@@ -482,7 +482,7 @@ const Commands = {
                 break;
 
             case 'open':
-                Storage.loadFromLocalStorage();
+                Storage.openFile();
                 this.finishCommand();
                 break;
 

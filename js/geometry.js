@@ -505,6 +505,24 @@ const Geometry = {
                        point.y >= entity.position.y - entity.height &&
                        point.y <= entity.position.y;
 
+            case 'donut':
+                // Hit test for donut - check if point is between inner and outer radius
+                const donutDist = Utils.dist(point, entity.center);
+                return donutDist >= entity.innerRadius - tolerance &&
+                       donutDist <= entity.outerRadius + tolerance;
+
+            case 'dimension':
+                // Hit test for dimension - check dimension line
+                if (entity.dimType === 'linear' || entity.dimType === 'aligned') {
+                    return Utils.distToSegment(point, entity.p1, entity.p2) < tolerance * 2;
+                } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
+                    return Utils.dist(point, entity.center) < entity.radius + tolerance;
+                }
+                return false;
+
+            case 'point':
+                return Utils.dist(point, entity.position) < tolerance;
+
             default:
                 return false;
         }

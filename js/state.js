@@ -544,6 +544,37 @@ class StateManager {
                     minY: entity.position.y - entity.height,
                     maxY: entity.position.y
                 };
+            case 'donut':
+                return {
+                    minX: entity.center.x - entity.outerRadius,
+                    maxX: entity.center.x + entity.outerRadius,
+                    minY: entity.center.y - entity.outerRadius,
+                    maxY: entity.center.y + entity.outerRadius
+                };
+            case 'point':
+                return {
+                    minX: entity.position.x - 1,
+                    maxX: entity.position.x + 1,
+                    minY: entity.position.y - 1,
+                    maxY: entity.position.y + 1
+                };
+            case 'dimension':
+                if (entity.dimType === 'linear' || entity.dimType === 'aligned') {
+                    return {
+                        minX: Math.min(entity.p1.x, entity.p2.x, entity.dimLinePos.x),
+                        maxX: Math.max(entity.p1.x, entity.p2.x, entity.dimLinePos.x),
+                        minY: Math.min(entity.p1.y, entity.p2.y, entity.dimLinePos.y),
+                        maxY: Math.max(entity.p1.y, entity.p2.y, entity.dimLinePos.y)
+                    };
+                } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
+                    return {
+                        minX: entity.center.x - entity.radius,
+                        maxX: entity.center.x + entity.radius,
+                        minY: entity.center.y - entity.radius,
+                        maxY: entity.center.y + entity.radius
+                    };
+                }
+                return null;
             default:
                 return null;
         }
