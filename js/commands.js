@@ -132,6 +132,10 @@ const Commands = {
         'ortho': 'ortho',
         'osnap': 'osnap',
 
+        // AutoLISP
+        'lisp': 'lisp',
+        'vlisp': 'lisp',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -141,7 +145,15 @@ const Commands = {
     // ==========================================
 
     execute(input) {
-        const parts = input.toLowerCase().trim().split(/\s+/);
+        const trimmedInput = input.trim();
+
+        // Check for AutoLISP expression (starts with parenthesis)
+        if (trimmedInput.startsWith('(')) {
+            this.executeLisp(trimmedInput);
+            return;
+        }
+
+        const parts = trimmedInput.toLowerCase().split(/\s+/);
         const cmdName = parts[0];
         const args = parts.slice(1);
 
@@ -159,6 +171,43 @@ const Commands = {
 
         // Execute the command
         this.startCommand(command, args);
+    },
+
+    // Execute AutoLISP code
+    async executeLisp(code) {
+        if (typeof AutoLISP === 'undefined') {
+            UI.log('AutoLISP interpreter not loaded.', 'error');
+            return;
+        }
+
+        try {
+            const result = await AutoLISP.execute(code);
+            if (result !== undefined && result !== null) {
+                // Format the result for display
+                const formatted = this.formatLispResult(result);
+                UI.log(`Result: ${formatted}`);
+            }
+        } catch (err) {
+            UI.log(`LISP Error: ${err.message}`, 'error');
+        }
+        Renderer.draw();
+    },
+
+    // Format LISP result for display
+    formatLispResult(value) {
+        if (value === null) return 'nil';
+        if (value === true) return 'T';
+        if (value === false) return 'nil';
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'string') return `"${value}"`;
+        if (Array.isArray(value)) {
+            if (value.length === 0) return 'nil';
+            return '(' + value.map(v => this.formatLispResult(v)).join(' ') + ')';
+        }
+        if (typeof value === 'object' && value.x !== undefined && value.y !== undefined) {
+            return `(${value.x} ${value.y}${value.z !== undefined ? ' ' + value.z : ''})`;
+        }
+        return String(value);
     },
 
     startCommand(name, args = []) {
@@ -488,6 +537,13 @@ const Commands = {
 
             case 'export':
                 Storage.exportDXF();
+                this.finishCommand();
+                break;
+
+            case 'lisp':
+                UI.log('AutoLISP Mode. Type (expression) to execute LISP code.');
+                UI.log('Examples: (+ 1 2 3), (setq x 10), (command "circle" \'(0 0) 50)');
+                UI.log('Type (help) for available functions.');
                 this.finishCommand();
                 break;
 
