@@ -1,0 +1,655 @@
+/* ============================================
+   HTMLCAD - Rendering Module
+   ============================================ */
+
+const Renderer = {
+    canvas: null,
+    ctx: null,
+    viewport: null,
+
+    // Colors
+    colors: {
+        background: '#1a1a1a',
+        gridMinor: '#252525',
+        gridMajor: '#353535',
+        axisX: '#803030',
+        axisY: '#308030',
+        cursor: '#ffffff',
+        selection: '#3399ff',
+        selectionFill: 'rgba(51, 153, 255, 0.15)',
+        crossWindow: 'rgba(0, 255, 100, 0.15)',
+        crossWindowBorder: 'rgba(0, 255, 100, 0.5)',
+        windowSelect: 'rgba(0, 100, 255, 0.15)',
+        windowSelectBorder: 'rgba(0, 100, 255, 0.5)',
+        preview: '#888888',
+        snap: {
+            endpoint: '#00ff00',
+            midpoint: '#00ffff',
+            center: '#ff00ff',
+            intersection: '#ffff00',
+            grid: '#808080',
+            nearest: '#ff8800',
+            perpendicular: '#00ff88'
+        }
+    },
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+
+    init(canvasId, viewportId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.viewport = document.getElementById(viewportId);
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        return this;
+    },
+
+    resize() {
+        if (!this.viewport || !this.canvas) return;
+
+        this.canvas.width = this.viewport.clientWidth;
+        this.canvas.height = this.viewport.clientHeight;
+        this.draw();
+    },
+
+    // ==========================================
+    // MAIN DRAW FUNCTION
+    // ==========================================
+
+    draw() {
+        if (!this.ctx) return;
+
+        const ctx = this.ctx;
+        const state = CAD;
+
+        // Clear canvas
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = this.colors.background;
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Apply view transformation
+        ctx.translate(state.pan.x, state.pan.y);
+        ctx.scale(state.zoom, state.zoom);
+
+        // Draw grid
+        if (state.showGrid) {
+            this.drawGrid();
+        }
+
+        // Draw entities
+        this.drawEntities();
+
+        // Draw preview (for active command)
+        this.drawPreview();
+
+        // Draw selection window
+        this.drawSelectionWindow();
+
+        // Reset transform for screen-space drawing
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Draw crosshair cursor
+        this.drawCursor();
+
+        // Draw snap indicator
+        this.drawSnapIndicator();
+
+        // Draw UCS icon
+        this.drawUCSIcon();
+    },
+
+    // ==========================================
+    // GRID DRAWING
+    // ==========================================
+
+    drawGrid() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        const spacing = state.gridSpacing;
+        const subdivisions = state.gridSubdivisions;
+        const minorSpacing = spacing / subdivisions;
+
+        // Calculate visible area
+        const topLeft = Utils.screenToWorld(0, 0, state.pan, state.zoom);
+        const bottomRight = Utils.screenToWorld(this.canvas.width, this.canvas.height, state.pan, state.zoom);
+
+        const startX = Math.floor(topLeft.x / minorSpacing) * minorSpacing;
+        const startY = Math.floor(topLeft.y / minorSpacing) * minorSpacing;
+        const endX = Math.ceil(bottomRight.x / minorSpacing) * minorSpacing;
+        const endY = Math.ceil(bottomRight.y / minorSpacing) * minorSpacing;
+
+        // Minor grid lines
+        ctx.strokeStyle = this.colors.gridMinor;
+        ctx.lineWidth = 0.5 / state.zoom;
+        ctx.beginPath();
+
+        for (let x = startX; x <= endX; x += minorSpacing) {
+            if (Math.abs(x % spacing) > 0.001) {
+                ctx.moveTo(x, topLeft.y);
+                ctx.lineTo(x, bottomRight.y);
+            }
+        }
+
+        for (let y = startY; y <= endY; y += minorSpacing) {
+            if (Math.abs(y % spacing) > 0.001) {
+                ctx.moveTo(topLeft.x, y);
+                ctx.lineTo(bottomRight.x, y);
+            }
+        }
+
+        ctx.stroke();
+
+        // Major grid lines
+        ctx.strokeStyle = this.colors.gridMajor;
+        ctx.lineWidth = 1 / state.zoom;
+        ctx.beginPath();
+
+        const majorStartX = Math.floor(topLeft.x / spacing) * spacing;
+        const majorStartY = Math.floor(topLeft.y / spacing) * spacing;
+
+        for (let x = majorStartX; x <= endX; x += spacing) {
+            if (x !== 0) {
+                ctx.moveTo(x, topLeft.y);
+                ctx.lineTo(x, bottomRight.y);
+            }
+        }
+
+        for (let y = majorStartY; y <= endY; y += spacing) {
+            if (y !== 0) {
+                ctx.moveTo(topLeft.x, y);
+                ctx.lineTo(bottomRight.x, y);
+            }
+        }
+
+        ctx.stroke();
+
+        // Axes
+        ctx.lineWidth = 1.5 / state.zoom;
+
+        // X axis (red)
+        ctx.strokeStyle = this.colors.axisX;
+        ctx.beginPath();
+        ctx.moveTo(topLeft.x, 0);
+        ctx.lineTo(bottomRight.x, 0);
+        ctx.stroke();
+
+        // Y axis (green)
+        ctx.strokeStyle = this.colors.axisY;
+        ctx.beginPath();
+        ctx.moveTo(0, topLeft.y);
+        ctx.lineTo(0, bottomRight.y);
+        ctx.stroke();
+    },
+
+    // ==========================================
+    // ENTITY DRAWING
+    // ==========================================
+
+    drawEntities() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        state.entities.forEach(entity => {
+            const layer = state.getLayer(entity.layer);
+            if (!layer || !layer.visible) return;
+
+            const isSelected = state.isSelected(entity.id);
+            const color = isSelected ? this.colors.selection : state.getEntityColor(entity);
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = (isSelected ? 2 : 1) / state.zoom;
+            ctx.setLineDash(isSelected ? [5 / state.zoom, 3 / state.zoom] : []);
+
+            this.drawEntity(entity, ctx);
+
+            // Handle hatch fill
+            if (entity.hatch) {
+                ctx.stroke();
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.2;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            } else {
+                ctx.stroke();
+            }
+        });
+
+        ctx.setLineDash([]);
+    },
+
+    drawEntity(entity, ctx) {
+        switch (entity.type) {
+            case 'line':
+                ctx.moveTo(entity.p1.x, entity.p1.y);
+                ctx.lineTo(entity.p2.x, entity.p2.y);
+                break;
+
+            case 'circle':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, 0, Math.PI * 2);
+                break;
+
+            case 'arc':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, entity.start, entity.end);
+                break;
+
+            case 'rect':
+                ctx.rect(entity.p1.x, entity.p1.y, entity.p2.x - entity.p1.x, entity.p2.y - entity.p1.y);
+                break;
+
+            case 'polyline':
+                if (entity.points.length > 0) {
+                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                    for (let i = 1; i < entity.points.length; i++) {
+                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    }
+                }
+                break;
+
+            case 'ellipse':
+                ctx.save();
+                ctx.translate(entity.center.x, entity.center.y);
+                ctx.rotate(entity.rotation || 0);
+                ctx.scale(entity.rx, entity.ry);
+                ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                ctx.restore();
+                break;
+
+            case 'text':
+                ctx.save();
+                const fontSize = entity.height * CAD.zoom;
+                ctx.font = `${entity.height}px Arial`;
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.translate(entity.position.x, entity.position.y);
+                if (entity.rotation) {
+                    ctx.rotate(Utils.degToRad(entity.rotation));
+                }
+                ctx.scale(1, -1); // Flip text (canvas Y is inverted)
+                ctx.fillText(entity.text, 0, 0);
+                ctx.restore();
+                break;
+        }
+    },
+
+    // ==========================================
+    // PREVIEW DRAWING
+    // ==========================================
+
+    drawPreview() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        if (!state.activeCmd || state.points.length === 0) return;
+
+        ctx.beginPath();
+        ctx.strokeStyle = this.colors.preview;
+        ctx.lineWidth = 1 / state.zoom;
+        ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+
+        const lastPoint = state.points[state.points.length - 1];
+        let endPoint = state.tempEnd || state.cursor;
+
+        // Apply ortho if enabled
+        if (state.orthoEnabled && state.points.length > 0) {
+            endPoint = Utils.applyOrtho(lastPoint, endPoint);
+        }
+
+        switch (state.activeCmd) {
+            case 'line':
+                ctx.moveTo(lastPoint.x, lastPoint.y);
+                ctx.lineTo(endPoint.x, endPoint.y);
+                break;
+
+            case 'polyline':
+                // Draw confirmed segments solid
+                ctx.setLineDash([]);
+                ctx.moveTo(state.points[0].x, state.points[0].y);
+                for (let i = 1; i < state.points.length; i++) {
+                    ctx.lineTo(state.points[i].x, state.points[i].y);
+                }
+                ctx.stroke();
+
+                // Draw preview segment dashed
+                ctx.beginPath();
+                ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+                ctx.moveTo(lastPoint.x, lastPoint.y);
+                ctx.lineTo(endPoint.x, endPoint.y);
+                break;
+
+            case 'circle':
+                const radius = Utils.dist(state.points[0], endPoint);
+                ctx.arc(state.points[0].x, state.points[0].y, radius, 0, Math.PI * 2);
+                break;
+
+            case 'arc':
+                if (state.step === 1) {
+                    // Show radius line from center
+                    ctx.moveTo(state.points[0].x, state.points[0].y);
+                    ctx.lineTo(endPoint.x, endPoint.y);
+                } else if (state.step === 2) {
+                    // Show arc preview
+                    const r = Utils.dist(state.points[0], state.points[1]);
+                    const startAngle = Utils.angle(state.points[0], state.points[1]);
+                    const endAngle = Utils.angle(state.points[0], endPoint);
+                    ctx.arc(state.points[0].x, state.points[0].y, r, startAngle, endAngle);
+                }
+                break;
+
+            case 'rect':
+                ctx.rect(
+                    state.points[0].x, state.points[0].y,
+                    endPoint.x - state.points[0].x,
+                    endPoint.y - state.points[0].y
+                );
+                break;
+
+            case 'ellipse':
+                if (state.step === 1) {
+                    // Show major axis
+                    ctx.moveTo(state.points[0].x, state.points[0].y);
+                    ctx.lineTo(endPoint.x, endPoint.y);
+                } else if (state.step === 2) {
+                    // Show ellipse preview
+                    const center = Utils.midpoint(state.points[0], state.points[1]);
+                    const rx = Utils.dist(state.points[0], state.points[1]) / 2;
+                    const ry = Utils.dist(center, endPoint);
+                    const rotation = Utils.angle(state.points[0], state.points[1]);
+
+                    ctx.save();
+                    ctx.translate(center.x, center.y);
+                    ctx.rotate(rotation);
+                    ctx.scale(rx, ry);
+                    ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                    ctx.restore();
+                }
+                break;
+
+            case 'move':
+            case 'copy':
+                if (state.points.length === 1) {
+                    const delta = {
+                        x: endPoint.x - state.points[0].x,
+                        y: endPoint.y - state.points[0].y
+                    };
+
+                    state.getSelectedEntities().forEach(entity => {
+                        const preview = Geometry.moveEntity(entity, delta);
+                        this.drawEntity(preview, ctx);
+                    });
+                }
+                break;
+
+            case 'rotate':
+                if (state.points.length === 1) {
+                    const angle = Utils.angle(state.points[0], endPoint);
+
+                    // Draw rotation reference line
+                    ctx.moveTo(state.points[0].x, state.points[0].y);
+                    ctx.lineTo(endPoint.x, endPoint.y);
+                    ctx.stroke();
+
+                    // Draw rotated entities preview
+                    ctx.beginPath();
+                    state.getSelectedEntities().forEach(entity => {
+                        const preview = Geometry.rotateEntity(entity, state.points[0], angle);
+                        this.drawEntity(preview, ctx);
+                    });
+                }
+                break;
+
+            case 'scale':
+                if (state.points.length === 2) {
+                    const baseDist = Utils.dist(state.points[0], state.points[1]);
+                    const currentDist = Utils.dist(state.points[0], endPoint);
+                    const scale = currentDist / baseDist;
+
+                    state.getSelectedEntities().forEach(entity => {
+                        const preview = Geometry.scaleEntity(entity, state.points[0], scale);
+                        this.drawEntity(preview, ctx);
+                    });
+                }
+                break;
+
+            case 'mirror':
+                if (state.points.length === 1) {
+                    // Draw mirror line
+                    ctx.moveTo(state.points[0].x, state.points[0].y);
+                    ctx.lineTo(endPoint.x, endPoint.y);
+                    ctx.stroke();
+
+                    // Draw mirrored entities preview
+                    ctx.beginPath();
+                    state.getSelectedEntities().forEach(entity => {
+                        const preview = Geometry.mirrorEntity(entity, state.points[0], endPoint);
+                        this.drawEntity(preview, ctx);
+                    });
+                }
+                break;
+        }
+
+        ctx.stroke();
+        ctx.setLineDash([]);
+    },
+
+    // ==========================================
+    // SELECTION WINDOW
+    // ==========================================
+
+    drawSelectionWindow() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        if (!state.selectionMode || !state.selectStart) return;
+
+        const start = state.selectStart;
+        const end = state.tempEnd || state.cursor;
+
+        const w = end.x - start.x;
+        const h = end.y - start.y;
+        const isCrossing = w < 0;
+
+        ctx.beginPath();
+        ctx.fillStyle = isCrossing ? this.colors.crossWindow : this.colors.windowSelect;
+        ctx.strokeStyle = isCrossing ? this.colors.crossWindowBorder : this.colors.windowSelectBorder;
+        ctx.lineWidth = 1 / state.zoom;
+
+        if (isCrossing) {
+            ctx.setLineDash([5 / state.zoom, 3 / state.zoom]);
+        }
+
+        ctx.rect(start.x, start.y, w, h);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+    },
+
+    // ==========================================
+    // CURSOR DRAWING
+    // ==========================================
+
+    drawCursor() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        const screen = Utils.worldToScreen(state.cursor.x, state.cursor.y, state.pan, state.zoom);
+        const size = 15;
+
+        ctx.strokeStyle = this.colors.cursor;
+        ctx.lineWidth = 1;
+
+        // Crosshair lines
+        ctx.beginPath();
+        ctx.moveTo(screen.x - size, screen.y);
+        ctx.lineTo(screen.x + size, screen.y);
+        ctx.moveTo(screen.x, screen.y - size);
+        ctx.lineTo(screen.x, screen.y + size);
+        ctx.stroke();
+
+        // Small box at center
+        ctx.strokeRect(screen.x - 3, screen.y - 3, 6, 6);
+    },
+
+    // ==========================================
+    // SNAP INDICATOR
+    // ==========================================
+
+    drawSnapIndicator() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        if (!state.snapEnabled || !state.snapPoint) return;
+
+        const screen = Utils.worldToScreen(state.snapPoint.x, state.snapPoint.y, state.pan, state.zoom);
+        const size = 8;
+
+        ctx.strokeStyle = this.colors.snap[state.snapType] || '#00ff00';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        switch (state.snapType) {
+            case 'endpoint':
+                // Square
+                ctx.strokeRect(screen.x - size, screen.y - size, size * 2, size * 2);
+                break;
+
+            case 'midpoint':
+                // Triangle
+                ctx.moveTo(screen.x, screen.y - size);
+                ctx.lineTo(screen.x + size, screen.y + size);
+                ctx.lineTo(screen.x - size, screen.y + size);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+
+            case 'center':
+                // Circle
+                ctx.arc(screen.x, screen.y, size, 0, Math.PI * 2);
+                ctx.stroke();
+                break;
+
+            case 'intersection':
+                // X
+                ctx.moveTo(screen.x - size, screen.y - size);
+                ctx.lineTo(screen.x + size, screen.y + size);
+                ctx.moveTo(screen.x + size, screen.y - size);
+                ctx.lineTo(screen.x - size, screen.y + size);
+                ctx.stroke();
+                break;
+
+            case 'grid':
+                // Plus sign
+                ctx.moveTo(screen.x - size / 2, screen.y);
+                ctx.lineTo(screen.x + size / 2, screen.y);
+                ctx.moveTo(screen.x, screen.y - size / 2);
+                ctx.lineTo(screen.x, screen.y + size / 2);
+                ctx.stroke();
+                break;
+
+            case 'nearest':
+                // Diamond
+                ctx.moveTo(screen.x, screen.y - size);
+                ctx.lineTo(screen.x + size, screen.y);
+                ctx.lineTo(screen.x, screen.y + size);
+                ctx.lineTo(screen.x - size, screen.y);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+
+            case 'perpendicular':
+                // Right angle symbol
+                ctx.moveTo(screen.x - size, screen.y + size);
+                ctx.lineTo(screen.x - size, screen.y - size);
+                ctx.lineTo(screen.x + size, screen.y - size);
+                ctx.stroke();
+                break;
+
+            default:
+                // Default: crosshair
+                ctx.moveTo(screen.x - size, screen.y);
+                ctx.lineTo(screen.x + size, screen.y);
+                ctx.moveTo(screen.x, screen.y - size);
+                ctx.lineTo(screen.x, screen.y + size);
+                ctx.stroke();
+        }
+    },
+
+    // ==========================================
+    // UCS ICON
+    // ==========================================
+
+    drawUCSIcon() {
+        const ctx = this.ctx;
+        const x = 40;
+        const y = this.canvas.height - 60;
+        const len = 30;
+
+        ctx.lineWidth = 2;
+
+        // X axis (red)
+        ctx.strokeStyle = '#ff4444';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + len, y);
+        ctx.stroke();
+
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(x + len, y);
+        ctx.lineTo(x + len - 5, y - 3);
+        ctx.lineTo(x + len - 5, y + 3);
+        ctx.closePath();
+        ctx.fillStyle = '#ff4444';
+        ctx.fill();
+
+        // X label
+        ctx.font = '10px Arial';
+        ctx.fillText('X', x + len + 4, y + 3);
+
+        // Y axis (green)
+        ctx.strokeStyle = '#44ff44';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - len);
+        ctx.stroke();
+
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(x, y - len);
+        ctx.lineTo(x - 3, y - len + 5);
+        ctx.lineTo(x + 3, y - len + 5);
+        ctx.closePath();
+        ctx.fillStyle = '#44ff44';
+        ctx.fill();
+
+        // Y label
+        ctx.fillText('Y', x - 3, y - len - 4);
+
+        // Origin circle
+        ctx.strokeStyle = '#888888';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    // ==========================================
+    // UTILITY METHODS
+    // ==========================================
+
+    getCanvasSize() {
+        return {
+            width: this.canvas ? this.canvas.width : 0,
+            height: this.canvas ? this.canvas.height : 0
+        };
+    }
+};
+
+// Export for module usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = Renderer;
+}
