@@ -68,8 +68,8 @@ const UI = {
     handleCommandInput(e) {
         const input = this.elements.cmdInput;
 
-        // Handle Enter key (same as Space in AutoCAD for command input)
-        if (e.key === 'Enter' || (e.key === ' ' && (CAD.activeCmd || !input.value.trim()))) {
+        // Handle Enter and Space keys (Space acts like Enter in AutoCAD)
+        if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             const value = input.value.trim();
 
@@ -340,56 +340,69 @@ const UI = {
 HTMLCAD Quick Reference:
 
 DRAWING COMMANDS:
-  L, LINE      - Draw lines
-  PL, PLINE    - Draw polylines
-  C, CIRCLE    - Draw circles
-  A, ARC       - Draw arcs
-  REC, RECT    - Draw rectangles
-  EL, ELLIPSE  - Draw ellipses
-  T, TEXT      - Add text
-  POL, POLYGON - Draw regular polygons
-  H, HATCH     - Hatch closed areas
+  L, LINE       - Draw lines
+  PL, PLINE     - Draw polylines
+  C, CIRCLE     - Draw circles
+  A, ARC        - Draw arcs
+  REC, RECT     - Draw rectangles
+  EL, ELLIPSE   - Draw ellipses
+  T, TEXT       - Add text
+  POL, POLYGON  - Draw regular polygons
+  DO, DONUT     - Draw donuts
+  RAY           - Draw rays
+  XL, XLINE     - Draw construction lines
+  SPL, SPLINE   - Draw splines
+  H, HATCH      - Hatch closed areas
 
 MODIFY COMMANDS:
-  M, MOVE      - Move objects
-  CO, COPY     - Copy objects
-  RO, ROTATE   - Rotate objects
-  SC, SCALE    - Scale objects
-  MI, MIRROR   - Mirror objects
-  O, OFFSET    - Offset objects
-  TR, TRIM     - Trim objects
-  E, ERASE     - Erase objects
-  X, EXPLODE   - Explode objects
-  AR, ARRAY    - Create arrays
-  F, FILLET    - Fillet corners
-  CHA, CHAMFER - Chamfer corners
+  M, MOVE       - Move objects
+  CO, COPY      - Copy objects
+  RO, ROTATE    - Rotate objects
+  SC, SCALE     - Scale objects
+  MI, MIRROR    - Mirror objects
+  O, OFFSET     - Offset objects
+  TR, TRIM      - Trim objects
+  E, ERASE      - Erase objects
+  X, EXPLODE    - Explode objects
+  AR, ARRAY     - Rectangular array
+  ARRAYPOLAR    - Polar array
+  F, FILLET     - Fillet corners (R for radius)
+  CHA, CHAMFER  - Chamfer corners (D for distance)
+  BR, BREAK     - Break objects
+
+DIMENSION COMMANDS:
+  DIM, DIMLIN   - Linear dimension
+  DIMALIGNED    - Aligned dimension
+  DIMRAD        - Radius dimension
+  DIMDIA        - Diameter dimension
 
 UTILITY COMMANDS:
-  U, UNDO      - Undo last action
-  REDO         - Redo last undo
-  Z, ZOOM      - Zoom view (E=extents)
-  P, PAN       - Pan view
-  DIST, DI     - Measure distance
-  AREA, AA     - Measure area
-  LIST, LI     - List object properties
+  U, UNDO       - Undo last action
+  REDO          - Redo last undo
+  Z, ZOOM       - Zoom view (E=extents)
+  P, PAN        - Pan view
+  DIST, DI      - Measure distance
+  AREA, AA      - Measure area
+  LIST, LI      - List object properties
 
 KEYBOARD SHORTCUTS:
-  Space/Enter  - Repeat last command
-  Escape       - Cancel command
-  Delete       - Erase selected
-  Ctrl+Z       - Undo
-  Ctrl+Y       - Redo
-  Ctrl+C/V     - Copy/Paste
-  Ctrl+A       - Select all
-  F2           - Toggle grid
-  F3           - Toggle object snap
-  F8           - Toggle ortho mode
-  Arrow Up/Down- Command history
+  Space/Enter   - Execute command / Repeat last
+  Escape        - Cancel command
+  Delete        - Erase selected
+  Ctrl+Z        - Undo
+  Ctrl+Y        - Redo
+  Ctrl+C/V      - Copy/Paste
+  Ctrl+A        - Select all
+  F2            - Toggle grid
+  F3            - Toggle object snap
+  F8            - Toggle ortho mode
+  Arrow Up/Down - Command history
 
-LISP:
-  Type (expression) to execute AutoLISP
-  Example: (+ 1 2 3)
-  Example: (command "line" '(0 0) '(100 100) "")
+AUTOLISP:
+  Type (expression) to execute AutoLISP code
+  Example: (+ 1 2 3) => 6
+  Example: (command "circle" '(0 0) 50)
+  Example: (setq x 10)
         `;
         this.log(helpText);
     },

@@ -132,8 +132,7 @@ const Commands = {
         'ortho': 'ortho',
         'osnap': 'osnap',
 
-        // Close/End options
-        'c': 'close',
+        // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
 
@@ -1374,11 +1373,12 @@ const Commands = {
     handlePolygonClick(point) {
         const state = CAD;
         state.points.push(point);
-        state.step++;
 
-        if (state.step === 1) {
-            UI.log('POLYGON: Specify center of polygon:', 'prompt');
-        } else if (state.step === 2) {
+        if (state.points.length === 1) {
+            // First click - center point
+            UI.log('POLYGON: Specify radius (edge point):', 'prompt');
+        } else if (state.points.length === 2) {
+            // Second click - edge point, create polygon
             const center = state.points[0];
             const edgePoint = state.points[1];
             const radius = Utils.dist(center, edgePoint);
@@ -1411,11 +1411,10 @@ const Commands = {
     handleRayClick(point) {
         const state = CAD;
         state.points.push(point);
-        state.step++;
 
-        if (state.step === 1) {
+        if (state.points.length === 1) {
             UI.log('RAY: Specify through point:', 'prompt');
-        } else if (state.step === 2) {
+        } else if (state.points.length === 2) {
             // Create a very long line in the direction specified
             const direction = Utils.angle(state.points[0], state.points[1]);
             const length = 10000; // Large number for "infinite" line
@@ -1431,8 +1430,8 @@ const Commands = {
             });
 
             UI.log('Ray created.');
-            state.points = [state.points[0]]; // Keep start point for more rays
-            state.step = 1;
+            // Keep start point for more rays from same origin
+            state.points = [state.points[0]];
             UI.log('RAY: Specify through point:', 'prompt');
         }
     },
@@ -1440,11 +1439,10 @@ const Commands = {
     handleXLineClick(point) {
         const state = CAD;
         state.points.push(point);
-        state.step++;
 
-        if (state.step === 1) {
+        if (state.points.length === 1) {
             UI.log('XLINE: Specify through point:', 'prompt');
-        } else if (state.step === 2) {
+        } else if (state.points.length === 2) {
             // Create a construction line (infinite in both directions)
             const direction = Utils.angle(state.points[0], state.points[1]);
             const length = 10000;
@@ -1463,8 +1461,8 @@ const Commands = {
             });
 
             UI.log('Construction line created.');
+            // Keep origin point for more construction lines
             state.points = [state.points[0]];
-            state.step = 1;
             UI.log('XLINE: Specify through point:', 'prompt');
         }
     },
@@ -1472,15 +1470,12 @@ const Commands = {
     handleSplineClick(point) {
         const state = CAD;
         state.points.push(point);
-        state.step++;
 
-        UI.log(`SPLINE: Specify point ${state.step + 1} or [Close/Fit tolerance]:`, 'prompt');
+        UI.log(`SPLINE: Specify point ${state.points.length + 1} or press Enter to finish:`, 'prompt');
     },
 
     handleDonutClick(point) {
         const state = CAD;
-        state.points.push(point);
-        state.step++;
 
         // Create donut (two concentric circles represented as filled shape)
         const inner = state.cmdOptions.donutInner || 10;
@@ -1493,7 +1488,7 @@ const Commands = {
             outerRadius: outer / 2
         });
 
-        UI.log('Donut created. Specify center of donut:', 'prompt');
+        UI.log('Donut created. Specify center of next donut or press Enter to finish:', 'prompt');
     },
 
     // ==========================================
@@ -1541,13 +1536,40 @@ const Commands = {
     handlePolarArrayClick(point) {
         const state = CAD;
         state.points.push(point);
-        state.step++;
 
-        if (state.step === 1) {
+        if (state.points.length === 1) {
+            // Center point specified, now ask for number of items
             UI.log('ARRAYPOLAR: Enter number of items <4>:', 'prompt');
-            state.cmdOptions.arrayItems = 4;
+            state.cmdOptions.arrayItems = state.cmdOptions.arrayItems || 4;
             state.cmdOptions.arrayAngle = 360;
+            state.cmdOptions.waitingForItems = true;
         }
+    },
+
+    completePolarArray() {
+        const state = CAD;
+        const center = state.points[0];
+        const items = state.cmdOptions.arrayItems || 4;
+        const totalAngle = Utils.degToRad(state.cmdOptions.arrayAngle || 360);
+        const angleStep = totalAngle / items;
+
+        CAD.saveUndoState('Polar Array');
+
+        const selectedEntities = state.getSelectedEntities();
+        for (let i = 1; i < items; i++) {
+            const angle = angleStep * i;
+
+            selectedEntities.forEach(entity => {
+                // Rotate entity around center point
+                const rotated = Geometry.rotateEntity(entity, center, angle);
+                delete rotated.id;
+                CAD.addEntity(rotated, true);
+            });
+        }
+
+        UI.log(`Polar array created: ${items} items.`);
+        state.clearSelection();
+        this.finishCommand();
     },
 
     handleFilletClick(point) {
@@ -1754,6 +1776,19 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'spline' && state.points.length >= 2) {
+                // Finish spline (create as smooth polyline for now)
+                CAD.addEntity({
+                    type: 'polyline',
+                    points: [...state.points],
+                    isSpline: true
+                });
+                UI.log('Spline created.');
+                this.finishCommand();
+                Renderer.draw();
+                return true;
+            }
+
             if (state.activeCmd === 'trim' && state.cmdOptions.selectingEdges) {
                 state.cmdOptions.selectingEdges = false;
                 UI.log('TRIM: Select object to trim:', 'prompt');
@@ -1769,6 +1804,21 @@ const Commands = {
                 UI.log(`Area = ${area.toFixed(4)}, Perimeter = ${perimeter.toFixed(4)}`);
                 this.finishCommand();
                 Renderer.draw();
+                return true;
+            }
+
+            // Polar array - accept default angle with Enter
+            if (state.activeCmd === 'arraypolar' && state.cmdOptions.waitingForAngle) {
+                this.completePolarArray();
+                Renderer.draw();
+                return true;
+            }
+
+            // Polar array - accept default items with Enter
+            if (state.activeCmd === 'arraypolar' && state.cmdOptions.waitingForItems) {
+                state.cmdOptions.waitingForItems = false;
+                state.cmdOptions.waitingForAngle = true;
+                UI.log('ARRAYPOLAR: Specify angle to fill <360>:', 'prompt');
                 return true;
             }
 
@@ -1866,23 +1916,35 @@ const Commands = {
             }
 
             // Polar array - number of items
-            if (state.activeCmd === 'arraypolar' && state.step === 1) {
+            if (state.activeCmd === 'arraypolar' && state.cmdOptions.waitingForItems) {
                 state.cmdOptions.arrayItems = Math.max(2, Math.round(num));
+                state.cmdOptions.waitingForItems = false;
+                state.cmdOptions.waitingForAngle = true;
                 UI.log('ARRAYPOLAR: Specify angle to fill <360>:', 'prompt');
                 return true;
             }
 
+            // Polar array - angle to fill
+            if (state.activeCmd === 'arraypolar' && state.cmdOptions.waitingForAngle) {
+                state.cmdOptions.arrayAngle = num;
+                state.cmdOptions.waitingForAngle = false;
+                this.completePolarArray();
+                Renderer.draw();
+                return true;
+            }
+
             // Donut - inner diameter
-            if (state.activeCmd === 'donut' && state.step === 0) {
+            if (state.activeCmd === 'donut' && !state.cmdOptions.innerSet) {
                 state.cmdOptions.donutInner = Math.abs(num);
+                state.cmdOptions.innerSet = true;
                 UI.log(`DONUT: Specify outside diameter <${state.cmdOptions.donutOuter}>:`, 'prompt');
                 return true;
             }
 
             // Donut - outer diameter
-            if (state.activeCmd === 'donut' && state.cmdOptions.donutInner !== undefined &&
-                state.cmdOptions.donutOuter === 20) {
+            if (state.activeCmd === 'donut' && state.cmdOptions.innerSet && !state.cmdOptions.outerSet) {
                 state.cmdOptions.donutOuter = Math.abs(num);
+                state.cmdOptions.outerSet = true;
                 UI.log('DONUT: Specify center of donut:', 'prompt');
                 return true;
             }
