@@ -273,7 +273,142 @@ const Renderer = {
                 ctx.fillText(entity.text, 0, 0);
                 ctx.restore();
                 break;
+
+            case 'point':
+                // Draw point as small X
+                const size = 3 / CAD.zoom;
+                ctx.moveTo(entity.position.x - size, entity.position.y - size);
+                ctx.lineTo(entity.position.x + size, entity.position.y + size);
+                ctx.moveTo(entity.position.x + size, entity.position.y - size);
+                ctx.lineTo(entity.position.x - size, entity.position.y + size);
+                break;
+
+            case 'donut':
+                // Draw donut as two concentric circles with fill
+                ctx.arc(entity.center.x, entity.center.y, entity.outerRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(entity.center.x, entity.center.y, entity.innerRadius, 0, Math.PI * 2);
+                // Fill between circles
+                ctx.save();
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.globalAlpha = 0.3;
+                ctx.fill('evenodd');
+                ctx.globalAlpha = 1.0;
+                ctx.restore();
+                break;
+
+            case 'dimension':
+                this.drawDimension(entity, ctx);
+                break;
         }
+    },
+
+    drawDimension(entity, ctx) {
+        const arrowSize = 3 / CAD.zoom;
+        const textHeight = 10 / CAD.zoom;
+        const extensionOffset = 2 / CAD.zoom;
+
+        ctx.save();
+        ctx.font = `${textHeight}px Arial`;
+        ctx.fillStyle = ctx.strokeStyle;
+
+        if (entity.dimType === 'linear' || entity.dimType === 'aligned') {
+            const p1 = entity.p1;
+            const p2 = entity.p2;
+            const dimPos = entity.dimLinePos;
+
+            // Determine if horizontal or vertical
+            const isHorizontal = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y);
+
+            let dimP1, dimP2;
+            if (entity.dimType === 'aligned') {
+                // Aligned dimension follows the points
+                dimP1 = { ...p1 };
+                dimP2 = { ...p2 };
+            } else if (isHorizontal) {
+                dimP1 = { x: p1.x, y: dimPos.y };
+                dimP2 = { x: p2.x, y: dimPos.y };
+            } else {
+                dimP1 = { x: dimPos.x, y: p1.y };
+                dimP2 = { x: dimPos.x, y: p2.y };
+            }
+
+            // Draw extension lines
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(dimP1.x, dimP1.y + extensionOffset);
+            ctx.moveTo(p2.x, p2.y);
+            ctx.lineTo(dimP2.x, dimP2.y + extensionOffset);
+
+            // Draw dimension line
+            ctx.moveTo(dimP1.x, dimP1.y);
+            ctx.lineTo(dimP2.x, dimP2.y);
+
+            // Draw arrows
+            const angle = Utils.angle(dimP1, dimP2);
+            this.drawArrow(ctx, dimP1, angle, arrowSize);
+            this.drawArrow(ctx, dimP2, angle + Math.PI, arrowSize);
+
+            // Draw text
+            const midX = (dimP1.x + dimP2.x) / 2;
+            const midY = (dimP1.y + dimP2.y) / 2;
+            ctx.save();
+            ctx.translate(midX, midY);
+            ctx.scale(1, -1);
+            ctx.textAlign = 'center';
+            ctx.fillText(entity.text, 0, -textHeight / 2);
+            ctx.restore();
+
+        } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
+            const center = entity.center;
+            const dimPos = entity.dimLinePos;
+            const angle = Utils.angle(center, dimPos);
+
+            // Line from center to edge (or through for diameter)
+            const edgePoint = {
+                x: center.x + entity.radius * Math.cos(angle),
+                y: center.y + entity.radius * Math.sin(angle)
+            };
+
+            if (entity.dimType === 'diameter') {
+                const oppositeEdge = {
+                    x: center.x - entity.radius * Math.cos(angle),
+                    y: center.y - entity.radius * Math.sin(angle)
+                };
+                ctx.moveTo(oppositeEdge.x, oppositeEdge.y);
+                ctx.lineTo(edgePoint.x, edgePoint.y);
+                this.drawArrow(ctx, oppositeEdge, angle, arrowSize);
+            } else {
+                ctx.moveTo(center.x, center.y);
+                ctx.lineTo(edgePoint.x, edgePoint.y);
+            }
+
+            this.drawArrow(ctx, edgePoint, angle + Math.PI, arrowSize);
+
+            // Draw text
+            const textX = center.x + (entity.radius / 2) * Math.cos(angle);
+            const textY = center.y + (entity.radius / 2) * Math.sin(angle);
+            ctx.save();
+            ctx.translate(textX, textY);
+            ctx.scale(1, -1);
+            ctx.textAlign = 'center';
+            ctx.fillText(entity.text, 0, -textHeight / 2);
+            ctx.restore();
+        }
+
+        ctx.restore();
+    },
+
+    drawArrow(ctx, point, angle, size) {
+        const x = point.x;
+        const y = point.y;
+        const a1 = angle + Math.PI - 0.3;
+        const a2 = angle + Math.PI + 0.3;
+
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + size * Math.cos(a1), y + size * Math.sin(a1));
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + size * Math.cos(a2), y + size * Math.sin(a2));
     },
 
     // ==========================================

@@ -5,6 +5,10 @@
 const UI = {
     elements: {},
     activeButton: null,
+    commandHistory: [],
+    historyIndex: -1,
+    lastCommand: null,
+    maxHistorySize: 50,
 
     // ==========================================
     // INITIALIZATION
@@ -64,13 +68,40 @@ const UI = {
     handleCommandInput(e) {
         const input = this.elements.cmdInput;
 
-        if (e.key === 'Enter') {
+        // Handle Enter key (same as Space in AutoCAD for command input)
+        if (e.key === 'Enter' || (e.key === ' ' && (CAD.activeCmd || !input.value.trim()))) {
             e.preventDefault();
             const value = input.value.trim();
 
-            if (value) {
-                this.log(`Command: ${value}`, 'input');
+            // Space or Enter with empty input - repeat last command or act as Enter
+            if (!value) {
+                if (CAD.activeCmd) {
+                    // During active command, space/enter confirms or finishes
+                    Commands.handleInput('');
+                } else if (this.lastCommand) {
+                    // No active command - repeat last command
+                    this.log(`Command: ${this.lastCommand}`, 'input');
+                    Commands.execute(this.lastCommand);
+                }
+                input.value = '';
+                return;
             }
+
+            // Check for LISP expression
+            if (value.startsWith('(')) {
+                this.log(`LISP: ${value}`, 'input');
+                this.addToHistory(value);
+                AutoLISP.execute(value).then(result => {
+                    if (result !== null && result !== undefined) {
+                        this.log(AutoLISP.toString(result), 'success');
+                    }
+                });
+                input.value = '';
+                return;
+            }
+
+            this.log(`Command: ${value}`, 'input');
+            this.addToHistory(value);
 
             // Try to handle as coordinate/input first
             if (Commands.handleInput(value)) {
@@ -78,28 +109,85 @@ const UI = {
                 return;
             }
 
-            // Otherwise treat as command
-            if (value) {
-                Commands.execute(value);
-            } else if (CAD.activeCmd) {
-                // Empty enter - finish command
-                Commands.handleInput('');
-            }
+            // Store as last command for repeat
+            this.lastCommand = value;
 
+            // Otherwise treat as command
+            Commands.execute(value);
             input.value = '';
+            this.historyIndex = -1;
+
         } else if (e.key === 'Escape') {
             e.preventDefault();
             Commands.cancelCommand();
             input.value = '';
-        } else if (e.key === ' ' && !input.value.trim()) {
-            // Space with empty input - repeat last command
+            this.historyIndex = -1;
+
+        } else if (e.key === 'ArrowUp') {
+            // Navigate command history (up)
             e.preventDefault();
+            if (this.commandHistory.length > 0) {
+                if (this.historyIndex < this.commandHistory.length - 1) {
+                    this.historyIndex++;
+                }
+                input.value = this.commandHistory[this.commandHistory.length - 1 - this.historyIndex];
+            }
+
+        } else if (e.key === 'ArrowDown') {
+            // Navigate command history (down)
+            e.preventDefault();
+            if (this.historyIndex > 0) {
+                this.historyIndex--;
+                input.value = this.commandHistory[this.commandHistory.length - 1 - this.historyIndex];
+            } else {
+                this.historyIndex = -1;
+                input.value = '';
+            }
+
+        } else if (e.key === 'Tab') {
+            // Tab completion for commands
+            e.preventDefault();
+            this.autoCompleteCommand(input);
+        }
+    },
+
+    addToHistory(command) {
+        // Don't add duplicates consecutively
+        if (this.commandHistory.length > 0 &&
+            this.commandHistory[this.commandHistory.length - 1] === command) {
+            return;
+        }
+
+        this.commandHistory.push(command);
+
+        // Limit history size
+        if (this.commandHistory.length > this.maxHistorySize) {
+            this.commandHistory.shift();
+        }
+    },
+
+    autoCompleteCommand(input) {
+        const value = input.value.toLowerCase().trim();
+        if (!value) return;
+
+        // Find matching commands
+        const commands = Object.keys(Commands.aliases);
+        const matches = commands.filter(cmd => cmd.startsWith(value));
+
+        if (matches.length === 1) {
+            input.value = matches[0].toUpperCase();
+        } else if (matches.length > 1) {
+            // Show available completions
+            this.log(`Completions: ${matches.slice(0, 10).join(', ')}${matches.length > 10 ? '...' : ''}`);
         }
     },
 
     handleKeyboard(e) {
-        // Don't handle if typing in input
-        if (e.target.tagName === 'INPUT') return;
+        // Don't handle if typing in input (except specific keys)
+        if (e.target.tagName === 'INPUT') {
+            // Allow F-keys even in input
+            if (!e.key.startsWith('F')) return;
+        }
 
         // Escape - cancel current operation
         if (e.key === 'Escape') {
@@ -109,7 +197,7 @@ const UI = {
         }
 
         // Delete - erase selected
-        if (e.key === 'Delete') {
+        if (e.key === 'Delete' && e.target.tagName !== 'INPUT') {
             e.preventDefault();
             if (CAD.selectedIds.length > 0) {
                 Commands.startCommand('erase');
@@ -132,7 +220,7 @@ const UI = {
         }
 
         // Ctrl+A - Select all
-        if (e.ctrlKey && e.key === 'a') {
+        if (e.ctrlKey && e.key === 'a' && e.target.tagName !== 'INPUT') {
             e.preventDefault();
             CAD.selectAll();
             this.log(`${CAD.selectedIds.length} objects selected.`);
@@ -141,7 +229,7 @@ const UI = {
         }
 
         // Ctrl+C - Copy
-        if (e.ctrlKey && e.key === 'c') {
+        if (e.ctrlKey && e.key === 'c' && e.target.tagName !== 'INPUT') {
             e.preventDefault();
             const count = CAD.copyToClipboard();
             if (count > 0) {
@@ -151,7 +239,7 @@ const UI = {
         }
 
         // Ctrl+V - Paste
-        if (e.ctrlKey && e.key === 'v') {
+        if (e.ctrlKey && e.key === 'v' && e.target.tagName !== 'INPUT') {
             e.preventDefault();
             const pasted = CAD.paste();
             if (pasted.length > 0) {
@@ -175,6 +263,13 @@ const UI = {
             return;
         }
 
+        // F1 - Help
+        if (e.key === 'F1') {
+            e.preventDefault();
+            this.showHelp();
+            return;
+        }
+
         // F2 - Toggle grid
         if (e.key === 'F2') {
             e.preventDefault();
@@ -194,12 +289,30 @@ const UI = {
             return;
         }
 
+        // F7 - Toggle grid display
+        if (e.key === 'F7') {
+            e.preventDefault();
+            CAD.showGrid = !CAD.showGrid;
+            this.log(`Grid display: ${CAD.showGrid ? 'ON' : 'OFF'}`);
+            this.updateStatusBar();
+            Renderer.draw();
+            return;
+        }
+
         // F8 - Toggle ortho
         if (e.key === 'F8') {
             e.preventDefault();
             CAD.orthoEnabled = !CAD.orthoEnabled;
             this.log(`Ortho: ${CAD.orthoEnabled ? 'ON' : 'OFF'}`);
             this.updateStatusBar();
+            return;
+        }
+
+        // F9 - Toggle snap
+        if (e.key === 'F9') {
+            e.preventDefault();
+            CAD.snapModes.grid = !CAD.snapModes.grid;
+            this.log(`Snap to grid: ${CAD.snapModes.grid ? 'ON' : 'OFF'}`);
             return;
         }
 
@@ -213,9 +326,72 @@ const UI = {
         }
 
         // Letter keys - focus command line
-        if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1 && e.target.tagName !== 'INPUT') {
             this.focusCommandLine();
         }
+    },
+
+    // ==========================================
+    // HELP
+    // ==========================================
+
+    showHelp() {
+        const helpText = `
+HTMLCAD Quick Reference:
+
+DRAWING COMMANDS:
+  L, LINE      - Draw lines
+  PL, PLINE    - Draw polylines
+  C, CIRCLE    - Draw circles
+  A, ARC       - Draw arcs
+  REC, RECT    - Draw rectangles
+  EL, ELLIPSE  - Draw ellipses
+  T, TEXT      - Add text
+  POL, POLYGON - Draw regular polygons
+  H, HATCH     - Hatch closed areas
+
+MODIFY COMMANDS:
+  M, MOVE      - Move objects
+  CO, COPY     - Copy objects
+  RO, ROTATE   - Rotate objects
+  SC, SCALE    - Scale objects
+  MI, MIRROR   - Mirror objects
+  O, OFFSET    - Offset objects
+  TR, TRIM     - Trim objects
+  E, ERASE     - Erase objects
+  X, EXPLODE   - Explode objects
+  AR, ARRAY    - Create arrays
+  F, FILLET    - Fillet corners
+  CHA, CHAMFER - Chamfer corners
+
+UTILITY COMMANDS:
+  U, UNDO      - Undo last action
+  REDO         - Redo last undo
+  Z, ZOOM      - Zoom view (E=extents)
+  P, PAN       - Pan view
+  DIST, DI     - Measure distance
+  AREA, AA     - Measure area
+  LIST, LI     - List object properties
+
+KEYBOARD SHORTCUTS:
+  Space/Enter  - Repeat last command
+  Escape       - Cancel command
+  Delete       - Erase selected
+  Ctrl+Z       - Undo
+  Ctrl+Y       - Redo
+  Ctrl+C/V     - Copy/Paste
+  Ctrl+A       - Select all
+  F2           - Toggle grid
+  F3           - Toggle object snap
+  F8           - Toggle ortho mode
+  Arrow Up/Down- Command history
+
+LISP:
+  Type (expression) to execute AutoLISP
+  Example: (+ 1 2 3)
+  Example: (command "line" '(0 0) '(100 100) "")
+        `;
+        this.log(helpText);
     },
 
     // ==========================================
@@ -256,6 +432,11 @@ const UI = {
         });
 
         this.activeButton = cmdName;
+
+        // Store as last command
+        if (cmdName) {
+            this.lastCommand = cmdName;
+        }
 
         // Add active class to matching button
         if (cmdName) {
@@ -487,6 +668,34 @@ const UI = {
                 `;
                 break;
 
+            case 'arc':
+                html += `
+                    <div class="property-group">
+                        <div class="property-group-title">Geometry</div>
+                        <div class="property-row">
+                            <span class="property-label">Center X</span>
+                            <span class="property-value">${entity.center.x.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Center Y</span>
+                            <span class="property-value">${entity.center.y.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Radius</span>
+                            <span class="property-value">${entity.r.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Start Angle</span>
+                            <span class="property-value">${(entity.start * 180 / Math.PI).toFixed(2)}°</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">End Angle</span>
+                            <span class="property-value">${(entity.end * 180 / Math.PI).toFixed(2)}°</span>
+                        </div>
+                    </div>
+                `;
+                break;
+
             case 'rect':
                 const width = Math.abs(entity.p2.x - entity.p1.x);
                 const height = Math.abs(entity.p2.y - entity.p1.y);
@@ -528,6 +737,54 @@ const UI = {
                         <div class="property-row">
                             <span class="property-label">Closed</span>
                             <span class="property-value">${Utils.isPolygonClosed(entity.points) ? 'Yes' : 'No'}</span>
+                        </div>
+                    </div>
+                `;
+                break;
+
+            case 'ellipse':
+                html += `
+                    <div class="property-group">
+                        <div class="property-group-title">Geometry</div>
+                        <div class="property-row">
+                            <span class="property-label">Center X</span>
+                            <span class="property-value">${entity.center.x.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Center Y</span>
+                            <span class="property-value">${entity.center.y.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Major Radius</span>
+                            <span class="property-value">${entity.rx.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Minor Radius</span>
+                            <span class="property-value">${entity.ry.toFixed(4)}</span>
+                        </div>
+                    </div>
+                `;
+                break;
+
+            case 'text':
+                html += `
+                    <div class="property-group">
+                        <div class="property-group-title">Text</div>
+                        <div class="property-row">
+                            <span class="property-label">Content</span>
+                            <span class="property-value">${entity.text}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Height</span>
+                            <span class="property-value">${entity.height.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Position X</span>
+                            <span class="property-value">${entity.position.x.toFixed(4)}</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Position Y</span>
+                            <span class="property-value">${entity.position.y.toFixed(4)}</span>
                         </div>
                     </div>
                 `;

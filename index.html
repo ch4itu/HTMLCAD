@@ -171,8 +171,33 @@
                             <i class="icon">&#9618;</i>
                             <span class="label">Hatch</span>
                         </button>
+                        <button class="tool-btn" data-cmd="polygon" onclick="App.executeCommand('polygon')" title="Polygon (POL)">
+                            <i class="icon">&#11039;</i>
+                            <span class="label">Polygon</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="donut" onclick="App.executeCommand('donut')" title="Donut (DO)">
+                            <i class="icon">&#9678;</i>
+                            <span class="label">Donut</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
+                </div>
+                <div class="ribbon-panel">
+                    <div class="ribbon-panel-content">
+                        <button class="tool-btn" data-cmd="dimlinear" onclick="App.executeCommand('dimlinear')" title="Linear Dimension (DIM)">
+                            <i class="icon">&#8596;</i>
+                            <span class="label">DimLinear</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="dimradius" onclick="App.executeCommand('dimradius')" title="Radius Dimension">
+                            <i class="icon">R</i>
+                            <span class="label">DimRadius</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="dimdiameter" onclick="App.executeCommand('dimdiameter')" title="Diameter Dimension">
+                            <i class="icon">&#8960;</i>
+                            <span class="label">DimDia</span>
+                        </button>
+                    </div>
+                    <div class="ribbon-panel-title">Dimension</div>
                 </div>
             </div>
 
@@ -223,6 +248,27 @@
                         </button>
                     </div>
                     <div class="ribbon-panel-title">Edit</div>
+                </div>
+                <div class="ribbon-panel">
+                    <div class="ribbon-panel-content">
+                        <button class="tool-btn" data-cmd="array" onclick="App.executeCommand('array')" title="Rectangular Array (AR)">
+                            <i class="icon">&#9638;</i>
+                            <span class="label">Array</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="fillet" onclick="App.executeCommand('fillet')" title="Fillet (F)">
+                            <i class="icon">&#8735;</i>
+                            <span class="label">Fillet</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="chamfer" onclick="App.executeCommand('chamfer')" title="Chamfer (CHA)">
+                            <i class="icon">&#9699;</i>
+                            <span class="label">Chamfer</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="break" onclick="App.executeCommand('break')" title="Break (BR)">
+                            <i class="icon">&#8689;</i>
+                            <span class="label">Break</span>
+                        </button>
+                    </div>
+                    <div class="ribbon-panel-title">Advanced</div>
                 </div>
             </div>
 
@@ -399,6 +445,7 @@
     <script src="js/geometry.js"></script>
     <script src="js/renderer.js"></script>
     <script src="js/commands.js"></script>
+    <script src="js/autolisp.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/app.js"></script>
