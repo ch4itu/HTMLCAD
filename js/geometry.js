@@ -834,6 +834,214 @@ const Geometry = {
         }
 
         return mirrored;
+    },
+
+    // ==========================================
+    // FILLET AND CHAMFER
+    // ==========================================
+
+    filletLines(line1, line2, radius) {
+        // Find intersection point of the two lines
+        const intersection = this.lineLineIntersection(
+            line1.p1, line1.p2, line2.p1, line2.p2, false
+        );
+
+        if (!intersection) return null;
+
+        // If radius is 0, just trim to intersection
+        if (radius === 0) {
+            // Determine which endpoints to keep
+            const d1p1 = Utils.dist(line1.p1, intersection);
+            const d1p2 = Utils.dist(line1.p2, intersection);
+            const d2p1 = Utils.dist(line2.p1, intersection);
+            const d2p2 = Utils.dist(line2.p2, intersection);
+
+            return {
+                line1: {
+                    p1: d1p1 > d1p2 ? line1.p1 : intersection,
+                    p2: d1p1 > d1p2 ? intersection : line1.p2
+                },
+                line2: {
+                    p1: d2p1 > d2p2 ? line2.p1 : intersection,
+                    p2: d2p1 > d2p2 ? intersection : line2.p2
+                },
+                arc: null
+            };
+        }
+
+        // Calculate the angle between the lines
+        const angle1 = Utils.angle(intersection, line1.p1);
+        const angle2 = Utils.angle(intersection, line2.p1);
+
+        // Find the bisector angle
+        let bisector = (angle1 + angle2) / 2;
+        if (Math.abs(angle1 - angle2) > Math.PI) {
+            bisector += Math.PI;
+        }
+
+        // Calculate fillet arc center
+        const sinHalfAngle = Math.sin(Math.abs(angle2 - angle1) / 2);
+        if (sinHalfAngle === 0) return null;
+
+        const centerDist = radius / sinHalfAngle;
+        const arcCenter = {
+            x: intersection.x + centerDist * Math.cos(bisector),
+            y: intersection.y + centerDist * Math.sin(bisector)
+        };
+
+        // Find tangent points on each line
+        const tangent1 = this.closestPointOnLine(arcCenter, line1.p1, line1.p2);
+        const tangent2 = this.closestPointOnLine(arcCenter, line2.p1, line2.p2);
+
+        // Create the fillet arc
+        const startAngle = Utils.angle(arcCenter, tangent1);
+        const endAngle = Utils.angle(arcCenter, tangent2);
+
+        // Trim the lines to the tangent points
+        const d1p1 = Utils.dist(line1.p1, tangent1);
+        const d1p2 = Utils.dist(line1.p2, tangent1);
+        const d2p1 = Utils.dist(line2.p1, tangent2);
+        const d2p2 = Utils.dist(line2.p2, tangent2);
+
+        return {
+            line1: {
+                type: 'line',
+                p1: d1p1 > d1p2 ? line1.p1 : tangent1,
+                p2: d1p1 > d1p2 ? tangent1 : line1.p2
+            },
+            line2: {
+                type: 'line',
+                p1: d2p1 > d2p2 ? line2.p1 : tangent2,
+                p2: d2p1 > d2p2 ? tangent2 : line2.p2
+            },
+            arc: {
+                type: 'arc',
+                center: arcCenter,
+                r: radius,
+                start: startAngle,
+                end: endAngle
+            }
+        };
+    },
+
+    closestPointOnLine(point, lineP1, lineP2) {
+        const dx = lineP2.x - lineP1.x;
+        const dy = lineP2.y - lineP1.y;
+        const lengthSq = dx * dx + dy * dy;
+
+        if (lengthSq === 0) return { ...lineP1 };
+
+        const t = Math.max(0, Math.min(1,
+            ((point.x - lineP1.x) * dx + (point.y - lineP1.y) * dy) / lengthSq
+        ));
+
+        return {
+            x: lineP1.x + t * dx,
+            y: lineP1.y + t * dy
+        };
+    },
+
+    chamferLines(line1, line2, dist1, dist2) {
+        // Find intersection point
+        const intersection = this.lineLineIntersection(
+            line1.p1, line1.p2, line2.p1, line2.p2, false
+        );
+
+        if (!intersection) return null;
+
+        // If distances are 0, just trim to intersection
+        if (dist1 === 0 && dist2 === 0) {
+            return this.filletLines(line1, line2, 0);
+        }
+
+        // Calculate chamfer points on each line
+        const d1p1 = Utils.dist(line1.p1, intersection);
+        const d1p2 = Utils.dist(line1.p2, intersection);
+        const d2p1 = Utils.dist(line2.p1, intersection);
+        const d2p2 = Utils.dist(line2.p2, intersection);
+
+        // Determine direction from intersection
+        const dir1 = d1p1 > d1p2 ?
+            { x: line1.p1.x - intersection.x, y: line1.p1.y - intersection.y } :
+            { x: line1.p2.x - intersection.x, y: line1.p2.y - intersection.y };
+        const dir2 = d2p1 > d2p2 ?
+            { x: line2.p1.x - intersection.x, y: line2.p1.y - intersection.y } :
+            { x: line2.p2.x - intersection.x, y: line2.p2.y - intersection.y };
+
+        // Normalize directions
+        const len1 = Math.sqrt(dir1.x * dir1.x + dir1.y * dir1.y);
+        const len2 = Math.sqrt(dir2.x * dir2.x + dir2.y * dir2.y);
+
+        const chamferP1 = {
+            x: intersection.x + (dir1.x / len1) * dist1,
+            y: intersection.y + (dir1.y / len1) * dist1
+        };
+        const chamferP2 = {
+            x: intersection.x + (dir2.x / len2) * dist2,
+            y: intersection.y + (dir2.y / len2) * dist2
+        };
+
+        return {
+            line1: {
+                type: 'line',
+                p1: d1p1 > d1p2 ? line1.p1 : chamferP1,
+                p2: d1p1 > d1p2 ? chamferP1 : line1.p2
+            },
+            line2: {
+                type: 'line',
+                p1: d2p1 > d2p2 ? line2.p1 : chamferP2,
+                p2: d2p1 > d2p2 ? chamferP2 : line2.p2
+            },
+            chamferLine: {
+                type: 'line',
+                p1: chamferP1,
+                p2: chamferP2
+            }
+        };
+    },
+
+    breakLine(entity, breakPoint1, breakPoint2) {
+        if (entity.type !== 'line') return null;
+
+        // Project break points onto line
+        const proj1 = this.closestPointOnLine(breakPoint1, entity.p1, entity.p2);
+        const proj2 = this.closestPointOnLine(breakPoint2, entity.p1, entity.p2);
+
+        // Calculate distances along line
+        const lineLen = Utils.dist(entity.p1, entity.p2);
+        const t1 = Utils.dist(entity.p1, proj1) / lineLen;
+        const t2 = Utils.dist(entity.p1, proj2) / lineLen;
+
+        const tMin = Math.min(t1, t2);
+        const tMax = Math.max(t1, t2);
+
+        const result = [];
+
+        // First segment (if not at start)
+        if (tMin > 0.001) {
+            result.push({
+                type: 'line',
+                p1: { ...entity.p1 },
+                p2: {
+                    x: entity.p1.x + tMin * (entity.p2.x - entity.p1.x),
+                    y: entity.p1.y + tMin * (entity.p2.y - entity.p1.y)
+                }
+            });
+        }
+
+        // Second segment (if not at end)
+        if (tMax < 0.999) {
+            result.push({
+                type: 'line',
+                p1: {
+                    x: entity.p1.x + tMax * (entity.p2.x - entity.p1.x),
+                    y: entity.p1.y + tMax * (entity.p2.y - entity.p1.y)
+                },
+                p2: { ...entity.p2 }
+            });
+        }
+
+        return result;
     }
 };
 

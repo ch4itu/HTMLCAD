@@ -25,6 +25,16 @@ const Commands = {
         'dtext': 'text',
         'po': 'point',
         'point': 'point',
+        'pol': 'polygon',
+        'polygon': 'polygon',
+        'ray': 'ray',
+        'xl': 'xline',
+        'xline': 'xline',
+        'spl': 'spline',
+        'spline': 'spline',
+        'do': 'donut',
+        'donut': 'donut',
+        'doughnut': 'donut',
 
         // Modify commands
         'e': 'erase',
@@ -59,6 +69,28 @@ const Commands = {
         'h': 'hatch',
         'hatch': 'hatch',
         'bh': 'hatch',
+        'ar': 'array',
+        'array': 'array',
+        'arrayrect': 'arrayrect',
+        'arraypolar': 'arraypolar',
+        'br': 'break',
+        'break': 'break',
+        'len': 'lengthen',
+        'lengthen': 'lengthen',
+        's': 'stretch',
+        'stretch': 'stretch',
+
+        // Dimension commands
+        'dim': 'dimlinear',
+        'dimlin': 'dimlinear',
+        'dimlinear': 'dimlinear',
+        'dimaligned': 'dimaligned',
+        'dimang': 'dimangular',
+        'dimangular': 'dimangular',
+        'dimrad': 'dimradius',
+        'dimradius': 'dimradius',
+        'dimdia': 'dimdiameter',
+        'dimdiameter': 'dimdiameter',
 
         // Utility commands
         'u': 'undo',
@@ -173,6 +205,50 @@ const Commands = {
                 UI.log('POINT: Specify a point:', 'prompt');
                 break;
 
+            case 'polygon':
+                UI.log('POLYGON: Enter number of sides <4>:', 'prompt');
+                CAD.cmdOptions.sides = 4;
+                break;
+
+            case 'ray':
+                UI.log('RAY: Specify start point:', 'prompt');
+                break;
+
+            case 'xline':
+                UI.log('XLINE: Specify a point or [Hor/Ver/Ang]:', 'prompt');
+                break;
+
+            case 'spline':
+                UI.log('SPLINE: Specify first point:', 'prompt');
+                break;
+
+            case 'donut':
+                UI.log(`DONUT: Specify inside diameter <${CAD.cmdOptions.donutInner || 10}>:`, 'prompt');
+                CAD.cmdOptions.donutInner = CAD.cmdOptions.donutInner || 10;
+                CAD.cmdOptions.donutOuter = CAD.cmdOptions.donutOuter || 20;
+                break;
+
+            // Dimension commands
+            case 'dimlinear':
+                UI.log('DIMLINEAR: Specify first extension line origin:', 'prompt');
+                break;
+
+            case 'dimaligned':
+                UI.log('DIMALIGNED: Specify first extension line origin:', 'prompt');
+                break;
+
+            case 'dimangular':
+                UI.log('DIMANGULAR: Select arc, circle, line, or specify vertex:', 'prompt');
+                break;
+
+            case 'dimradius':
+                UI.log('DIMRADIUS: Select arc or circle:', 'prompt');
+                break;
+
+            case 'dimdiameter':
+                UI.log('DIMDIAMETER: Select arc or circle:', 'prompt');
+                break;
+
             // Modify commands
             case 'erase':
                 if (CAD.selectedIds.length > 0) {
@@ -254,6 +330,64 @@ const Commands = {
                 } else {
                     UI.log('EXPLODE: Select objects to explode:', 'prompt');
                     CAD.cmdOptions.needSelection = true;
+                }
+                break;
+
+            case 'array':
+            case 'arrayrect':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('ARRAY: Select objects to array:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('ARRAY: Enter number of rows <1>:', 'prompt');
+                    CAD.cmdOptions.arrayRows = 1;
+                    CAD.cmdOptions.arrayCols = 1;
+                    CAD.cmdOptions.arrayType = 'rectangular';
+                }
+                break;
+
+            case 'arraypolar':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('ARRAYPOLAR: Select objects to array:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('ARRAYPOLAR: Specify center point of array:', 'prompt');
+                    CAD.cmdOptions.arrayType = 'polar';
+                }
+                break;
+
+            case 'fillet':
+                UI.log(`FILLET: Current radius = ${CAD.filletRadius || 0}. Select first object or [Radius]:`, 'prompt');
+                CAD.filletRadius = CAD.filletRadius || 0;
+                break;
+
+            case 'chamfer':
+                UI.log(`CHAMFER: Distances = ${CAD.chamferDist1 || 0}, ${CAD.chamferDist2 || 0}. Select first line or [Distance]:`, 'prompt');
+                CAD.chamferDist1 = CAD.chamferDist1 || 0;
+                CAD.chamferDist2 = CAD.chamferDist2 || 0;
+                break;
+
+            case 'break':
+                UI.log('BREAK: Select object:', 'prompt');
+                break;
+
+            case 'lengthen':
+                UI.log('LENGTHEN: Select an object or [DElta/Percent/Total/DYnamic]:', 'prompt');
+                CAD.cmdOptions.lengthenMode = 'dynamic';
+                break;
+
+            case 'stretch':
+                UI.log('STRETCH: Select objects to stretch by crossing-window:', 'prompt');
+                CAD.cmdOptions.needSelection = true;
+                CAD.selectionMode = true;
+                break;
+
+            case 'join':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('JOIN: Select source object:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('JOIN: Select objects to join to source:', 'prompt');
                 }
                 break;
 
@@ -486,6 +620,57 @@ const Commands = {
             case 'id':
                 UI.log(`X = ${point.x.toFixed(4)}, Y = ${point.y.toFixed(4)}, Z = 0.0000`);
                 this.finishCommand();
+                break;
+
+            case 'polygon':
+                this.handlePolygonClick(point);
+                break;
+
+            case 'ray':
+                this.handleRayClick(point);
+                break;
+
+            case 'xline':
+                this.handleXLineClick(point);
+                break;
+
+            case 'spline':
+                this.handleSplineClick(point);
+                break;
+
+            case 'donut':
+                this.handleDonutClick(point);
+                break;
+
+            case 'array':
+            case 'arrayrect':
+                this.handleArrayClick(point);
+                break;
+
+            case 'arraypolar':
+                this.handlePolarArrayClick(point);
+                break;
+
+            case 'fillet':
+                this.handleFilletClick(point);
+                break;
+
+            case 'chamfer':
+                this.handleChamferClick(point);
+                break;
+
+            case 'break':
+                this.handleBreakClick(point);
+                break;
+
+            case 'dimlinear':
+            case 'dimaligned':
+                this.handleDimLinearClick(point);
+                break;
+
+            case 'dimradius':
+            case 'dimdiameter':
+                this.handleDimRadiusClick(point);
                 break;
 
             default:
@@ -1183,6 +1368,371 @@ const Commands = {
     },
 
     // ==========================================
+    // NEW DRAWING COMMAND HANDLERS
+    // ==========================================
+
+    handlePolygonClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('POLYGON: Specify center of polygon:', 'prompt');
+        } else if (state.step === 2) {
+            const center = state.points[0];
+            const edgePoint = state.points[1];
+            const radius = Utils.dist(center, edgePoint);
+            const startAngle = Utils.angle(center, edgePoint);
+            const sides = state.cmdOptions.sides || 4;
+
+            // Create polygon as a closed polyline
+            const points = [];
+            for (let i = 0; i < sides; i++) {
+                const angle = startAngle + (i * 2 * Math.PI / sides);
+                points.push({
+                    x: center.x + radius * Math.cos(angle),
+                    y: center.y + radius * Math.sin(angle)
+                });
+            }
+            // Close the polygon
+            points.push({ ...points[0] });
+
+            CAD.addEntity({
+                type: 'polyline',
+                points: points,
+                closed: true
+            });
+
+            UI.log(`Polygon with ${sides} sides created.`);
+            this.finishCommand();
+        }
+    },
+
+    handleRayClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('RAY: Specify through point:', 'prompt');
+        } else if (state.step === 2) {
+            // Create a very long line in the direction specified
+            const direction = Utils.angle(state.points[0], state.points[1]);
+            const length = 10000; // Large number for "infinite" line
+
+            CAD.addEntity({
+                type: 'line',
+                p1: { ...state.points[0] },
+                p2: {
+                    x: state.points[0].x + length * Math.cos(direction),
+                    y: state.points[0].y + length * Math.sin(direction)
+                },
+                isRay: true
+            });
+
+            UI.log('Ray created.');
+            state.points = [state.points[0]]; // Keep start point for more rays
+            state.step = 1;
+            UI.log('RAY: Specify through point:', 'prompt');
+        }
+    },
+
+    handleXLineClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('XLINE: Specify through point:', 'prompt');
+        } else if (state.step === 2) {
+            // Create a construction line (infinite in both directions)
+            const direction = Utils.angle(state.points[0], state.points[1]);
+            const length = 10000;
+
+            CAD.addEntity({
+                type: 'line',
+                p1: {
+                    x: state.points[0].x - length * Math.cos(direction),
+                    y: state.points[0].y - length * Math.sin(direction)
+                },
+                p2: {
+                    x: state.points[0].x + length * Math.cos(direction),
+                    y: state.points[0].y + length * Math.sin(direction)
+                },
+                isXLine: true
+            });
+
+            UI.log('Construction line created.');
+            state.points = [state.points[0]];
+            state.step = 1;
+            UI.log('XLINE: Specify through point:', 'prompt');
+        }
+    },
+
+    handleSplineClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        UI.log(`SPLINE: Specify point ${state.step + 1} or [Close/Fit tolerance]:`, 'prompt');
+    },
+
+    handleDonutClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        // Create donut (two concentric circles represented as filled shape)
+        const inner = state.cmdOptions.donutInner || 10;
+        const outer = state.cmdOptions.donutOuter || 20;
+
+        CAD.addEntity({
+            type: 'donut',
+            center: { ...point },
+            innerRadius: inner / 2,
+            outerRadius: outer / 2
+        });
+
+        UI.log('Donut created. Specify center of donut:', 'prompt');
+    },
+
+    // ==========================================
+    // NEW MODIFY COMMAND HANDLERS
+    // ==========================================
+
+    handleArrayClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            // Point for row/column offset reference
+            UI.log('ARRAY: Specify second point for row/column spacing:', 'prompt');
+        } else if (state.step === 2) {
+            const rows = state.cmdOptions.arrayRows || 1;
+            const cols = state.cmdOptions.arrayCols || 1;
+            const rowOffset = state.points[1].y - state.points[0].y;
+            const colOffset = state.points[1].x - state.points[0].x;
+
+            CAD.saveUndoState('Array');
+
+            const selectedEntities = state.getSelectedEntities();
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (r === 0 && c === 0) continue; // Skip original
+
+                    const dx = c * colOffset;
+                    const dy = r * rowOffset;
+
+                    selectedEntities.forEach(entity => {
+                        const copied = Geometry.moveEntity(entity, { x: dx, y: dy });
+                        delete copied.id;
+                        CAD.addEntity(copied, true);
+                    });
+                }
+            }
+
+            UI.log(`Array created: ${rows} rows x ${cols} columns.`);
+            state.clearSelection();
+            this.finishCommand();
+        }
+    },
+
+    handlePolarArrayClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('ARRAYPOLAR: Enter number of items <4>:', 'prompt');
+            state.cmdOptions.arrayItems = 4;
+            state.cmdOptions.arrayAngle = 360;
+        }
+    },
+
+    handleFilletClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (!hit) {
+            UI.log('No object selected.', 'error');
+            return;
+        }
+
+        if (state.step === 0) {
+            state.targetId = hit.id;
+            state.step = 1;
+            UI.log('FILLET: Select second object:', 'prompt');
+        } else if (state.step === 1) {
+            // Perform fillet between two lines
+            const entity1 = CAD.getEntity(state.targetId);
+            const entity2 = hit;
+
+            if (entity1.type === 'line' && entity2.type === 'line') {
+                const result = Geometry.filletLines(entity1, entity2, CAD.filletRadius);
+                if (result) {
+                    CAD.saveUndoState('Fillet');
+                    CAD.updateEntity(entity1.id, result.line1, true);
+                    CAD.updateEntity(entity2.id, result.line2, true);
+                    if (result.arc) {
+                        CAD.addEntity(result.arc, true);
+                    }
+                    UI.log(`Fillet created with radius ${CAD.filletRadius}.`);
+                } else {
+                    UI.log('Cannot fillet these objects.', 'error');
+                }
+            } else {
+                UI.log('Fillet currently supports only lines.', 'error');
+            }
+
+            this.finishCommand();
+        }
+    },
+
+    handleChamferClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (!hit) {
+            UI.log('No object selected.', 'error');
+            return;
+        }
+
+        if (state.step === 0) {
+            state.targetId = hit.id;
+            state.step = 1;
+            UI.log('CHAMFER: Select second line:', 'prompt');
+        } else if (state.step === 1) {
+            const entity1 = CAD.getEntity(state.targetId);
+            const entity2 = hit;
+
+            if (entity1.type === 'line' && entity2.type === 'line') {
+                const result = Geometry.chamferLines(entity1, entity2, CAD.chamferDist1, CAD.chamferDist2);
+                if (result) {
+                    CAD.saveUndoState('Chamfer');
+                    CAD.updateEntity(entity1.id, result.line1, true);
+                    CAD.updateEntity(entity2.id, result.line2, true);
+                    CAD.addEntity(result.chamferLine, true);
+                    UI.log(`Chamfer created with distances ${CAD.chamferDist1}, ${CAD.chamferDist2}.`);
+                } else {
+                    UI.log('Cannot chamfer these lines.', 'error');
+                }
+            } else {
+                UI.log('Chamfer currently supports only lines.', 'error');
+            }
+
+            this.finishCommand();
+        }
+    },
+
+    handleBreakClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (!hit) {
+            UI.log('No object selected.', 'error');
+            return;
+        }
+
+        if (state.step === 0) {
+            state.targetId = hit.id;
+            state.points.push(point);
+            state.step = 1;
+            UI.log('BREAK: Specify second break point or [First point]:', 'prompt');
+        } else if (state.step === 1) {
+            state.points.push(point);
+
+            const entity = CAD.getEntity(state.targetId);
+            if (entity && entity.type === 'line') {
+                const result = Geometry.breakLine(entity, state.points[0], state.points[1]);
+                if (result && result.length > 0) {
+                    CAD.saveUndoState('Break');
+                    CAD.removeEntity(state.targetId, true);
+                    result.forEach(e => CAD.addEntity(e, true));
+                    UI.log('Object broken.');
+                } else {
+                    UI.log('Cannot break object at specified points.', 'error');
+                }
+            }
+
+            this.finishCommand();
+        }
+    },
+
+    // ==========================================
+    // DIMENSION COMMAND HANDLERS
+    // ==========================================
+
+    handleDimLinearClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('DIMLINEAR: Specify second extension line origin:', 'prompt');
+        } else if (state.step === 2) {
+            UI.log('DIMLINEAR: Specify dimension line location:', 'prompt');
+        } else if (state.step === 3) {
+            const p1 = state.points[0];
+            const p2 = state.points[1];
+            const dimLine = state.points[2];
+
+            // Calculate dimension value
+            const distance = state.activeCmd === 'dimaligned' ?
+                Utils.dist(p1, p2) :
+                Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y) ?
+                    Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
+
+            // Create dimension entity
+            CAD.addEntity({
+                type: 'dimension',
+                dimType: state.activeCmd === 'dimaligned' ? 'aligned' : 'linear',
+                p1: { ...p1 },
+                p2: { ...p2 },
+                dimLinePos: { ...dimLine },
+                value: distance,
+                text: distance.toFixed(2)
+            });
+
+            UI.log(`Dimension: ${distance.toFixed(4)}`);
+            this.finishCommand();
+        }
+    },
+
+    handleDimRadiusClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (hit && (hit.type === 'circle' || hit.type === 'arc')) {
+            state.targetId = hit.id;
+            state.points.push(point);
+            state.step = 1;
+            UI.log('DIMRADIUS: Specify dimension line location:', 'prompt');
+        } else if (state.step === 1) {
+            const entity = CAD.getEntity(state.targetId);
+            if (entity) {
+                const value = state.activeCmd === 'dimdiameter' ? entity.r * 2 : entity.r;
+                const prefix = state.activeCmd === 'dimdiameter' ? 'Ø' : 'R';
+
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: state.activeCmd === 'dimdiameter' ? 'diameter' : 'radius',
+                    center: { ...entity.center },
+                    radius: entity.r,
+                    dimLinePos: { ...point },
+                    value: value,
+                    text: `${prefix}${value.toFixed(2)}`
+                });
+
+                UI.log(`${state.activeCmd === 'dimdiameter' ? 'Diameter' : 'Radius'}: ${value.toFixed(4)}`);
+            }
+            this.finishCommand();
+        } else {
+            UI.log('Please select a circle or arc.', 'error');
+        }
+    },
+
+    // ==========================================
     // INPUT HANDLING
     // ==========================================
 
@@ -1291,6 +1841,72 @@ const Commands = {
                 Renderer.draw();
                 return true;
             }
+
+            // Polygon - number of sides
+            if (state.activeCmd === 'polygon' && state.step === 0) {
+                state.cmdOptions.sides = Math.max(3, Math.round(num));
+                state.step = 1;
+                UI.log(`POLYGON: ${state.cmdOptions.sides} sides. Specify center of polygon:`, 'prompt');
+                return true;
+            }
+
+            // Array - number of rows
+            if ((state.activeCmd === 'array' || state.activeCmd === 'arrayrect') && state.step === 0) {
+                state.cmdOptions.arrayRows = Math.max(1, Math.round(num));
+                UI.log(`ARRAY: Enter number of columns <1>:`, 'prompt');
+                return true;
+            }
+
+            // Array - number of columns
+            if ((state.activeCmd === 'array' || state.activeCmd === 'arrayrect') &&
+                state.cmdOptions.arrayRows && !state.cmdOptions.arrayCols) {
+                state.cmdOptions.arrayCols = Math.max(1, Math.round(num));
+                UI.log('ARRAY: Specify first corner of array:', 'prompt');
+                return true;
+            }
+
+            // Polar array - number of items
+            if (state.activeCmd === 'arraypolar' && state.step === 1) {
+                state.cmdOptions.arrayItems = Math.max(2, Math.round(num));
+                UI.log('ARRAYPOLAR: Specify angle to fill <360>:', 'prompt');
+                return true;
+            }
+
+            // Donut - inner diameter
+            if (state.activeCmd === 'donut' && state.step === 0) {
+                state.cmdOptions.donutInner = Math.abs(num);
+                UI.log(`DONUT: Specify outside diameter <${state.cmdOptions.donutOuter}>:`, 'prompt');
+                return true;
+            }
+
+            // Donut - outer diameter
+            if (state.activeCmd === 'donut' && state.cmdOptions.donutInner !== undefined &&
+                state.cmdOptions.donutOuter === 20) {
+                state.cmdOptions.donutOuter = Math.abs(num);
+                UI.log('DONUT: Specify center of donut:', 'prompt');
+                return true;
+            }
+        }
+
+        // Check for special command options
+        if (state.activeCmd === 'fillet' && input.toLowerCase() === 'r') {
+            const radius = prompt('Enter fillet radius:', CAD.filletRadius || '0');
+            if (radius !== null) {
+                CAD.filletRadius = Math.abs(parseFloat(radius)) || 0;
+                UI.log(`FILLET: Radius = ${CAD.filletRadius}. Select first object:`, 'prompt');
+            }
+            return true;
+        }
+
+        if (state.activeCmd === 'chamfer' && input.toLowerCase() === 'd') {
+            const d1 = prompt('Enter first chamfer distance:', CAD.chamferDist1 || '0');
+            if (d1 !== null) {
+                CAD.chamferDist1 = Math.abs(parseFloat(d1)) || 0;
+                const d2 = prompt('Enter second chamfer distance:', CAD.chamferDist1);
+                CAD.chamferDist2 = d2 !== null ? Math.abs(parseFloat(d2)) || CAD.chamferDist1 : CAD.chamferDist1;
+                UI.log(`CHAMFER: Distances = ${CAD.chamferDist1}, ${CAD.chamferDist2}. Select first line:`, 'prompt');
+            }
+            return true;
         }
 
         // Not a coordinate - treat as command
