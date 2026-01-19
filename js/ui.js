@@ -196,6 +196,22 @@ const UI = {
             return;
         }
 
+        // Space or Enter - repeat last command or act as Enter for active command
+        if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'INPUT') {
+            e.preventDefault();
+            if (CAD.activeCmd) {
+                // Active command - act as Enter to confirm/finish
+                Commands.handleInput('');
+                Renderer.draw();
+            } else if (this.lastCommand) {
+                // No active command - repeat last command
+                this.log(`Command: ${this.lastCommand}`, 'input');
+                Commands.execute(this.lastCommand);
+            }
+            this.focusCommandLine();
+            return;
+        }
+
         // Delete - erase selected
         if (e.key === 'Delete' && e.target.tagName !== 'INPUT') {
             e.preventDefault();
