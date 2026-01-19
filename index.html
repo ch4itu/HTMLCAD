@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCAD Classic</title>
+    <style>
+        :root {
+            --bg-color: #2b2b2b;
+            --panel-color: #333;
+            --input-bg: #222;
+            --border: #444;
+            --highlight: #0078d4;
+            --text-color: #e0e0e0;
+            --canvas-bg: #121212;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden;
+            user-select: none;
+        }
+
+        /* --- Toolbar --- */
+        .toolbar {
+            background-color: var(--panel-color);
+            border-bottom: 1px solid var(--border);
+            display: flex; padding: 5px; gap: 5px; height: 50px; align-items: center;
+        }
+
+        .separator { width: 1px; height: 30px; background: #555; margin: 0 5px; }
+
+        .btn {
+            background: transparent; border: 1px solid transparent; color: #ccc;
+            padding: 4px; cursor: pointer; border-radius: 2px; min-width: 40px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .btn:hover { background: #444; border-color: #555; }
+        .btn.active { background: #405060; color: #fff; border-color: #0078d4; }
+        .btn i { font-style: normal; font-size: 1.1rem; margin-bottom: 2px; }
+        .btn span { font-size: 0.65rem; }
+
+        .layer-control { display: flex; align-items: center; gap: 5px; margin-left: 5px; }
+        select { background: var(--input-bg); color: #fff; border: 1px solid var(--border); padding: 4px; font-size: 0.8rem;}
+
+        /* --- Canvas --- */
+        #viewport { flex-grow: 1; position: relative; background: var(--canvas-bg); overflow: hidden; cursor: crosshair; }
+        
+        /* --- Bottom Panel --- */
+        .bottom-panel {
+            background: var(--panel-color); border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; height: 120px;
+        }
+        
+        .cmd-history { 
+            flex-grow: 1; overflow-y: auto; color: #aaa; font-size: 0.8rem; 
+            padding: 5px 10px; font-family: 'Consolas', monospace; 
+        }
+
+        .cmd-line-row {
+            display: flex; align-items: center; background: var(--input-bg); 
+            padding: 4px 10px; border-top: 1px solid var(--border);
+        }
+        .cmd-prompt { margin-right: 8px; font-family: 'Consolas', monospace; font-weight: bold; font-size: 0.9rem;}
+        #cmdInput { 
+            background: transparent; border: none; color: #fff; flex-grow: 1; 
+            outline: none; font-family: 'Consolas', monospace; font-size: 0.9rem; 
+        }
+
+        .status-bar {
+            display: flex; justify-content: space-between; padding: 2px 10px;
+            background: #222; color: #888; font-size: 0.75rem; font-family: monospace;
+            border-top: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <button class="btn" onclick="cmd('line')" id="btn-line" title="Line (L)"><i>/</i><span>Line</span></button>
+    <button class="btn" onclick="cmd('polyline')" id="btn-polyline" title="Polyline (PL)"><i>~</i><span>Poly</span></button>
+    <button class="btn" onclick="cmd('circle')" id="btn-circle" title="Circle (C)"><i>○</i><span>Circle</span></button>
+    <button class="btn" onclick="cmd('rect')" id="btn-rect" title="Rectangle (REC)"><i>□</i><span>Rect</span></button>
+    
+    <div class="separator"></div>
+    
+    <button class="btn" onclick="cmd('trim')" id="btn-trim" title="Trim (TR)"><i>✂</i><span>Trim</span></button>
+    <button class="btn" onclick="cmd('hatch')" id="btn-hatch" title="Hatch (H)"><i>▒</i><span>Hatch</span></button>
+    <button class="btn" onclick="cmd('offset')" id="btn-offset" title="Offset (O)"><i>∥</i><span>Offset</span></button>
+    <button class="btn" onclick="cmd('erase')" title="Erase (E)"><i>✕</i><span>Erase</span></button>
+
+    <div class="separator"></div>
+
+    <div class="layer-control">
+        <button class="btn" style="min-width:24px;" onclick="addLayer()" title="New Layer">＋</button>
+        <select id="layerSelect" onchange="setLayer(this.value)"></select>
+        <input type="color" id="layerColor" value="#ffffff" onchange="updateLayerColor(this.value)" style="width:24px; height:24px; border:none; padding:0; cursor:pointer;">
+    </div>
+
+    <div style="flex-grow:1;"></div>
+
+    <button class="btn" onclick="saveDXF()" style="width:auto; padding:4px 8px;"><i>💾</i><span>Save as DXF</span></button>
+</div>
+
+<div id="viewport">
+    <canvas id="canvas"></canvas>
+</div>
+
+<div class="bottom-panel">
+    <div class="cmd-history" id="history">
+        <div>WebCAD Classic Initialized.</div>
+        <div>Use 'C' to Close Line or Polyline chains.</div>
+    </div>
+    <div class="cmd-line-row">
+        <span class="cmd-prompt">Command:</span>
+        <input type="text" id="cmdInput" autocomplete="off" autofocus>
+    </div>
+    <div class="status-bar">
+        <span>Model</span>
+        <span id="coords">0.00, 0.00, 0.00</span>
+    </div>
+</div>
+
+<script>
+/* =========================================
+   CORE STATE
+   ========================================= */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const viewport = document.getElementById('viewport');
+const historyInfo = document.getElementById('history');
+const cmdInput = document.getElementById('cmdInput');
+const coordDisplay = document.getElementById('coords');
+
+const state = {
+    activeCmd: null,     
+    step: 0,
+    
+    // Command specific temp data
+    points: [],          
+    tempEnd: null,
+    lineChainStart: null,
+    offsetDist: 10,
+    targetId: null,
+
+    // Selection
+    selectionMode: false,
+    selectStart: null,   
+    selectedIds: [],     
+    
+    // View
+    pan: { x: 0, y: 0 },
+    zoom: 1,
+    cursor: { x: 0, y: 0 }, 
+    
+    // Data
+    layers: [{ name: '0', color: '#ffffff', visible: true }],
+    currentLayer: '0',
+    entities: []        
+};
+
+// Start
+resize();
+updateLayerUI();
+window.addEventListener('resize', resize);
+
+// Force focus to command line
+function focusCLI() {
+    if (document.activeElement !== cmdInput && document.activeElement.tagName !== 'INPUT') {
+        cmdInput.focus();
+    }
+}
+
+/* =========================================
+   INPUT & COMMANDS
+   ========================================= */
+
+cmdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const raw = cmdInput.value.trim();
+        if(!raw && e.key === ' ') {
+             if(state.activeCmd === 'offset' || state.activeCmd === 'trim') { finishCmd(); log('Command finished.'); }
+             return;
+        }
+        
+        const val = raw.toLowerCase();
+        log(`Command: ${raw}`);
+        cmdInput.value = '';
+
+        if (state.activeCmd && (val === 'c' || val === 'close')) {
+            closeShape();
+            return;
+        }
+
+        if (state.activeCmd === 'offset' && state.step === 0) {
+            const dist = parseFloat(val);
+            if (!isNaN(dist) && dist > 0) {
+                state.offsetDist = dist;
+                state.step = 1;
+                log('Select object to offset:');
+            } else {
+                log('Invalid distance.');
+                finishCmd();
+            }
+            return;
+        }
+
+        const map = {
+            'l': 'line', 'line': 'line',
+            'pl': 'polyline', 'pline': 'polyline',
+            'c': 'circle', 'circle': 'circle',
+            'rec': 'rect', 'rect': 'rect',
+            'e': 'erase', 'erase': 'erase',
+            'o': 'offset', 'offset': 'offset',
+            'h': 'hatch', 'hatch': 'hatch',
+            'tr': 'trim', 'trim': 'trim'
+        };
+
+        if (map[val]) cmd(map[val]);
+        else log('Unknown command');
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') handleEscape();
+    if (e.key === 'Delete') cmd('erase');
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+         if(document.activeElement !== cmdInput && e.target.tagName !== 'INPUT') {
+            cmdInput.focus();
+         }
+    }
+});
+
+function cmd(name) {
+    state.activeCmd = name;
+    state.step = 0;
+    state.points = [];
+    state.targetId = null;
+    state.selectionMode = false;
+    state.lineChainStart = null; 
+    
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`btn-${name}`);
+    if(btn) btn.classList.add('active');
+
+    if (name === 'erase') { deleteSelected(); finishCmd(); return; }
+    
+    if (name === 'line' || name === 'polyline') log('Specify first point:');
+    else if (name === 'circle') log('Specify center point:');
+    else if (name === 'rect') log('Specify first corner:');
+    else if (name === 'hatch') log('Select closed object to hatch:');
+    else if (name === 'offset') log('Specify offset distance <' + state.offsetDist + '>:');
+    else if (name === 'trim') log('Select object to trim:');
+}
+
+/* =========================================
+   MOUSE INTERACTIONS
+   ========================================= */
+
+viewport.addEventListener('mousedown', e => {
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) { startPan(e); return; }
+    if (e.button === 0) handleClick(e); 
+});
+
+viewport.addEventListener('mousemove', e => {
+    const world = screenToWorld(e.offsetX, e.offsetY);
+    state.cursor = world;
+    state.tempEnd = world;
+    coordDisplay.textContent = `${world.x.toFixed(2)}, ${world.y.toFixed(2)}, 0.00`;
+    if (state.isPanning) doPan(e);
+    draw(); 
+});
+
+viewport.addEventListener('mouseup', () => { 
+    state.isPanning = false; 
+    canvas.style.cursor = 'crosshair'; 
+    focusCLI();
+});
+
+viewport.addEventListener('wheel', e => {
+    const zoomDir = e.deltaY < 0 ? 1.1 : 0.9;
+    const wBefore = screenToWorld(e.offsetX, e.offsetY);
+    state.zoom *= zoomDir;
+    state.pan.x = e.offsetX - wBefore.x * state.zoom;
+    state.pan.y = e.offsetY - wBefore.y * state.zoom;
+    draw();
+});
+
+function handleClick(e) {
+    const pt = state.cursor;
+
+    // --- TRIM LOGIC ---
+    if (state.activeCmd === 'trim') {
+        const hit = hitTest(pt);
+        if (hit) {
+            performTrim(hit, pt);
+            // Don't finishCmd, allow multiple trims
+            log('Object trimmed. Select next or Enter to exit.');
+        } else {
+            log('No object found to trim.');
+        }
+        return;
+    }
+
+    // --- HATCH LOGIC ---
+    if (state.activeCmd === 'hatch') {
+        const hit = hitTest(pt);
+        if (hit) {
+            if (hit.type === 'circle' || hit.type === 'rect' || (hit.type === 'polyline' && isClosed(hit))) {
+                hit.hatch = true;
+                log('Hatch applied.');
+            } else {
+                log('Object is not closed. Cannot hatch.');
+            }
+            finishCmd();
+        }
+        return;
+    }
+
+    // --- OFFSET LOGIC ---
+    if (state.activeCmd === 'offset') {
+        if (state.step === 1) {
+            const hit = hitTest(pt);
+            if (hit) {
+                state.targetId = hit.id;
+                state.step = 2;
+                log('Specify point on side to offset:');
+            }
+        } else if (state.step === 2) {
+            performOffset(state.targetId, pt);
+            state.step = 1;
+            state.targetId = null;
+            log('Select object to offset or <Exit>:');
+        }
+        return;
+    }
+
+    // --- DRAWING LOGIC ---
+    if (!state.activeCmd) {
+        if (!state.selectionMode) {
+            const hit = hitTest(pt);
+            if (hit) { state.selectedIds = [hit.id]; log('1 found.'); }
+            else { state.selectionMode = true; state.selectStart = pt; log('Specify opposite corner:'); }
+        } else {
+            finishSelection(pt);
+            state.selectionMode = false;
+        }
+        draw();
+        return;
+    }
+
+    state.points.push(pt);
+    state.step++;
+
+    if (state.activeCmd === 'line') {
+        if (state.points.length === 1 && !state.lineChainStart) {
+            state.lineChainStart = pt;
+        }
+
+        if (state.points.length === 2) {
+            addEntity({ type: 'line', p1: state.points[0], p2: state.points[1] });
+            state.points = [state.points[1]]; 
+            log('Specify next point or [Close]:');
+        } else {
+            log('Specify next point:');
+        }
+    }
+    else if (state.activeCmd === 'polyline') {
+        log(state.points.length > 0 ? 'Specify next point or [Close]:' : 'Specify next point:');
+    }
+    else if (state.activeCmd === 'circle' && state.points.length === 2) {
+        addEntity({ type: 'circle', center: state.points[0], r: dist(state.points[0], state.points[1]) });
+        finishCmd();
+    }
+    else if (state.activeCmd === 'rect' && state.points.length === 2) {
+        addEntity({ type: 'rect', p1: state.points[0], p2: state.points[1] });
+        finishCmd();
+    }
+}
+
+/* =========================================
+   GEOMETRY OPERATIONS (OFFSET & TRIM)
+   ========================================= */
+
+function performTrim(ent, clickPt) {
+    // Collect intersection points on this entity
+    let cuts = [];
+    
+    // 1. Calculate intersections against all other visible entities
+    state.entities.forEach(other => {
+        if (other.id === ent.id) return;
+        if (!state.layers.find(l => l.name === other.layer).visible) return;
+        
+        const pts = getIntersections(ent, other);
+        cuts.push(...pts);
+    });
+
+    if (cuts.length === 0) { log('No intersections found to trim against.'); return; }
+
+    // 2. Sort cuts based on entity type to order them
+    if (ent.type === 'line') {
+        cuts.push(ent.p1, ent.p2);
+        // Sort by distance from p1
+        cuts.sort((a,b) => dist(ent.p1, a) - dist(ent.p1, b));
+    } else if (ent.type === 'circle' || ent.type === 'arc') {
+        // For circle, we work in angles.
+        // Convert cuts to angles.
+        // If circle, we need to handle the wrap-around.
+        // Simplification: Convert circle to Arc 0-2PI, then split.
+    }
+
+    // 3. Reconstruct Entity segments
+    const newEnts = [];
+    
+    if (ent.type === 'line') {
+        // Remove duplicate points close to each other
+        cuts = filterUniquePoints(cuts);
+        
+        // Find which segment the user clicked
+        let clickedIdx = -1;
+        let minD = 9999;
+        
+        // Check midpoints of segments
+        for (let i = 0; i < cuts.length - 1; i++) {
+            const mid = { x: (cuts[i].x + cuts[i+1].x)/2, y: (cuts[i].y + cuts[i+1].y)/2 };
+            const d = dist(clickPt, mid);
+            if (d < minD) { minD = d; clickedIdx = i; }
+        }
+        
+        // Rebuild lines except clicked one
+        for (let i = 0; i < cuts.length - 1; i++) {
+            if (i === clickedIdx) continue;
+            if (dist(cuts[i], cuts[i+1]) < 0.001) continue;
+            newEnts.push({ type: 'line', p1: cuts[i], p2: cuts[i+1] });
+        }
+    }
+    else {
+        // Basic fallback for Circle/Polyline:
+        // Proper trim for these is complex (angles, polyline segments).
+        // For this version, we will only support robust Line trimming.
+        // Warning log for now to avoid breaking.
+        log('Trimming currently optimized for Lines only.');
+        return;
+    }
+    
+    // 4. Update State: Remove old, add new
+    state.entities = state.entities.filter(e => e.id !== ent.id);
+    newEnts.forEach(e => addEntity(e));
+    draw();
+}
+
+function getIntersections(e1, e2) {
+    const res = [];
+    const segs1 = getSegments(e1);
+    const segs2 = getSegments(e2);
+    
+    segs1.forEach(s1 => {
+        segs2.forEach(s2 => {
+            if (s1.type === 'line' && s2.type === 'line') {
+                const p = getIntersectionLineLineRaw(s1.p1, s1.p2, s2.p1, s2.p2);
+                if (p) res.push(p);
+            }
+            // Add Line-Arc/Circle logic here if needed for circle trimming
+        });
+    });
+    return res;
+}
+
+function getSegments(e) {
+    if (e.type === 'line') return [{type:'line', p1:e.p1, p2:e.p2}];
+    if (e.type === 'polyline') {
+        const res = [];
+        for(let i=0; i<e.points.length-1; i++) res.push({type:'line', p1:e.points[i], p2:e.points[i+1]});
+        if(isClosed(e)) res.push({type:'line', p1:e.points[e.points.length-1], p2:e.points[0]});
+        return res;
+    }
+    if (e.type === 'rect') {
+        const p1=e.p1, p2=e.p2;
+        return [
+            {type:'line', p1:{x:p1.x, y:p1.y}, p2:{x:p2.x, y:p1.y}},
+            {type:'line', p1:{x:p2.x, y:p1.y}, p2:{x:p2.x, y:p2.y}},
+            {type:'line', p1:{x:p2.x, y:p2.y}, p2:{x:p1.x, y:p2.y}},
+            {type:'line', p1:{x:p1.x, y:p2.y}, p2:{x:p1.x, y:p1.y}}
+        ];
+    }
+    // Circle intersections treated elsewhere or simplified
+    return [];
+}
+
+function getIntersectionLineLineRaw(p1, p2, p3, p4) {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    if (Math.abs(d) < 1e-6) return null;
+    const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+    }
+    return null;
+}
+
+function filterUniquePoints(pts) {
+    const res = [];
+    pts.forEach(p => {
+        if (!res.find(e => dist(e, p) < 0.001)) res.push(p);
+    });
+    return res;
+}
+
+function performOffset(id, clickPt) {
+    const ent = state.entities.find(e => e.id === id);
+    if (!ent) return;
+    const d = state.offsetDist;
+    const newEnt = { id: Date.now(), layer: state.currentLayer, type: ent.type };
+
+    if (ent.type === 'circle') {
+        const currentDist = dist(ent.center, clickPt);
+        const newR = (currentDist > ent.r) ? ent.r + d : ent.r - d;
+        if (newR <= 0) { log('Offset radius too small.'); return; }
+        newEnt.center = ent.center; newEnt.r = newR;
+        state.entities.push(newEnt);
+    } 
+    else if (ent.type === 'line') {
+        const offsetSeg = getOffsetLine(ent.p1, ent.p2, d, clickPt);
+        newEnt.p1 = offsetSeg.p1; newEnt.p2 = offsetSeg.p2;
+        state.entities.push(newEnt);
+    }
+    else if (ent.type === 'rect') {
+        const minX = Math.min(ent.p1.x, ent.p2.x); const maxX = Math.max(ent.p1.x, ent.p2.x);
+        const minY = Math.min(ent.p1.y, ent.p2.y); const maxY = Math.max(ent.p1.y, ent.p2.y);
+        const isInside = clickPt.x > minX && clickPt.x < maxX && clickPt.y > minY && clickPt.y < maxY;
+        const sign = isInside ? -1 : 1;
+        
+        let nMinX = minX - d*sign; let nMaxX = maxX + d*sign;
+        let nMinY = minY - d*sign; let nMaxY = maxY + d*sign;
+        
+        if (nMaxX <= nMinX || nMaxY <= nMinY) { log('Offset too small.'); return; }
+        newEnt.p1 = { x: nMinX, y: nMinY }; newEnt.p2 = { x: nMaxX, y: nMaxY };
+        state.entities.push(newEnt);
+    }
+    else if (ent.type === 'polyline') {
+        if (ent.points.length < 2) return;
+        let closestIdx = 0; let minDist = 999999;
+        for(let i=0; i<ent.points.length-1; i++) {
+            const dst = distToSeg(clickPt, ent.points[i], ent.points[i+1]);
+            if(dst < minDist) { minDist = dst; closestIdx = i; }
+        }
+        const p1 = ent.points[closestIdx]; const p2 = ent.points[closestIdx+1];
+        const dx = p2.x - p1.x; const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const nx = -dy/len; const ny = dx/len;
+        const vx = clickPt.x - p1.x; const vy = clickPt.y - p1.y;
+        const sign = (vx*nx + vy*ny) > 0 ? 1 : -1;
+        
+        const lines = [];
+        for(let i=0; i<ent.points.length-1; i++) lines.push(getOffsetLineRaw(ent.points[i], ent.points[i+1], d * sign));
+        
+        const newPts = [];
+        const closed = isClosed(ent);
+        if (closed) {
+            const inter = getIntersectionLineLine(lines[lines.length-1], lines[0]);
+            newPts.push(inter ? inter : lines[0].p1); 
+        } else {
+             newPts.push(lines[0].p1);
+        }
+        for(let i=0; i<lines.length-1; i++) {
+            const inter = getIntersectionLineLine(lines[i], lines[i+1]);
+            if(inter) newPts.push(inter);
+            else newPts.push(lines[i].p2); 
+        }
+        if (closed) newPts.push(newPts[0]); 
+        else newPts.push(lines[lines.length-1].p2);
+
+        newEnt.points = newPts;
+        state.entities.push(newEnt);
+    }
+    
+    log('Object offset.');
+}
+
+function getOffsetLine(p1, p2, d, clickPt) {
+    const dx = p2.x - p1.x; const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    const nx = -dy / len; const ny = dx / len;
+    const vx = clickPt.x - p1.x; const vy = clickPt.y - p1.y;
+    const sign = (vx * nx + vy * ny) > 0 ? 1 : -1;
+    return { p1: {x: p1.x + nx*d*sign, y: p1.y + ny*d*sign}, p2: {x: p2.x + nx*d*sign, y: p2.y + ny*d*sign} };
+}
+function getOffsetLineRaw(p1, p2, signedDist) {
+    const dx = p2.x - p1.x; const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    const nx = -dy / len; const ny = dx / len;
+    return { p1: {x: p1.x + nx*signedDist, y: p1.y + ny*signedDist}, p2: {x: p2.x + nx*signedDist, y: p2.y + ny*signedDist} };
+}
+function getIntersectionLineLine(l1, l2) {
+    const x1 = l1.p1.x, y1 = l1.p1.y, x2 = l1.p2.x, y2 = l1.p2.y;
+    const x3 = l2.p1.x, y3 = l2.p1.y, x4 = l2.p2.x, y4 = l2.p2.y;
+    const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(d) < 1e-6) return null; 
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
+    return { x: x1 + t * (x1 - x2), y: y1 + t * (y1 - y2) };
+}
+
+function closeShape() {
+    if (state.activeCmd === 'polyline' && state.points.length >= 2) {
+        state.points.push(state.points[0]); 
+        const pts = [...state.points];
+        addEntity({ type: 'polyline', points: pts });
+        finishCmd();
+        log('Polyline Closed.');
+    }
+    else if (state.activeCmd === 'line' && state.lineChainStart && state.points.length === 1) {
+        const currentStart = state.points[0];
+        const chainStart = state.lineChainStart;
+        addEntity({ type: 'line', p1: currentStart, p2: chainStart });
+        finishCmd();
+        log('Line chain Closed.');
+    }
+    else {
+        log('Cannot close. Need at least 2 segments.');
+    }
+}
+
+function isClosed(ent) {
+    if (ent.type !== 'polyline') return true; 
+    if (ent.points.length < 3) return false;
+    const f = ent.points[0]; const l = ent.points[ent.points.length-1];
+    return (Math.hypot(f.x-l.x, f.y-l.y) < 0.001);
+}
+
+/* =========================================
+   STANDARD UTILS
+   ========================================= */
+
+function handleEscape() {
+    if (state.selectionMode) {
+        state.selectionMode = false;
+        state.selectStart = null;
+        log('Selection window canceled.');
+        draw();
+        return;
+    }
+    
+    if (state.selectedIds.length) { state.selectedIds = []; log('Deselected.'); }
+    else if (state.activeCmd) { finishCmd(); log('Canceled.'); }
+    draw();
+}
+
+function finishCmd() {
+    state.activeCmd = null;
+    state.points = [];
+    state.step = 0;
+    state.lineChainStart = null;
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    draw();
+    focusCLI();
+}
+
+function deleteSelected() {
+    if (!state.selectedIds.length) return;
+    state.entities = state.entities.filter(e => !state.selectedIds.includes(e.id));
+    state.selectedIds = [];
+    log('Erased.');
+    draw();
+}
+
+function addEntity(data) {
+    state.entities.push({ id: Date.now(), layer: state.currentLayer, ...data });
+    draw();
+}
+
+/* =========================================
+   RENDERING
+   ========================================= */
+
+function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#121212';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.translate(state.pan.x, state.pan.y);
+    ctx.scale(state.zoom, state.zoom);
+
+    drawGrid();
+
+    state.entities.forEach(ent => {
+        if (!state.layers.find(l => l.name === ent.layer).visible) return;
+        
+        const sel = state.selectedIds.includes(ent.id);
+        const col = sel ? '#3399ff' : getEntColor(ent);
+        
+        ctx.beginPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = (sel ? 2 : 1) / state.zoom;
+        ctx.setLineDash(sel ? [5/state.zoom, 3/state.zoom] : []);
+
+        if (ent.type === 'line') { ctx.moveTo(ent.p1.x, ent.p1.y); ctx.lineTo(ent.p2.x, ent.p2.y); }
+        else if (ent.type === 'circle') { ctx.arc(ent.center.x, ent.center.y, ent.r, 0, Math.PI*2); }
+        else if (ent.type === 'arc') { ctx.arc(ent.center.x, ent.center.y, ent.r, ent.start, ent.end); }
+        else if (ent.type === 'rect') { ctx.rect(ent.p1.x, ent.p1.y, ent.p2.x - ent.p1.x, ent.p2.y - ent.p1.y); }
+        else if (ent.type === 'polyline') {
+            ctx.moveTo(ent.points[0].x, ent.points[0].y);
+            for(let i=1; i<ent.points.length; i++) ctx.lineTo(ent.points[i].x, ent.points[i].y);
+        }
+        
+        if (ent.hatch) {
+            ctx.stroke(); 
+            ctx.fillStyle = col; 
+            ctx.globalAlpha = 0.2; 
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        } else {
+            ctx.stroke();
+        }
+    });
+
+    if (state.activeCmd && state.points.length > 0) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 1 / state.zoom;
+        ctx.setLineDash([2/state.zoom, 4/state.zoom]);
+        const start = state.points[state.points.length - 1];
+        const end = state.tempEnd;
+        
+        if (state.activeCmd === 'line' || state.activeCmd === 'polyline') {
+            ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
+            if(state.activeCmd === 'polyline') {
+                 ctx.setLineDash([]);
+                 ctx.moveTo(state.points[0].x, state.points[0].y);
+                 for(let i=1; i<state.points.length; i++) ctx.lineTo(state.points[i].x, state.points[i].y);
+                 ctx.stroke();
+                 ctx.beginPath(); ctx.setLineDash([2/state.zoom, 4/state.zoom]);
+                 ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y);
+            }
+        } else if (state.activeCmd === 'circle') {
+            ctx.arc(start.x, start.y, dist(start, end), 0, Math.PI*2);
+        } else if (state.activeCmd === 'rect') {
+            ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+        }
+        ctx.stroke();
+    }
+
+    if (state.selectionMode && state.selectStart) {
+        const s = state.selectStart;
+        const e = state.tempEnd;
+        const w = e.x - s.x;
+        const h = e.y - s.y;
+        ctx.beginPath();
+        ctx.fillStyle = (w < 0) ? 'rgba(0, 255, 100, 0.1)' : 'rgba(0, 100, 255, 0.1)';
+        ctx.strokeStyle = (w < 0) ? 'rgba(0, 255, 100, 0.5)' : 'rgba(0, 100, 255, 0.5)';
+        ctx.lineWidth = 1/state.zoom;
+        ctx.setLineDash([]);
+        ctx.rect(s.x, s.y, w, h);
+        ctx.fill(); ctx.stroke();
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawCursor();
+}
+
+function drawCursor() {
+    const c = worldToScreen(state.cursor.x, state.cursor.y);
+    const sz = 15;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(c.x-sz, c.y); ctx.lineTo(c.x+sz, c.y);
+    ctx.moveTo(c.x, c.y-sz); ctx.lineTo(c.x, c.y+sz);
+    ctx.stroke();
+    ctx.strokeRect(c.x-3, c.y-3, 6, 6);
+}
+
+function drawGrid() {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 1/state.zoom; ctx.beginPath();
+    const sz=10000, st=100;
+    for(let i=-sz; i<=sz; i+=st) { ctx.moveTo(i, -sz); ctx.lineTo(i, sz); ctx.moveTo(-sz, i); ctx.lineTo(sz, i); }
+    ctx.stroke();
+    ctx.strokeStyle = '#444'; ctx.lineWidth = 2/state.zoom; ctx.beginPath();
+    ctx.moveTo(-sz, 0); ctx.lineTo(sz, 0); ctx.moveTo(0, -sz); ctx.lineTo(0, sz);
+    ctx.stroke();
+}
+
+/* =========================================
+   HELPERS & IO
+   ========================================= */
+
+function addLayer() {
+    const name = prompt("Layer Name:", "Layer"+state.layers.length);
+    if(name) { state.layers.push({name, color:'#ffffff', visible:true}); updateLayerUI(); setLayer(name); }
+}
+function setLayer(n) { state.currentLayer = n; document.getElementById('layerSelect').value = n; document.getElementById('layerColor').value = state.layers.find(l=>l.name===n).color; }
+function updateLayerColor(c) { state.layers.find(l=>l.name===state.currentLayer).color = c; draw(); }
+function updateLayerUI() {
+    const sel = document.getElementById('layerSelect'); sel.innerHTML = '';
+    state.layers.forEach(l => { const o = document.createElement('option'); o.value = l.name; o.text = l.name; sel.add(o); });
+    sel.value = state.currentLayer;
+}
+function getEntColor(ent) { return state.layers.find(l=>l.name===ent.layer).color; }
+
+function resize() { canvas.width = viewport.clientWidth; canvas.height = viewport.clientHeight; draw(); }
+function log(m) { const d=document.createElement('div'); d.textContent=m; historyInfo.appendChild(d); historyInfo.scrollTop=historyInfo.scrollHeight; }
+
+function screenToWorld(sx, sy) { return { x: (sx - state.pan.x)/state.zoom, y: (sy - state.pan.y)/state.zoom }; }
+function worldToScreen(wx, wy) { return { x: wx*state.zoom + state.pan.x, y: wy*state.zoom + state.pan.y }; }
+function dist(p1, p2) { return Math.hypot(p2.x-p1.x, p2.y-p1.y); }
+
+let panStart = {x:0, y:0}; state.isPanning = false;
+function startPan(e) { state.isPanning = true; panStart = {x:e.offsetX, y:e.offsetY}; canvas.style.cursor='grabbing'; }
+function doPan(e) { state.pan.x += e.offsetX-panStart.x; state.pan.y += e.offsetY-panStart.y; panStart={x:e.offsetX, y:e.offsetY}; }
+
+// Selection Helpers
+function hitTest(pt) {
+    const tol = 10/state.zoom;
+    for(let i=state.entities.length-1; i>=0; i--) {
+        const e = state.entities[i];
+        if(!state.layers.find(l=>l.name===e.layer).visible) continue;
+        let d = 1000;
+        if(e.type==='line') d = distToSeg(pt, e.p1, e.p2);
+        else if(e.type==='circle') d = Math.abs(dist(pt, e.center)-e.r);
+        else if(e.type==='arc') d = Math.abs(dist(pt, e.center)-e.r); // Simplified arc hit
+        else if(e.type==='rect') d = distToRect(pt, e.p1, e.p2);
+        else if(e.type==='polyline') { for(let j=0; j<e.points.length-1; j++) { const sd=distToSeg(pt,e.points[j],e.points[j+1]); if(sd<d) d=sd; } }
+        if(d<tol) return e;
+    }
+    return null;
+}
+function finishSelection(end) {
+    const start = state.selectStart;
+    const box = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w: Math.abs(end.x-start.x), h: Math.abs(end.y-start.y) };
+    const cross = end.x < start.x;
+    state.selectedIds = [];
+    state.entities.forEach(e => {
+        if(!state.layers.find(l=>l.name===e.layer).visible) return;
+        const ext = getExtents(e);
+        if(!ext) return;
+        if(cross) { if(ext.minX<box.x+box.w && ext.maxX>box.x && ext.minY<box.y+box.h && ext.maxY>box.y) state.selectedIds.push(e.id); }
+        else { if(ext.minX>=box.x && ext.maxX<=box.x+box.w && ext.minY>=box.y && ext.maxY<=box.y+box.h) state.selectedIds.push(e.id); }
+    });
+    log(`${state.selectedIds.length} found.`);
+}
+function getExtents(e) {
+    if(e.type==='line') return {minX:Math.min(e.p1.x,e.p2.x), maxX:Math.max(e.p1.x,e.p2.x), minY:Math.min(e.p1.y,e.p2.y), maxY:Math.max(e.p1.y,e.p2.y)};
+    if(e.type==='circle' || e.type === 'arc') return {minX:e.center.x-e.r, maxX:e.center.x+e.r, minY:e.center.y-e.r, maxY:e.center.y+e.r};
+    if(e.type==='rect') return {minX:Math.min(e.p1.x,e.p2.x), maxX:Math.max(e.p1.x,e.p2.x), minY:Math.min(e.p1.y,e.p2.y), maxY:Math.max(e.p1.y,e.p2.y)};
+    if(e.type==='polyline') { const x=e.points.map(p=>p.x), y=e.points.map(p=>p.y); return {minX:Math.min(...x), maxX:Math.max(...x), minY:Math.min(...y), maxY:Math.max(...y)}; }
+    return null;
+}
+function distToSeg(p, v, w) { const l2=dist(v,w)**2; if(l2===0) return dist(p,v); let t=((p.x-v.x)*(w.x-v.x)+(p.y-v.y)*(w.y-v.y))/l2; t=Math.max(0,Math.min(1,t)); return dist(p, {x:v.x+t*(w.x-v.x), y:v.y+t*(w.y-v.y)}); }
+function distToRect(p, p1, p2) { return Math.min(distToSeg(p,p1,{x:p2.x,y:p1.y}), distToSeg(p,{x:p2.x,y:p1.y},p2), distToSeg(p,p2,{x:p1.x,y:p2.y}), distToSeg(p,{x:p1.x,y:p2.y},p1)); }
+
+// DXF Saving
+window.saveDXF = function() {
+    let d = `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n0\nENDSEC\n`;
+    d += `0\nSECTION\n2\nENTITIES\n`;
+    state.entities.forEach(e => {
+        const hex = getEntColor(e).replace('#', '');
+        const colInt = parseInt(hex, 16);
+        const colStr = `420\n${colInt}\n`;
+
+        if(e.type==='line') d+=`0\nLINE\n8\n${e.layer}\n${colStr}10\n${e.p1.x}\n20\n${-e.p1.y}\n11\n${e.p2.x}\n21\n${-e.p2.y}\n`;
+        else if(e.type==='circle') d+=`0\nCIRCLE\n8\n${e.layer}\n${colStr}10\n${e.center.x}\n20\n${-e.center.y}\n40\n${e.r}\n`;
+        else if(e.type==='arc') {
+            const sDeg = e.start * (180/Math.PI);
+            const eDeg = e.end * (180/Math.PI);
+            d+=`0\nARC\n8\n${e.layer}\n${colStr}10\n${e.center.x}\n20\n${-e.center.y}\n40\n${e.r}\n50\n${sDeg}\n51\n${eDeg}\n`;
+        }
+        else if(e.type==='rect') d+=`0\nLWPOLYLINE\n8\n${e.layer}\n${colStr}90\n4\n70\n1\n10\n${e.p1.x}\n20\n${-e.p1.y}\n10\n${e.p2.x}\n20\n${-e.p1.y}\n10\n${e.p2.x}\n20\n${-e.p2.y}\n10\n${e.p1.x}\n20\n${-e.p2.y}\n`;
+        else if(e.type==='polyline') { d+=`0\nLWPOLYLINE\n8\n${e.layer}\n${colStr}90\n${e.points.length}\n70\n${isClosed(e)?1:0}\n`; e.points.forEach(p=>d+=`10\n${p.x}\n20\n${-p.y}\n`); }
+        
+        if(e.hatch) {
+            d += `0\nHATCH\n8\n${e.layer}\n${colStr}10\n0.0\n20\n0.0\n30\n0.0\n210\n0.0\n220\n0.0\n230\n1.0\n2\nSOLID\n70\n1\n71\n0\n91\n1\n`;
+            if (e.type === 'circle') {
+                d += `92\n1\n93\n1\n72\n2\n10\n${e.center.x}\n20\n${-e.center.y}\n40\n${e.r}\n50\n0.0\n51\n360.0\n73\n1\n97\n0\n`;
+            } else {
+                let pts = [];
+                if (e.type === 'rect') pts = [{x:e.p1.x, y:-e.p1.y}, {x:e.p2.x, y:-e.p1.y}, {x:e.p2.x, y:-e.p2.y}, {x:e.p1.x, y:-e.p2.y}];
+                else pts = e.points.map(p => ({x:p.x, y:-p.y}));
+                d += `92\n2\n72\n0\n73\n1\n93\n${pts.length}\n`;
+                pts.forEach(p => d += `10\n${p.x}\n20\n${p.y}\n`);
+                d += `97\n0\n`;
+            }
+        }
+    });
+    d+=`0\nENDSEC\n0\nEOF`;
+    const b = new Blob([d], {type:'application/dxf'});
+    const l = document.createElement('a'); l.href=URL.createObjectURL(b); l.download='drawing.dxf'; l.click();
+}
+</script>
+</body>
+</html>
