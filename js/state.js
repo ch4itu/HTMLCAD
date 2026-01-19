@@ -420,6 +420,9 @@ class StateManager {
         this.targetId = null;
         this.lineChainStart = null;
         this.cmdOptions = {};
+        // Clear selection mode when starting a command
+        this.selectionMode = false;
+        this.selectStart = null;
     }
 
     finishCommand() {
@@ -428,6 +431,9 @@ class StateManager {
         this.step = 0;
         this.lineChainStart = null;
         this.cmdOptions = {};
+        // Clear selection mode when finishing
+        this.selectionMode = false;
+        this.selectStart = null;
     }
 
     cancelCommand() {
