@@ -483,6 +483,9 @@ body {
     padding: 6px 10px;
     font-size: 12px;
     line-height: 1.5;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
 }
 
 .command-history .line {
