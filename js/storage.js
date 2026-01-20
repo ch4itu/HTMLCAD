@@ -458,10 +458,12 @@ const Storage = {
     },
 
     importDXF(file) {
+        UI.log(`Opening DXF file: ${file.name}...`);
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const content = e.target.result;
+                UI.log(`File loaded, parsing DXF (${content.length} bytes)...`);
                 const entities = this.parseDXF(content);
 
                 if (entities.length > 0) {
@@ -469,13 +471,17 @@ const Storage = {
                     entities.forEach(entity => CAD.addEntity(entity, true));
                     Renderer.draw();
                     Commands.zoomExtents();
-                    UI.log(`DXF imported: ${entities.length} entities loaded.`);
+                    UI.log(`DXF imported: ${entities.length} entities loaded.`, 'success');
                 } else {
-                    UI.log('No entities found in DXF file.', 'error');
+                    UI.log('No entities found in DXF file. Check if file contains ENTITIES section.', 'error');
                 }
             } catch (err) {
                 UI.log('Error importing DXF: ' + err.message, 'error');
+                console.error('DXF Import Error:', err);
             }
+        };
+        reader.onerror = (e) => {
+            UI.log('Error reading file: ' + e.target.error.message, 'error');
         };
         reader.readAsText(file);
     },
@@ -486,18 +492,23 @@ const Storage = {
         const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map(l => l.trim());
         let i = 0;
 
-        // Find ENTITIES section - look for 0/SECTION followed by 2/ENTITIES pattern
+        console.log(`DXF: Total lines: ${lines.length}`);
+
+        // Find ENTITIES section - look for 2/ENTITIES pattern (after 0/SECTION)
         let inEntitiesSection = false;
         while (i < lines.length - 1) {
+            // Standard DXF: group code 2 followed by section name ENTITIES
             if (lines[i] === '2' && lines[i + 1].toUpperCase() === 'ENTITIES') {
                 inEntitiesSection = true;
                 i += 2;
+                console.log(`DXF: Found ENTITIES section at line ${i}`);
                 break;
             }
-            // Also handle if ENTITIES appears directly (some DXF variants)
+            // Some DXF variants have ENTITIES as standalone
             if (lines[i].toUpperCase() === 'ENTITIES') {
                 inEntitiesSection = true;
                 i++;
+                console.log(`DXF: Found ENTITIES (standalone) at line ${i}`);
                 break;
             }
             i++;
@@ -505,6 +516,7 @@ const Storage = {
 
         if (!inEntitiesSection) {
             console.log('DXF: ENTITIES section not found');
+            UI.log('DXF: Could not find ENTITIES section in file.', 'error');
             return entities;
         }
 
