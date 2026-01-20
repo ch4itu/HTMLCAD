@@ -67,11 +67,19 @@ const UI = {
 
     handleCommandInput(e) {
         const input = this.elements.cmdInput;
+        const currentValue = input.value;
+
+        // For LISP expressions (starting with '('), don't treat space as Enter
+        // This allows typing multi-word LISP code like (command "circle" '(0 0) 50)
+        if (e.key === ' ' && currentValue.startsWith('(')) {
+            // Allow space in LISP expressions - don't intercept
+            return;
+        }
 
         // Handle Enter and Space keys (Space acts like Enter in AutoCAD)
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            const value = input.value.trim();
+            const value = currentValue.trim();
 
             // Space or Enter with empty input - repeat last command or act as Enter
             if (!value) {

@@ -482,209 +482,292 @@ const Storage = {
 
     parseDXF(content) {
         const entities = [];
-        const lines = content.split('\n').map(l => l.trim());
+        // Handle different line endings (Windows \r\n, Unix \n, old Mac \r)
+        const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map(l => l.trim());
         let i = 0;
 
-        // Find ENTITIES section
-        while (i < lines.length) {
-            if (lines[i] === 'ENTITIES') break;
+        // Find ENTITIES section - look for 0/SECTION followed by 2/ENTITIES pattern
+        let inEntitiesSection = false;
+        while (i < lines.length - 1) {
+            if (lines[i] === '2' && lines[i + 1].toUpperCase() === 'ENTITIES') {
+                inEntitiesSection = true;
+                i += 2;
+                break;
+            }
+            // Also handle if ENTITIES appears directly (some DXF variants)
+            if (lines[i].toUpperCase() === 'ENTITIES') {
+                inEntitiesSection = true;
+                i++;
+                break;
+            }
             i++;
         }
-        i++; // Move past ENTITIES
+
+        if (!inEntitiesSection) {
+            console.log('DXF: ENTITIES section not found');
+            return entities;
+        }
 
         // Parse entities until ENDSEC
-        while (i < lines.length && lines[i] !== 'ENDSEC') {
+        while (i < lines.length - 1) {
+            // Check for end of section
+            if (lines[i] === '0' && lines[i + 1].toUpperCase() === 'ENDSEC') {
+                break;
+            }
+
+            // New entity starts with group code 0
             if (lines[i] === '0') {
-                const entityType = lines[i + 1];
+                const entityType = lines[i + 1].toUpperCase();
                 i += 2;
 
                 if (entityType === 'LINE') {
-                    const entity = this.parseDXFLine(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFLine(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
                 } else if (entityType === 'CIRCLE') {
-                    const entity = this.parseDXFCircle(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFCircle(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
                 } else if (entityType === 'ARC') {
-                    const entity = this.parseDXFArc(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFArc(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
                 } else if (entityType === 'LWPOLYLINE' || entityType === 'POLYLINE') {
-                    const entity = this.parseDXFPolyline(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFPolyline(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
                 } else if (entityType === 'TEXT' || entityType === 'MTEXT') {
-                    const entity = this.parseDXFText(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFText(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
                 } else if (entityType === 'POINT') {
-                    const entity = this.parseDXFPoint(lines, i);
-                    if (entity) {
-                        entities.push(entity.entity);
-                        i = entity.nextIndex;
+                    const result = this.parseDXFPoint(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
                     }
-                } else {
-                    i++;
+                } else if (entityType === 'SPLINE') {
+                    const result = this.parseDXFSpline(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    }
+                } else if (entityType === 'ELLIPSE') {
+                    const result = this.parseDXFEllipse(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    }
                 }
+                // Skip unknown entity types - they'll be skipped in next iteration
             } else {
                 i++;
             }
         }
 
+        console.log(`DXF: Parsed ${entities.length} entities`);
         return entities;
     },
 
-    parseDXFLine(lines, startIndex) {
+    // Helper to read DXF group code/value pairs until we hit group code 0
+    readDXFEntity(lines, startIndex) {
+        const data = {};
         let i = startIndex;
-        const entity = { type: 'line', p1: {}, p2: {}, layer: '0' };
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
+        while (i < lines.length - 1) {
             const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+            if (code === 0) break; // New entity starts
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10: entity.p1.x = parseFloat(value); break;
-                case 20: entity.p1.y = -parseFloat(value); break; // Flip Y
-                case 11: entity.p2.x = parseFloat(value); break;
-                case 21: entity.p2.y = -parseFloat(value); break; // Flip Y
+            const value = lines[i + 1];
+            // Store values by group code (some codes can appear multiple times)
+            if (data[code] === undefined) {
+                data[code] = value;
+            } else if (Array.isArray(data[code])) {
+                data[code].push(value);
+            } else {
+                data[code] = [data[code], value];
             }
             i += 2;
-            if (lines[i] === '0') break;
         }
 
-        return { entity, nextIndex: i };
+        return { data, nextIndex: i };
+    },
+
+    parseDXFLine(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        const entity = {
+            type: 'line',
+            p1: {
+                x: parseFloat(data[10]) || 0,
+                y: parseFloat(data[20]) || 0
+            },
+            p2: {
+                x: parseFloat(data[11]) || 0,
+                y: parseFloat(data[21]) || 0
+            },
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
     },
 
     parseDXFCircle(lines, startIndex) {
-        let i = startIndex;
-        const entity = { type: 'circle', center: {}, r: 0, layer: '0' };
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
-            const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+        const entity = {
+            type: 'circle',
+            center: {
+                x: parseFloat(data[10]) || 0,
+                y: parseFloat(data[20]) || 0
+            },
+            r: parseFloat(data[40]) || 1,
+            layer: data[8] || '0'
+        };
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10: entity.center.x = parseFloat(value); break;
-                case 20: entity.center.y = -parseFloat(value); break;
-                case 40: entity.r = parseFloat(value); break;
-            }
-            i += 2;
-            if (lines[i] === '0') break;
-        }
-
-        return { entity, nextIndex: i };
+        return { entity, nextIndex };
     },
 
     parseDXFArc(lines, startIndex) {
-        let i = startIndex;
-        const entity = { type: 'arc', center: {}, r: 0, start: 0, end: 0, layer: '0' };
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
-            const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+        const entity = {
+            type: 'arc',
+            center: {
+                x: parseFloat(data[10]) || 0,
+                y: parseFloat(data[20]) || 0
+            },
+            r: parseFloat(data[40]) || 1,
+            startAngle: Utils.degToRad(parseFloat(data[50]) || 0),
+            endAngle: Utils.degToRad(parseFloat(data[51]) || 360),
+            layer: data[8] || '0'
+        };
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10: entity.center.x = parseFloat(value); break;
-                case 20: entity.center.y = -parseFloat(value); break;
-                case 40: entity.r = parseFloat(value); break;
-                case 50: entity.start = Utils.degToRad(-parseFloat(value)); break;
-                case 51: entity.end = Utils.degToRad(-parseFloat(value)); break;
-            }
-            i += 2;
-            if (lines[i] === '0') break;
-        }
-
-        return { entity, nextIndex: i };
+        return { entity, nextIndex };
     },
 
     parseDXFPolyline(lines, startIndex) {
-        let i = startIndex;
-        const entity = { type: 'polyline', points: [], layer: '0' };
-        let currentPoint = {};
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
-            const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+        // For LWPOLYLINE, vertices are stored with multiple group 10/20 codes
+        const xCoords = Array.isArray(data[10]) ? data[10] : (data[10] !== undefined ? [data[10]] : []);
+        const yCoords = Array.isArray(data[20]) ? data[20] : (data[20] !== undefined ? [data[20]] : []);
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10:
-                    if (currentPoint.x !== undefined) {
-                        entity.points.push(currentPoint);
-                        currentPoint = {};
-                    }
-                    currentPoint.x = parseFloat(value);
-                    break;
-                case 20:
-                    currentPoint.y = -parseFloat(value);
-                    break;
-            }
-            i += 2;
-            if (lines[i] === '0') break;
+        const points = [];
+        for (let j = 0; j < xCoords.length; j++) {
+            points.push({
+                x: parseFloat(xCoords[j]) || 0,
+                y: parseFloat(yCoords[j]) || 0
+            });
         }
 
-        if (currentPoint.x !== undefined) {
-            entity.points.push(currentPoint);
-        }
+        // Check closed flag (group code 70, bit 1)
+        const flags = parseInt(data[70]) || 0;
+        const closed = (flags & 1) !== 0;
 
-        return entity.points.length > 0 ? { entity, nextIndex: i } : null;
+        const entity = {
+            type: 'polyline',
+            points: points,
+            closed: closed,
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
     },
 
     parseDXFText(lines, startIndex) {
-        let i = startIndex;
-        const entity = { type: 'text', position: {}, height: 10, text: '', layer: '0' };
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
-            const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+        const entity = {
+            type: 'text',
+            position: {
+                x: parseFloat(data[10]) || 0,
+                y: parseFloat(data[20]) || 0
+            },
+            text: data[1] || '',
+            height: parseFloat(data[40]) || 10,
+            rotation: parseFloat(data[50]) || 0,
+            layer: data[8] || '0'
+        };
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10: entity.position.x = parseFloat(value); break;
-                case 20: entity.position.y = -parseFloat(value); break;
-                case 40: entity.height = parseFloat(value); break;
-                case 1: entity.text = value; break;
-                case 50: entity.rotation = parseFloat(value); break;
-            }
-            i += 2;
-            if (lines[i] === '0') break;
-        }
-
-        return entity.text ? { entity, nextIndex: i } : null;
+        return { entity, nextIndex };
     },
 
     parseDXFPoint(lines, startIndex) {
-        let i = startIndex;
-        const entity = { type: 'point', position: {}, layer: '0' };
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        while (i < lines.length && !(lines[i] === '0' && lines[i + 1] !== '0')) {
-            const code = parseInt(lines[i]);
-            const value = lines[i + 1];
+        const entity = {
+            type: 'point',
+            position: {
+                x: parseFloat(data[10]) || 0,
+                y: parseFloat(data[20]) || 0
+            },
+            layer: data[8] || '0'
+        };
 
-            switch (code) {
-                case 8: entity.layer = value; break;
-                case 10: entity.position.x = parseFloat(value); break;
-                case 20: entity.position.y = -parseFloat(value); break;
-            }
-            i += 2;
-            if (lines[i] === '0') break;
+        return { entity, nextIndex };
+    },
+
+    parseDXFSpline(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        // Get control points
+        const xCoords = Array.isArray(data[10]) ? data[10] : (data[10] !== undefined ? [data[10]] : []);
+        const yCoords = Array.isArray(data[20]) ? data[20] : (data[20] !== undefined ? [data[20]] : []);
+
+        const points = [];
+        for (let j = 0; j < xCoords.length; j++) {
+            points.push({
+                x: parseFloat(xCoords[j]) || 0,
+                y: parseFloat(yCoords[j]) || 0
+            });
         }
 
-        return { entity, nextIndex: i };
+        const entity = {
+            type: 'polyline',
+            points: points,
+            isSpline: true,
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
+    },
+
+    parseDXFEllipse(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        const centerX = parseFloat(data[10]) || 0;
+        const centerY = parseFloat(data[20]) || 0;
+        // Major axis endpoint relative to center
+        const majorX = parseFloat(data[11]) || 1;
+        const majorY = parseFloat(data[21]) || 0;
+        // Ratio of minor to major axis
+        const ratio = parseFloat(data[40]) || 1;
+
+        const majorRadius = Math.sqrt(majorX * majorX + majorY * majorY);
+        const minorRadius = majorRadius * ratio;
+        const rotation = Math.atan2(majorY, majorX);
+
+        const entity = {
+            type: 'ellipse',
+            center: { x: centerX, y: centerY },
+            rx: majorRadius,
+            ry: minorRadius,
+            rotation: rotation,
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
     },
 
     openFile() {
