@@ -41,6 +41,13 @@ const AutoLISP = {
                 continue;
             }
 
+            // Single quote (for quoting)
+            if (char === "'") {
+                tokens.push({ type: 'quote' });
+                i++;
+                continue;
+            }
+
             // Parentheses
             if (char === '(' || char === ')') {
                 tokens.push(char);
@@ -104,6 +111,13 @@ const AutoLISP = {
             if (pos >= tokens.length) return null;
 
             const token = tokens[pos];
+
+            // Handle quote: 'expr becomes (QUOTE expr)
+            if (token && token.type === 'quote') {
+                pos++; // Skip the quote token
+                const quotedExpr = parseExpr();
+                return [{ type: 'symbol', value: 'QUOTE' }, quotedExpr];
+            }
 
             if (token === '(') {
                 pos++; // Skip '('
@@ -660,8 +674,16 @@ const AutoLISP = {
 
             // ========== CAD SPECIFIC - COMMANDS ==========
             'COMMAND': async (...args) => {
+                // Helper to extract value from token or return as-is
+                const getValue = (v) => {
+                    if (v && typeof v === 'object' && v.type === 'number') return v.value;
+                    if (v && typeof v === 'object' && v.type === 'string') return v.value;
+                    return v;
+                };
+
                 for (let i = 0; i < args.length; i++) {
-                    const arg = args[i];
+                    let arg = getValue(args[i]);
+
                     if (typeof arg === 'string') {
                         if (arg === '') {
                             // Empty string acts as Enter
@@ -676,13 +698,15 @@ const AutoLISP = {
                             }
                         }
                     } else if (Array.isArray(arg)) {
-                        // Point
-                        Commands.handleClick({ x: arg[0], y: arg[1] });
+                        // Point - extract values from token objects
+                        const x = getValue(arg[0]);
+                        const y = getValue(arg[1]);
+                        Commands.handleClick({ x: x, y: y });
                     } else if (typeof arg === 'number') {
                         Commands.handleInput(String(arg));
                     }
                     // Small delay to allow command processing
-                    await new Promise(resolve => setTimeout(resolve, 10));
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
                 Renderer.draw();
                 return null;
