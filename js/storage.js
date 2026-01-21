@@ -783,16 +783,268 @@ const Storage = {
     },
 
     openFile() {
-        this.openFileDialog('.dxf,.json,.htmlcad', (file) => {
+        // Use wildcard to allow all files, then filter by extension
+        this.openFileDialog('*', (file) => {
             const ext = file.name.split('.').pop().toLowerCase();
+            UI.log(`Opening file: ${file.name}`);
+
             if (ext === 'dxf') {
                 this.importDXF(file);
             } else if (ext === 'json' || ext === 'htmlcad') {
                 this.importJSON(file);
+            } else if (ext === 'svg') {
+                this.importSVG(file);
             } else {
-                UI.log('Unsupported file format. Use .dxf or .json', 'error');
+                UI.log(`Unsupported file format: .${ext}. Use .dxf, .json, or .svg`, 'error');
             }
         });
+    },
+
+    importSVG(file) {
+        UI.log(`Opening SVG file: ${file.name}...`);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const content = e.target.result;
+                const entities = this.parseSVG(content);
+
+                if (entities.length > 0) {
+                    CAD.entities = [];
+                    entities.forEach(entity => CAD.addEntity(entity, true));
+                    Renderer.draw();
+                    Commands.zoomExtents();
+                    UI.log(`SVG imported: ${entities.length} entities loaded.`, 'success');
+                } else {
+                    UI.log('No supported elements found in SVG file.', 'error');
+                }
+            } catch (err) {
+                UI.log('Error importing SVG: ' + err.message, 'error');
+                console.error('SVG Import Error:', err);
+            }
+        };
+        reader.onerror = (e) => {
+            UI.log('Error reading file: ' + e.target.error.message, 'error');
+        };
+        reader.readAsText(file);
+    },
+
+    parseSVG(content) {
+        const entities = [];
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'image/svg+xml');
+
+        // Check for parsing errors
+        const parseError = doc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error('Invalid SVG file');
+        }
+
+        // Get viewBox for coordinate transformation
+        const svg = doc.querySelector('svg');
+        const viewBox = svg?.getAttribute('viewBox')?.split(/\s+/).map(Number) || [0, 0, 100, 100];
+
+        // Parse line elements
+        doc.querySelectorAll('line').forEach(el => {
+            entities.push({
+                type: 'line',
+                p1: { x: parseFloat(el.getAttribute('x1')) || 0, y: parseFloat(el.getAttribute('y1')) || 0 },
+                p2: { x: parseFloat(el.getAttribute('x2')) || 0, y: parseFloat(el.getAttribute('y2')) || 0 },
+                layer: '0'
+            });
+        });
+
+        // Parse circle elements
+        doc.querySelectorAll('circle').forEach(el => {
+            entities.push({
+                type: 'circle',
+                center: { x: parseFloat(el.getAttribute('cx')) || 0, y: parseFloat(el.getAttribute('cy')) || 0 },
+                r: parseFloat(el.getAttribute('r')) || 1,
+                layer: '0'
+            });
+        });
+
+        // Parse ellipse elements
+        doc.querySelectorAll('ellipse').forEach(el => {
+            entities.push({
+                type: 'ellipse',
+                center: { x: parseFloat(el.getAttribute('cx')) || 0, y: parseFloat(el.getAttribute('cy')) || 0 },
+                rx: parseFloat(el.getAttribute('rx')) || 1,
+                ry: parseFloat(el.getAttribute('ry')) || 1,
+                rotation: 0,
+                layer: '0'
+            });
+        });
+
+        // Parse rect elements
+        doc.querySelectorAll('rect').forEach(el => {
+            const x = parseFloat(el.getAttribute('x')) || 0;
+            const y = parseFloat(el.getAttribute('y')) || 0;
+            const width = parseFloat(el.getAttribute('width')) || 0;
+            const height = parseFloat(el.getAttribute('height')) || 0;
+            entities.push({
+                type: 'rect',
+                p1: { x: x, y: y },
+                p2: { x: x + width, y: y + height },
+                layer: '0'
+            });
+        });
+
+        // Parse polyline elements
+        doc.querySelectorAll('polyline').forEach(el => {
+            const points = this.parseSVGPoints(el.getAttribute('points'));
+            if (points.length >= 2) {
+                entities.push({
+                    type: 'polyline',
+                    points: points,
+                    closed: false,
+                    layer: '0'
+                });
+            }
+        });
+
+        // Parse polygon elements
+        doc.querySelectorAll('polygon').forEach(el => {
+            const points = this.parseSVGPoints(el.getAttribute('points'));
+            if (points.length >= 3) {
+                entities.push({
+                    type: 'polyline',
+                    points: points,
+                    closed: true,
+                    layer: '0'
+                });
+            }
+        });
+
+        // Parse path elements (basic support)
+        doc.querySelectorAll('path').forEach(el => {
+            const d = el.getAttribute('d');
+            if (d) {
+                const pathEntities = this.parseSVGPath(d);
+                entities.push(...pathEntities);
+            }
+        });
+
+        // Parse text elements
+        doc.querySelectorAll('text').forEach(el => {
+            const x = parseFloat(el.getAttribute('x')) || 0;
+            const y = parseFloat(el.getAttribute('y')) || 0;
+            const text = el.textContent || '';
+            if (text.trim()) {
+                entities.push({
+                    type: 'text',
+                    position: { x: x, y: y },
+                    text: text.trim(),
+                    height: parseFloat(el.getAttribute('font-size')) || 12,
+                    rotation: 0,
+                    layer: '0'
+                });
+            }
+        });
+
+        console.log(`SVG: Parsed ${entities.length} entities`);
+        return entities;
+    },
+
+    parseSVGPoints(pointsStr) {
+        if (!pointsStr) return [];
+        const points = [];
+        const pairs = pointsStr.trim().split(/\s+|,/).filter(s => s);
+
+        for (let i = 0; i < pairs.length - 1; i += 2) {
+            const x = parseFloat(pairs[i]);
+            const y = parseFloat(pairs[i + 1]);
+            if (!isNaN(x) && !isNaN(y)) {
+                points.push({ x, y });
+            }
+        }
+        return points;
+    },
+
+    parseSVGPath(d) {
+        const entities = [];
+        const points = [];
+        let currentX = 0, currentY = 0;
+        let startX = 0, startY = 0;
+
+        // Simple path parser - handles M, L, H, V, Z commands
+        const commands = d.match(/[MLHVZCSQTAmlhvzcsqta][^MLHVZCSQTAmlhvzcsqta]*/g) || [];
+
+        for (const cmd of commands) {
+            const type = cmd[0];
+            const args = cmd.slice(1).trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n));
+
+            switch (type) {
+                case 'M': // Move to (absolute)
+                    if (points.length >= 2) {
+                        entities.push({ type: 'polyline', points: [...points], layer: '0' });
+                    }
+                    points.length = 0;
+                    currentX = args[0] || 0;
+                    currentY = args[1] || 0;
+                    startX = currentX;
+                    startY = currentY;
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'm': // Move to (relative)
+                    if (points.length >= 2) {
+                        entities.push({ type: 'polyline', points: [...points], layer: '0' });
+                    }
+                    points.length = 0;
+                    currentX += args[0] || 0;
+                    currentY += args[1] || 0;
+                    startX = currentX;
+                    startY = currentY;
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'L': // Line to (absolute)
+                    for (let i = 0; i < args.length; i += 2) {
+                        currentX = args[i];
+                        currentY = args[i + 1];
+                        points.push({ x: currentX, y: currentY });
+                    }
+                    break;
+                case 'l': // Line to (relative)
+                    for (let i = 0; i < args.length; i += 2) {
+                        currentX += args[i];
+                        currentY += args[i + 1];
+                        points.push({ x: currentX, y: currentY });
+                    }
+                    break;
+                case 'H': // Horizontal line (absolute)
+                    currentX = args[0];
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'h': // Horizontal line (relative)
+                    currentX += args[0];
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'V': // Vertical line (absolute)
+                    currentY = args[0];
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'v': // Vertical line (relative)
+                    currentY += args[0];
+                    points.push({ x: currentX, y: currentY });
+                    break;
+                case 'Z':
+                case 'z': // Close path
+                    if (points.length >= 2) {
+                        points.push({ x: startX, y: startY });
+                        entities.push({ type: 'polyline', points: [...points], closed: true, layer: '0' });
+                        points.length = 0;
+                    }
+                    currentX = startX;
+                    currentY = startY;
+                    break;
+            }
+        }
+
+        // Add remaining points as polyline
+        if (points.length >= 2) {
+            entities.push({ type: 'polyline', points: [...points], layer: '0' });
+        }
+
+        return entities;
     },
 
     // ==========================================

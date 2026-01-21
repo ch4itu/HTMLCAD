@@ -490,6 +490,8 @@ body {
 
 .command-history .line {
     color: var(--text-secondary);
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .command-history .line.input {
