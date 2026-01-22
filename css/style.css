@@ -435,6 +435,121 @@ body {
     margin-right: 10px;
 }
 
+/* ============================================
+   FLOATING CANVAS SELECTION TOOLBAR
+   ============================================ */
+
+.canvas-selection-toolbar {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(60, 80, 120, 0.95) 0%, rgba(40, 60, 100, 0.95) 100%);
+    border: 1px solid rgba(100, 140, 200, 0.5);
+    border-radius: 8px;
+    padding: 10px 15px;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(5px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 320px;
+}
+
+.cst-title {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 6px;
+}
+
+.cst-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.cst-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    color: #fff;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-width: 55px;
+}
+
+.cst-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.cst-btn:active {
+    transform: translateY(0);
+}
+
+.cst-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.cst-info {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    text-align: center;
+    padding: 4px 0;
+}
+
+.cst-info.has-selection {
+    color: #90EE90;
+    font-weight: 500;
+}
+
+.cst-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 8px;
+}
+
+.cst-btn.cst-confirm {
+    background: rgba(50, 180, 100, 0.4);
+    border-color: rgba(50, 180, 100, 0.6);
+    flex-direction: row;
+    gap: 5px;
+    padding: 6px 15px;
+}
+
+.cst-btn.cst-confirm:hover {
+    background: rgba(50, 180, 100, 0.6);
+}
+
+.cst-btn.cst-cancel {
+    background: rgba(200, 80, 80, 0.4);
+    border-color: rgba(200, 80, 80, 0.6);
+    flex-direction: row;
+    gap: 5px;
+    padding: 6px 15px;
+}
+
+.cst-btn.cst-cancel:hover {
+    background: rgba(200, 80, 80, 0.6);
+}
+
 .panel-header {
     padding: 8px 10px;
     background: var(--bg-light);

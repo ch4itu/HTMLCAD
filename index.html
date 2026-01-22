@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="HTMLCAD - Professional CAD application in pure HTML/CSS/JavaScript with AutoCAD-like interface">
-    <title>HTMLCAD - Web-Based CAD Application</title>
+    <meta name="description" content="BrowserCAD - Professional CAD application in pure HTML/CSS/JavaScript with AutoCAD-like interface">
+    <title>BrowserCAD - Web-Based CAD Application</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="app-container">
         <!-- Title Bar -->
         <div class="title-bar">
-            <div class="logo">HTML<span>CAD</span></div>
+            <div class="logo">Browser<span>CAD</span></div>
             <div class="menu-bar">
                 <div class="menu-item" onclick="Storage.openFile()">Open</div>
                 <div class="menu-item" onclick="Storage.saveToLocalStorage()">Save</div>
@@ -393,6 +393,44 @@
                 <!-- Canvas Viewport -->
                 <div class="viewport" id="viewport">
                     <canvas id="canvas"></canvas>
+
+                    <!-- Floating Canvas Selection Toolbar -->
+                    <div class="canvas-selection-toolbar" id="canvasSelectionToolbar" style="display: none;">
+                        <div class="cst-title">Select Objects:</div>
+                        <div class="cst-buttons">
+                            <button class="cst-btn" onclick="UI.canvasSelectWindow()" title="Window Selection (left to right)">
+                                <span class="cst-icon">⬚</span>
+                                <span>Window</span>
+                            </button>
+                            <button class="cst-btn" onclick="UI.canvasSelectCrossing()" title="Crossing Selection (right to left)">
+                                <span class="cst-icon">⬡</span>
+                                <span>Crossing</span>
+                            </button>
+                            <button class="cst-btn" onclick="UI.canvasSelectAll()" title="Select All Objects">
+                                <span class="cst-icon">☑</span>
+                                <span>All</span>
+                            </button>
+                            <button class="cst-btn" onclick="UI.canvasSelectPrevious()" title="Select Previous Selection">
+                                <span class="cst-icon">↺</span>
+                                <span>Previous</span>
+                            </button>
+                            <button class="cst-btn" onclick="UI.canvasSelectLast()" title="Select Last Created Entity">
+                                <span class="cst-icon">⟳</span>
+                                <span>Last</span>
+                            </button>
+                        </div>
+                        <div class="cst-info" id="cstInfo">Click entities or use selection mode</div>
+                        <div class="cst-actions">
+                            <button class="cst-btn cst-confirm" onclick="UI.confirmCanvasSelection()" title="Confirm Selection (Enter)">
+                                <span class="cst-icon">✓</span>
+                                <span>Confirm</span>
+                            </button>
+                            <button class="cst-btn cst-cancel" onclick="Commands.cancelCommand()" title="Cancel (Esc)">
+                                <span class="cst-icon">✕</span>
+                                <span>Cancel</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -400,7 +438,7 @@
         <!-- Command Line Panel -->
         <div class="command-panel">
             <div class="command-history" id="cmdHistory">
-                <div class="line">Welcome to HTMLCAD - A Web-Based CAD Application</div>
+                <div class="line">Welcome to BrowserCAD - A Web-Based CAD Application</div>
                 <div class="line">Type commands or use toolbar buttons. Press F1 for help.</div>
             </div>
             <div class="command-input-row">
