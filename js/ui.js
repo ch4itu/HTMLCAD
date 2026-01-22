@@ -621,18 +621,83 @@ AUTOLISP:
     // SELECTION RIBBON
     // ==========================================
 
+    // Commands that need entity selection
+    modifyCommands: ['move', 'copy', 'rotate', 'scale', 'mirror', 'erase', 'stretch', 'array', 'arrayrect', 'arraypolar', 'offset', 'trim', 'extend', 'fillet', 'chamfer', 'explode'],
+
     updateSelectionRibbon() {
         const ribbon = document.getElementById('selectionRibbon');
         const countEl = document.getElementById('selectionCount');
+        const actionsEl = document.getElementById('selectionActions');
         if (!ribbon) return;
 
         const selectedCount = CAD.selectedIds ? CAD.selectedIds.length : 0;
+        const activeCmd = CAD.activeCmd;
+        const isModifyCmd = activeCmd && this.modifyCommands.includes(activeCmd);
 
-        if (selectedCount > 0) {
+        // Show ribbon if entities selected OR if a modify command is active
+        if (selectedCount > 0 || isModifyCmd) {
             ribbon.style.display = 'flex';
-            if (countEl) countEl.textContent = selectedCount;
+            if (countEl) {
+                countEl.textContent = selectedCount;
+            }
+            // Update ribbon content based on mode
+            this.updateSelectionRibbonContent(selectedCount, isModifyCmd, activeCmd);
         } else {
             ribbon.style.display = 'none';
+        }
+    },
+
+    updateSelectionRibbonContent(count, isModifyCmd, activeCmd) {
+        const actionsEl = document.getElementById('selectionActions');
+        if (!actionsEl) return;
+
+        if (isModifyCmd && count === 0) {
+            // Show selection helpers during modify commands
+            actionsEl.innerHTML = `
+                <span class="sel-prompt">Select objects for ${activeCmd.toUpperCase()}:</span>
+                <button class="sel-btn" onclick="CAD.selectAll(); UI.updateSelectionRibbon(); Renderer.draw();" title="Select All">
+                    <i class="icon">☑</i> All
+                </button>
+                <button class="sel-btn" onclick="Commands.execute('selectwindow')" title="Window Select">
+                    <i class="icon">⬚</i> Window
+                </button>
+                <button class="sel-btn" onclick="Commands.execute('selectcrossing')" title="Crossing Select">
+                    <i class="icon">⬡</i> Crossing
+                </button>
+                <div class="sel-separator"></div>
+                <button class="sel-btn deselect" onclick="Commands.cancelCommand();" title="Cancel Command (Esc)">
+                    <i class="icon">⊗</i> Cancel
+                </button>
+            `;
+        } else if (count > 0) {
+            // Show action buttons when entities are selected
+            actionsEl.innerHTML = `
+                <button class="sel-btn" onclick="App.executeCommand('move')" title="Move (M)">
+                    <i class="icon">↔</i> Move
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('copy')" title="Copy (CO)">
+                    <i class="icon">⧉</i> Copy
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('rotate')" title="Rotate (RO)">
+                    <i class="icon">↻</i> Rotate
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('scale')" title="Scale (SC)">
+                    <i class="icon">⤢</i> Scale
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('mirror')" title="Mirror (MI)">
+                    <i class="icon">⇿</i> Mirror
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('erase')" title="Erase (E)">
+                    <i class="icon">✕</i> Erase
+                </button>
+                <button class="sel-btn" onclick="Commands.listEntities()" title="Properties">
+                    <i class="icon">ℹ</i> Properties
+                </button>
+                <div class="sel-separator"></div>
+                <button class="sel-btn deselect" onclick="CAD.clearSelection(); Renderer.draw();" title="Deselect All (Esc)">
+                    <i class="icon">⊗</i> Deselect
+                </button>
+            `;
         }
     },
 
