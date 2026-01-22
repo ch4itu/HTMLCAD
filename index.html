@@ -332,12 +332,12 @@
             </div>
         </div>
 
-        <!-- Selection Ribbon (appears when entities are selected) -->
+        <!-- Selection Ribbon (appears when entities are selected or during modify commands) -->
         <div class="selection-ribbon" id="selectionRibbon" style="display: none;">
             <div class="selection-info">
                 <span id="selectionCount">0</span> object(s) selected
             </div>
-            <div class="selection-actions">
+            <div class="selection-actions" id="selectionActions">
                 <button class="sel-btn" onclick="App.executeCommand('move')" title="Move (M)">
                     <i class="icon">↔</i> Move
                 </button>

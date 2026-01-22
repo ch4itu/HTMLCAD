@@ -383,39 +383,56 @@ body {
 /* Left Panel (Properties) */
 .panel-left {
     width: 220px;
+    min-width: 220px;
+    max-width: 220px;
     background: var(--bg-medium);
     border-right: 1px solid var(--border-dark);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: width 0.2s ease;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .panel-left.collapsed {
-    width: 30px;
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
 }
 
 .panel-left.collapsed .panel-content {
     display: none;
+    width: 0;
+    overflow: hidden;
 }
 
 .panel-left.collapsed .panel-header {
     writing-mode: vertical-rl;
     text-orientation: mixed;
-    padding: 10px 6px;
+    padding: 10px 5px;
     justify-content: flex-start;
+    white-space: nowrap;
 }
 
 .panel-toggle {
     font-size: 10px;
     margin-right: 6px;
     transition: transform 0.2s ease;
+    flex-shrink: 0;
 }
 
 .panel-left.collapsed .panel-toggle {
     transform: rotate(180deg);
     margin-right: 0;
     margin-bottom: 6px;
+}
+
+/* Selection prompt in ribbon */
+.sel-prompt {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 10px;
 }
 
 .panel-header {
