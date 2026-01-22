@@ -1028,6 +1028,128 @@ AUTOLISP:
         document.querySelectorAll('.ribbon-content').forEach(content => {
             content.style.display = content.dataset.tab === tabName ? 'flex' : 'none';
         });
+    },
+
+    // ==========================================
+    // CANVAS SELECTION TOOLBAR
+    // ==========================================
+
+    // Store previous selection for "Previous" option
+    previousSelection: [],
+
+    showCanvasSelectionToolbar() {
+        const toolbar = document.getElementById('canvasSelectionToolbar');
+        if (toolbar) {
+            toolbar.style.display = 'flex';
+            this.updateCanvasSelectionInfo();
+        }
+    },
+
+    hideCanvasSelectionToolbar() {
+        const toolbar = document.getElementById('canvasSelectionToolbar');
+        if (toolbar) {
+            toolbar.style.display = 'none';
+        }
+    },
+
+    updateCanvasSelectionInfo() {
+        const info = document.getElementById('cstInfo');
+        if (!info) return;
+
+        const count = CAD.selectedIds ? CAD.selectedIds.length : 0;
+        if (count > 0) {
+            info.textContent = `${count} object(s) selected`;
+            info.classList.add('has-selection');
+        } else {
+            info.textContent = 'Click entities or use selection mode';
+            info.classList.remove('has-selection');
+        }
+    },
+
+    // Window selection - user draws left to right
+    canvasSelectWindow() {
+        this.log('Window selection: Click first corner, then drag LEFT to RIGHT');
+        CAD.cmdOptions.forceWindowMode = 'window';
+        CAD.selectionMode = true;
+        this.focusCommandLine();
+    },
+
+    // Crossing selection - user draws right to left
+    canvasSelectCrossing() {
+        this.log('Crossing selection: Click first corner, then drag RIGHT to LEFT');
+        CAD.cmdOptions.forceWindowMode = 'crossing';
+        CAD.selectionMode = true;
+        this.focusCommandLine();
+    },
+
+    // Select all entities
+    canvasSelectAll() {
+        CAD.selectAll();
+        this.log(`${CAD.selectedIds.length} object(s) selected.`);
+        this.updateCanvasSelectionInfo();
+        Renderer.draw();
+    },
+
+    // Select previous selection
+    canvasSelectPrevious() {
+        if (this.previousSelection && this.previousSelection.length > 0) {
+            // Verify entities still exist
+            const validIds = this.previousSelection.filter(id => CAD.getEntity(id));
+            if (validIds.length > 0) {
+                CAD.selectedIds = [...validIds];
+                this.log(`${validIds.length} object(s) from previous selection.`);
+                this.updateCanvasSelectionInfo();
+                Renderer.draw();
+            } else {
+                this.log('Previous selection no longer exists.', 'error');
+            }
+        } else {
+            this.log('No previous selection available.', 'error');
+        }
+    },
+
+    // Select last created entity
+    canvasSelectLast() {
+        const entities = CAD.getVisibleEntities();
+        if (entities.length > 0) {
+            const lastEntity = entities[entities.length - 1];
+            CAD.selectedIds = [lastEntity.id];
+            this.log(`Selected last entity: ${lastEntity.type}`);
+            this.updateCanvasSelectionInfo();
+            Renderer.draw();
+        } else {
+            this.log('No entities to select.', 'error');
+        }
+    },
+
+    // Confirm selection and continue command
+    confirmCanvasSelection() {
+        if (CAD.selectedIds.length > 0) {
+            // Store for "Previous" option
+            this.previousSelection = [...CAD.selectedIds];
+
+            // Continue with the command
+            if (CAD.cmdOptions.needSelection) {
+                CAD.cmdOptions.needSelection = false;
+                Commands.continueCommand(CAD.activeCmd);
+                this.hideCanvasSelectionToolbar();
+                Renderer.draw();
+            }
+        } else {
+            this.log('No objects selected. Select objects first.', 'error');
+        }
+    },
+
+    // Update canvas selection toolbar visibility based on state
+    updateCanvasSelectionToolbar() {
+        const activeCmd = CAD.activeCmd;
+        const needSelection = CAD.cmdOptions && CAD.cmdOptions.needSelection;
+
+        if (activeCmd && needSelection && this.modifyCommands.includes(activeCmd)) {
+            this.showCanvasSelectionToolbar();
+        } else {
+            this.hideCanvasSelectionToolbar();
+        }
     }
 };
 

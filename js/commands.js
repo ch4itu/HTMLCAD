@@ -233,6 +233,9 @@ const Commands = {
         // Update selection ribbon (for modify commands that need selection)
         UI.updateSelectionRibbon();
 
+        // Update canvas selection toolbar for modify commands
+        UI.updateCanvasSelectionToolbar();
+
         switch (name) {
             // Drawing commands
             case 'line':
@@ -607,6 +610,7 @@ const Commands = {
             // Don't auto-proceed - wait for Enter to confirm selection
             // User can keep selecting more entities
             UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
+            UI.updateCanvasSelectionInfo();
             Renderer.draw();
             return;
         }
@@ -1173,8 +1177,21 @@ const Commands = {
             h: Math.abs(endPoint.y - start.y)
         };
 
-        const isCrossing = endPoint.x < start.x;
-        state.selectedIds = [];
+        // Check for forced window mode from canvas toolbar
+        let isCrossing;
+        if (state.cmdOptions.forceWindowMode === 'window') {
+            isCrossing = false;
+            state.cmdOptions.forceWindowMode = null;
+        } else if (state.cmdOptions.forceWindowMode === 'crossing') {
+            isCrossing = true;
+            state.cmdOptions.forceWindowMode = null;
+        } else {
+            isCrossing = endPoint.x < start.x;
+        }
+
+        // Don't clear existing selection - add to it
+        const existingSelection = state.cmdOptions.needSelection ? [...state.selectedIds] : [];
+        const newSelection = [];
 
         CAD.getVisibleEntities().forEach(entity => {
             const ext = CAD.getEntityExtents(entity);
@@ -1184,26 +1201,35 @@ const Commands = {
                 // Crossing selection - any intersection
                 if (ext.minX < box.x + box.w && ext.maxX > box.x &&
                     ext.minY < box.y + box.h && ext.maxY > box.y) {
-                    state.selectedIds.push(entity.id);
+                    newSelection.push(entity.id);
                 }
             } else {
                 // Window selection - fully inside
                 if (ext.minX >= box.x && ext.maxX <= box.x + box.w &&
                     ext.minY >= box.y && ext.maxY <= box.y + box.h) {
-                    state.selectedIds.push(entity.id);
+                    newSelection.push(entity.id);
                 }
             }
         });
 
-        UI.log(`${state.selectedIds.length} found.`);
+        // Merge with existing selection (remove duplicates)
+        if (state.cmdOptions.needSelection) {
+            const combinedSet = new Set([...existingSelection, ...newSelection]);
+            state.selectedIds = Array.from(combinedSet);
+            UI.log(`${newSelection.length} found, ${state.selectedIds.length} total.`);
+        } else {
+            state.selectedIds = newSelection;
+            UI.log(`${state.selectedIds.length} found.`);
+        }
+
         state.selectionMode = false;
         state.selectStart = null;
 
-        // Continue command if waiting for selection
-        if (state.cmdOptions.needSelection && state.selectedIds.length > 0) {
-            state.cmdOptions.needSelection = false;
-            this.continueCommand(state.activeCmd);
-        }
+        // Update canvas selection toolbar info
+        UI.updateCanvasSelectionInfo();
+
+        // Don't auto-continue if needSelection - wait for user confirmation
+        // This allows user to keep adding to selection
     },
 
     continueCommand(name) {
@@ -1434,6 +1460,8 @@ const Commands = {
         const lastCmd = CAD.activeCmd;
         CAD.finishCommand();
         UI.setActiveButton(null);
+        UI.hideCanvasSelectionToolbar();
+        UI.updateSelectionRibbon();
         Renderer.draw();
 
         // Auto-restart repeatable commands (like AutoCAD)
@@ -1452,9 +1480,11 @@ const Commands = {
         CAD.clearSelection();
         CAD.selectionMode = false;
         CAD.selectStart = null;
+        CAD.cmdOptions.forceWindowMode = null;
         UI.setActiveButton(null);
         UI.log('*Cancel*');
         UI.updateSelectionRibbon();
+        UI.hideCanvasSelectionToolbar();
         Renderer.draw();
     },
 
@@ -1859,7 +1889,10 @@ const Commands = {
 
             // Confirm selection during modify commands
             if (state.cmdOptions.needSelection && state.selectedIds.length > 0) {
+                // Store for "Previous" option
+                UI.previousSelection = [...state.selectedIds];
                 state.cmdOptions.needSelection = false;
+                UI.hideCanvasSelectionToolbar();
                 this.continueCommand(state.activeCmd);
                 Renderer.draw();
                 return true;
