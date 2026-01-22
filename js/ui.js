@@ -57,11 +57,15 @@ const UI = {
             this.handleKeyboard(e);
         });
 
-        // Prevent text selection during CAD operations
+        // Prevent text selection during CAD operations, but allow in command history
         document.addEventListener('selectstart', (e) => {
-            if (e.target.tagName !== 'INPUT') {
-                e.preventDefault();
+            // Allow selection in INPUT elements and command history
+            if (e.target.tagName === 'INPUT' ||
+                e.target.closest('.command-history') ||
+                e.target.closest('.properties-panel')) {
+                return; // Allow selection
             }
+            e.preventDefault();
         });
     },
 
@@ -602,9 +606,39 @@ AUTOLISP:
     // PROPERTIES PANEL
     // ==========================================
 
+    togglePropertiesPanel() {
+        const panel = document.getElementById('panelLeft');
+        const toggle = document.getElementById('panelToggle');
+        if (panel) {
+            panel.classList.toggle('collapsed');
+        }
+    },
+
+    // ==========================================
+    // SELECTION RIBBON
+    // ==========================================
+
+    updateSelectionRibbon() {
+        const ribbon = document.getElementById('selectionRibbon');
+        const countEl = document.getElementById('selectionCount');
+        if (!ribbon) return;
+
+        const selectedCount = CAD.selectedIds ? CAD.selectedIds.length : 0;
+
+        if (selectedCount > 0) {
+            ribbon.style.display = 'flex';
+            if (countEl) countEl.textContent = selectedCount;
+        } else {
+            ribbon.style.display = 'none';
+        }
+    },
+
     updatePropertiesPanel() {
         const panel = this.elements.propertiesPanel;
         if (!panel) return;
+
+        // Also update selection ribbon
+        this.updateSelectionRibbon();
 
         const selected = CAD.getSelectedEntities();
 

@@ -310,15 +310,27 @@ class StateManager {
     select(ids) {
         if (!Array.isArray(ids)) ids = [ids];
         this.selectedIds = [...new Set([...this.selectedIds, ...ids])];
+        // Update UI
+        if (typeof UI !== 'undefined') {
+            UI.updatePropertiesPanel();
+        }
     }
 
     deselect(ids) {
         if (!Array.isArray(ids)) ids = [ids];
         this.selectedIds = this.selectedIds.filter(id => !ids.includes(id));
+        // Update UI
+        if (typeof UI !== 'undefined') {
+            UI.updatePropertiesPanel();
+        }
     }
 
     clearSelection() {
         this.selectedIds = [];
+        // Update UI
+        if (typeof UI !== 'undefined') {
+            UI.updatePropertiesPanel();
+        }
     }
 
     isSelected(id) {
@@ -331,6 +343,10 @@ class StateManager {
 
     selectAll() {
         this.selectedIds = this.getVisibleEntities().map(e => e.id);
+        // Update UI
+        if (typeof UI !== 'undefined') {
+            UI.updatePropertiesPanel();
+        }
     }
 
     // ==========================================
