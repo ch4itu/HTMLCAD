@@ -26,6 +26,9 @@ class StateManager {
         this.selectStart = null;
         this.selectedIds = [];
 
+        // Hover state (for entity highlighting on mouse over)
+        this.hoveredId = null;
+
         // View state
         this.pan = { x: 0, y: 0 };
         this.zoom = 1;

@@ -106,11 +106,16 @@ const App = {
             CAD.panStart = { x: e.offsetX, y: e.offsetY };
         }
 
+        // Update hover highlighting (detect entity under cursor)
+        const tolerance = 10 / CAD.zoom;
+        const hit = Commands.hitTest(world);
+        CAD.hoveredId = hit ? hit.id : null;
+
         // Update snap point
-        if (CAD.snapEnabled && CAD.activeCmd) {
+        if (CAD.snapEnabled) {
             const entities = CAD.getVisibleEntities();
-            const tolerance = 15 / CAD.zoom;
-            const snap = Geometry.findSnapPoints(world, entities, CAD.snapModes, tolerance, CAD.gridSize);
+            const snapTolerance = 15 / CAD.zoom;
+            const snap = Geometry.findSnapPoints(world, entities, CAD.snapModes, snapTolerance, CAD.gridSize);
 
             if (snap) {
                 CAD.snapPoint = snap.point;
