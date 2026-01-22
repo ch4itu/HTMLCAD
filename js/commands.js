@@ -587,6 +587,19 @@ const Commands = {
             point = Utils.applyOrtho(state.points[state.points.length - 1], point);
         }
 
+        // Handle selection mode FIRST (window/crossing selection in progress)
+        // This must come before needSelection check to properly finish selection box
+        if (state.selectionMode && state.selectStart) {
+            this.finishSelection(point);
+            // After window selection during modify commands, update toolbar and stay in selection mode
+            if (state.cmdOptions.needSelection) {
+                UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
+                UI.updateCanvasSelectionInfo();
+            }
+            Renderer.draw();
+            return;
+        }
+
         // Check if we need selection first (modify commands)
         if (state.cmdOptions.needSelection) {
             const hit = this.hitTest(point);
@@ -599,11 +612,12 @@ const Commands = {
                     state.select(hit.id);
                     UI.log(`1 found, ${state.selectedIds.length} total`);
                 }
-            } else if (!state.selectionMode) {
-                // Start window/crossing selection
+            } else {
+                // Start window/crossing selection (first corner)
                 state.selectionMode = true;
                 state.selectStart = point;
                 UI.log('Specify opposite corner:');
+                Renderer.draw();
                 return;
             }
 
@@ -611,17 +625,6 @@ const Commands = {
             // User can keep selecting more entities
             UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
             UI.updateCanvasSelectionInfo();
-            Renderer.draw();
-            return;
-        }
-
-        // Handle selection mode (window/crossing)
-        if (state.selectionMode) {
-            this.finishSelection(point);
-            // After window selection, stay in selection mode if needSelection is true
-            if (state.cmdOptions.needSelection) {
-                UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
-            }
             Renderer.draw();
             return;
         }
