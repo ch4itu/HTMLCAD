@@ -783,17 +783,22 @@ const Storage = {
     },
 
     openFile() {
-        // Use wildcard to allow all files, then filter by extension
-        this.openFileDialog('*', (file) => {
-            const ext = file.name.split('.').pop().toLowerCase();
-            UI.log(`Opening file: ${file.name}`);
+        // Use empty accept to allow all files
+        this.openFileDialog('', (file) => {
+            const fileName = file.name;
+            const ext = fileName.split('.').pop().toLowerCase();
+            console.log('Opening file:', fileName, 'Extension:', ext);
+            UI.log(`Opening file: ${fileName} (type: .${ext})`);
 
             if (ext === 'dxf') {
+                console.log('Routing to DXF import');
                 this.importDXF(file);
-            } else if (ext === 'json' || ext === 'htmlcad') {
-                this.importJSON(file);
             } else if (ext === 'svg') {
+                console.log('Routing to SVG import');
                 this.importSVG(file);
+            } else if (ext === 'json' || ext === 'htmlcad') {
+                console.log('Routing to JSON import');
+                this.importJSON(file);
             } else {
                 UI.log(`Unsupported file format: .${ext}. Use .dxf, .json, or .svg`, 'error');
             }

@@ -312,6 +312,74 @@ body {
     overflow: hidden;
 }
 
+/* ============================================
+   SELECTION RIBBON
+   ============================================ */
+
+.selection-ribbon {
+    background: linear-gradient(180deg, #4a6da7 0%, #3d5a8a 100%);
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.selection-info {
+    color: #fff;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+
+.selection-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.sel-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 3px;
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sel-btn:hover {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.sel-btn .icon {
+    font-size: 14px;
+    font-style: normal;
+}
+
+.sel-btn.deselect {
+    background: rgba(200,50,50,0.3);
+    border-color: rgba(200,50,50,0.5);
+}
+
+.sel-btn.deselect:hover {
+    background: rgba(200,50,50,0.5);
+}
+
+.sel-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.3);
+    margin: 0 8px;
+}
+
 /* Left Panel (Properties) */
 .panel-left {
     width: 220px;
@@ -320,6 +388,34 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.panel-left.collapsed {
+    width: 30px;
+}
+
+.panel-left.collapsed .panel-content {
+    display: none;
+}
+
+.panel-left.collapsed .panel-header {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 10px 6px;
+    justify-content: flex-start;
+}
+
+.panel-toggle {
+    font-size: 10px;
+    margin-right: 6px;
+    transition: transform 0.2s ease;
+}
+
+.panel-left.collapsed .panel-toggle {
+    transform: rotate(180deg);
+    margin-right: 0;
+    margin-bottom: 6px;
 }
 
 .panel-header {
@@ -332,7 +428,8 @@ body {
     letter-spacing: 0.5px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
 }
 
 .panel-header .close-btn {

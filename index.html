@@ -332,11 +332,46 @@
             </div>
         </div>
 
+        <!-- Selection Ribbon (appears when entities are selected) -->
+        <div class="selection-ribbon" id="selectionRibbon" style="display: none;">
+            <div class="selection-info">
+                <span id="selectionCount">0</span> object(s) selected
+            </div>
+            <div class="selection-actions">
+                <button class="sel-btn" onclick="App.executeCommand('move')" title="Move (M)">
+                    <i class="icon">↔</i> Move
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('copy')" title="Copy (CO)">
+                    <i class="icon">⧉</i> Copy
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('rotate')" title="Rotate (RO)">
+                    <i class="icon">↻</i> Rotate
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('scale')" title="Scale (SC)">
+                    <i class="icon">⤢</i> Scale
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('mirror')" title="Mirror (MI)">
+                    <i class="icon">⇿</i> Mirror
+                </button>
+                <button class="sel-btn" onclick="App.executeCommand('erase')" title="Erase (E)">
+                    <i class="icon">✕</i> Erase
+                </button>
+                <button class="sel-btn" onclick="Commands.listEntities()" title="Properties">
+                    <i class="icon">ℹ</i> Properties
+                </button>
+                <div class="sel-separator"></div>
+                <button class="sel-btn deselect" onclick="CAD.clearSelection(); Renderer.draw();" title="Deselect All (Esc)">
+                    <i class="icon">⊗</i> Deselect
+                </button>
+            </div>
+        </div>
+
         <!-- Main Workspace -->
         <div class="workspace">
             <!-- Properties Panel (Left) -->
-            <div class="panel-left">
-                <div class="panel-header">
+            <div class="panel-left" id="panelLeft">
+                <div class="panel-header" onclick="UI.togglePropertiesPanel()">
+                    <span class="panel-toggle" id="panelToggle">◀</span>
                     Properties
                 </div>
                 <div class="panel-content" id="propertiesPanel">
