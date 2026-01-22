@@ -59,10 +59,13 @@ const UI = {
 
         // Prevent text selection during CAD operations, but allow in command history
         document.addEventListener('selectstart', (e) => {
+            const target = e.target;
             // Allow selection in INPUT elements and command history
-            if (e.target.tagName === 'INPUT' ||
-                e.target.closest('.command-history') ||
-                e.target.closest('.properties-panel')) {
+            // Check if target has closest method (it's an Element, not a text node)
+            if (target.tagName === 'INPUT' ||
+                (target.closest && target.closest('.command-history')) ||
+                (target.closest && target.closest('.properties-panel')) ||
+                (target.closest && target.closest('.panel-content'))) {
                 return; // Allow selection
             }
             e.preventDefault();

@@ -3,6 +3,12 @@
    ============================================ */
 
 const Commands = {
+    // Commands that should repeat automatically (like AutoCAD)
+    repeatableCommands: ['line', 'polyline', 'circle', 'arc', 'rect', 'ellipse', 'text', 'point', 'polygon', 'donut', 'ray', 'xline', 'spline'],
+
+    // Last executed drawing command (for repeat)
+    lastDrawingCmd: null,
+
     // Command aliases (AutoCAD-like shortcuts)
     aliases: {
         // Drawing commands
@@ -211,9 +217,14 @@ const Commands = {
     },
 
     startCommand(name, args = []) {
-        // Finish any active command first
+        // Finish any active command first (without restarting)
         if (CAD.activeCmd) {
-            this.finishCommand();
+            this.finishCommand(true); // Pass true to prevent auto-restart
+        }
+
+        // Track repeatable commands
+        if (this.repeatableCommands.includes(name)) {
+            this.lastDrawingCmd = name;
         }
 
         CAD.startCommand(name);
@@ -1406,13 +1417,24 @@ const Commands = {
         this.finishCommand();
     },
 
-    finishCommand() {
+    finishCommand(preventRestart = false) {
+        const lastCmd = CAD.activeCmd;
         CAD.finishCommand();
         UI.setActiveButton(null);
         Renderer.draw();
+
+        // Auto-restart repeatable commands (like AutoCAD)
+        if (!preventRestart && lastCmd && this.repeatableCommands.includes(lastCmd)) {
+            // Small delay to allow UI to update
+            setTimeout(() => {
+                this.startCommand(lastCmd);
+            }, 50);
+        }
     },
 
     cancelCommand() {
+        // Clear the last drawing command so it doesn't restart
+        this.lastDrawingCmd = null;
         CAD.cancelCommand();
         CAD.clearSelection();
         CAD.selectionMode = false;
