@@ -584,30 +584,40 @@ const Commands = {
             point = Utils.applyOrtho(state.points[state.points.length - 1], point);
         }
 
-        // Check if we need selection first
+        // Check if we need selection first (modify commands)
         if (state.cmdOptions.needSelection) {
             const hit = this.hitTest(point);
             if (hit) {
-                state.select(hit.id);
-                UI.log(`1 found, 1 total`);
+                // Toggle selection on click (like AutoCAD)
+                if (state.isSelected(hit.id)) {
+                    state.deselect(hit.id);
+                    UI.log(`1 removed, ${state.selectedIds.length} total`);
+                } else {
+                    state.select(hit.id);
+                    UI.log(`1 found, ${state.selectedIds.length} total`);
+                }
             } else if (!state.selectionMode) {
+                // Start window/crossing selection
                 state.selectionMode = true;
                 state.selectStart = point;
                 UI.log('Specify opposite corner:');
                 return;
             }
 
-            if (state.selectedIds.length > 0) {
-                state.cmdOptions.needSelection = false;
-                this.continueCommand(state.activeCmd);
-            }
+            // Don't auto-proceed - wait for Enter to confirm selection
+            // User can keep selecting more entities
+            UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
             Renderer.draw();
             return;
         }
 
-        // Handle selection mode
+        // Handle selection mode (window/crossing)
         if (state.selectionMode) {
             this.finishSelection(point);
+            // After window selection, stay in selection mode if needSelection is true
+            if (state.cmdOptions.needSelection) {
+                UI.log(`${state.selectedIds.length} selected. Press ENTER to confirm or keep selecting.`, 'prompt');
+            }
             Renderer.draw();
             return;
         }
@@ -1846,6 +1856,22 @@ const Commands = {
 
         if (!input) {
             // Enter pressed with empty input
+
+            // Confirm selection during modify commands
+            if (state.cmdOptions.needSelection && state.selectedIds.length > 0) {
+                state.cmdOptions.needSelection = false;
+                this.continueCommand(state.activeCmd);
+                Renderer.draw();
+                return true;
+            }
+
+            // Cancel selection mode if no selection made
+            if (state.cmdOptions.needSelection && state.selectedIds.length === 0) {
+                UI.log('No objects selected.');
+                this.finishCommand(true);
+                return true;
+            }
+
             if (state.activeCmd === 'polyline' && state.points.length >= 2) {
                 // Finish polyline
                 CAD.addEntity({
