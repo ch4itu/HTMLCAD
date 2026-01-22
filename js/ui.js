@@ -611,9 +611,14 @@ AUTOLISP:
 
     togglePropertiesPanel() {
         const panel = document.getElementById('panelLeft');
-        const toggle = document.getElementById('panelToggle');
         if (panel) {
             panel.classList.toggle('collapsed');
+            // Resize canvas after panel animation completes
+            setTimeout(() => {
+                if (typeof Renderer !== 'undefined') {
+                    Renderer.resize();
+                }
+            }, 250); // Wait for CSS transition to complete
         }
     },
 
