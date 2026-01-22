@@ -579,14 +579,29 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
+        // Debug logging
+        console.log('drawSelectionWindow called:', {
+            selectionMode: state.selectionMode,
+            selectStart: state.selectStart,
+            tempEnd: state.tempEnd,
+            cursor: state.cursor
+        });
+
         if (!state.selectionMode || !state.selectStart) return;
 
         const start = state.selectStart;
         const end = state.tempEnd || state.cursor;
 
+        if (!end) {
+            console.log('No end point available');
+            return;
+        }
+
         const w = end.x - start.x;
         const h = end.y - start.y;
         const isCrossing = w < 0;
+
+        console.log('Drawing selection window:', { start, end, w, h, isCrossing });
 
         ctx.beginPath();
         ctx.fillStyle = isCrossing ? this.colors.crossWindow : this.colors.windowSelect;
