@@ -63,9 +63,19 @@ const App = {
     onMouseDown(e) {
         const world = Utils.screenToWorld(e.offsetX, e.offsetY, CAD.pan, CAD.zoom);
 
-        // Middle mouse button - start pan
+        // Middle mouse button - start pan or zoom extents on double-click
         if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
             e.preventDefault();
+
+            // Check for double middle click
+            const now = Date.now();
+            if (e.button === 1 && now - this.lastMiddleClick < 300) {
+                this.onMiddleDoubleClick();
+                this.lastMiddleClick = 0;
+                return;
+            }
+            this.lastMiddleClick = e.button === 1 ? now : 0;
+
             CAD.isPanning = true;
             CAD.panStart = { x: e.offsetX, y: e.offsetY };
             document.getElementById('viewport').style.cursor = 'grabbing';
@@ -155,11 +165,18 @@ const App = {
         }
     },
 
+    // Track middle button for double-click zoom
+    lastMiddleClick: 0,
+
     onDoubleClick(e) {
-        // Double-click to zoom extents
-        if (!CAD.activeCmd && CAD.selectedIds.length === 0) {
-            Commands.zoomExtents();
-        }
+        // Double left click does nothing now
+        // Use double middle click for zoom extents
+    },
+
+    onMiddleDoubleClick() {
+        // Double middle click to zoom extents
+        Commands.zoomExtents();
+        Renderer.draw();
     },
 
     // ==========================================
