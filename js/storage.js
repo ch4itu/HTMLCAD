@@ -775,11 +775,11 @@ const Storage = {
             type: 'line',
             p1: {
                 x: parseFloat(data[10]) || 0,
-                y: parseFloat(data[20]) || 0
+                y: -(parseFloat(data[20]) || 0)
             },
             p2: {
                 x: parseFloat(data[11]) || 0,
-                y: parseFloat(data[21]) || 0
+                y: -(parseFloat(data[21]) || 0)
             },
             layer: data[8] || '0'
         };
@@ -794,7 +794,7 @@ const Storage = {
             type: 'circle',
             center: {
                 x: parseFloat(data[10]) || 0,
-                y: parseFloat(data[20]) || 0
+                y: -(parseFloat(data[20]) || 0)
             },
             r: parseFloat(data[40]) || 1,
             layer: data[8] || '0'
@@ -810,11 +810,11 @@ const Storage = {
             type: 'arc',
             center: {
                 x: parseFloat(data[10]) || 0,
-                y: parseFloat(data[20]) || 0
+                y: -(parseFloat(data[20]) || 0)
             },
             r: parseFloat(data[40]) || 1,
-            startAngle: Utils.degToRad(parseFloat(data[50]) || 0),
-            endAngle: Utils.degToRad(parseFloat(data[51]) || 360),
+            start: -Utils.degToRad(parseFloat(data[51]) || 0),
+            end: -Utils.degToRad(parseFloat(data[50]) || 360),
             layer: data[8] || '0'
         };
 
@@ -832,7 +832,7 @@ const Storage = {
         for (let j = 0; j < xCoords.length; j++) {
             points.push({
                 x: parseFloat(xCoords[j]) || 0,
-                y: parseFloat(yCoords[j]) || 0
+                y: -(parseFloat(yCoords[j]) || 0)
             });
         }
 
@@ -857,7 +857,7 @@ const Storage = {
             type: 'text',
             position: {
                 x: parseFloat(data[10]) || 0,
-                y: parseFloat(data[20]) || 0
+                y: -(parseFloat(data[20]) || 0)
             },
             text: data[1] || '',
             height: parseFloat(data[40]) || 10,
@@ -875,7 +875,7 @@ const Storage = {
             type: 'point',
             position: {
                 x: parseFloat(data[10]) || 0,
-                y: parseFloat(data[20]) || 0
+                y: -(parseFloat(data[20]) || 0)
             },
             layer: data[8] || '0'
         };
@@ -894,7 +894,7 @@ const Storage = {
         for (let j = 0; j < xCoords.length; j++) {
             points.push({
                 x: parseFloat(xCoords[j]) || 0,
-                y: parseFloat(yCoords[j]) || 0
+                y: -(parseFloat(yCoords[j]) || 0)
             });
         }
 
@@ -912,10 +912,10 @@ const Storage = {
         const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
         const centerX = parseFloat(data[10]) || 0;
-        const centerY = parseFloat(data[20]) || 0;
+        const centerY = -(parseFloat(data[20]) || 0);
         // Major axis endpoint relative to center
         const majorX = parseFloat(data[11]) || 1;
-        const majorY = parseFloat(data[21]) || 0;
+        const majorY = -(parseFloat(data[21]) || 0);
         // Ratio of minor to major axis
         const ratio = parseFloat(data[40]) || 1;
 
