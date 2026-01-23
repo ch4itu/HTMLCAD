@@ -579,7 +579,7 @@ const Commands = {
         const state = CAD;
 
         // Handle coordinate input from snap
-        if (state.snapEnabled && state.snapPoint) {
+        if ((state.osnapEnabled || state.gridSnapEnabled) && state.snapPoint) {
             point = { ...state.snapPoint };
         }
 
@@ -1157,7 +1157,17 @@ const Commands = {
     },
 
     getHatchPatternOptions() {
-        return ['solid', 'diagonal', 'cross', 'dots'].join('/');
+        const underline = (text, shortcut) => {
+            const index = text.toLowerCase().indexOf(shortcut);
+            if (index === -1) return text;
+            return `${text.slice(0, index)}${text[index]}\u0332${text.slice(index + 1)}`;
+        };
+        return [
+            underline('solid', 's'),
+            underline('diagonal', 'd'),
+            underline('cross', 'c'),
+            underline('dots', 'o')
+        ].join('/');
     },
 
     setHatchPattern(pattern) {
@@ -2317,9 +2327,13 @@ const Commands = {
             const pattern = input.toLowerCase();
             const validPatterns = {
                 solid: 'solid',
+                s: 'solid',
                 diagonal: 'diagonal',
+                d: 'diagonal',
                 cross: 'cross',
+                c: 'cross',
                 dots: 'dots',
+                o: 'dots',
                 ansi31: 'diagonal',
                 ansi32: 'cross',
                 ansi37: 'dots'
