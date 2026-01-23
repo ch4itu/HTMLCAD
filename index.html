@@ -20,7 +20,7 @@
                 <div class="menu-item" onclick="Storage.exportJSON()">Export JSON</div>
             </div>
             <div class="spacer"></div>
-            <div class="file-name" id="fileName">Untitled.dwg</div>
+            <div class="file-name" id="fileName">Untitled.bcad</div>
         </div>
 
         <!-- Ribbon Toolbar -->
@@ -116,8 +116,10 @@
                                 <i class="icon">+</i>
                             </button>
                             <select id="layerSelect" class="layer-select" onchange="UI.onLayerChange()"></select>
-                            <input type="color" id="layerColor" class="color-picker" value="#ffffff"
-                                   onchange="UI.onLayerColorChange()" title="Layer Color">
+                            <button class="color-btn" id="layerColorBtn" onclick="UI.showLayerColorPicker()" title="Layer Color">
+                                <span class="color-swatch" id="layerColorSwatch"></span>
+                            </button>
+                            <input type="hidden" id="layerColor" value="#ffffff">
                         </div>
                     </div>
                     <div class="ribbon-panel-title">Layers</div>
@@ -466,6 +468,48 @@
             </div>
             <div class="status-right">
                 <span class="status-coords" id="coordDisplay">0.0000, 0.0000, 0.0000</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- AutoCAD-style Color Picker Dialog -->
+    <div class="color-picker-dialog" id="colorPickerDialog" style="display: none;">
+        <div class="color-picker-content">
+            <div class="color-picker-header">
+                <span>Select Color</span>
+                <button class="color-picker-close" onclick="UI.hideColorPicker()">&times;</button>
+            </div>
+            <div class="color-picker-tabs">
+                <button class="color-tab active" data-tab="index" onclick="UI.switchColorTab('index')">Index Color</button>
+                <button class="color-tab" data-tab="true" onclick="UI.switchColorTab('true')">True Color</button>
+            </div>
+            <div class="color-picker-body">
+                <!-- Index Colors Tab -->
+                <div class="color-tab-content" id="colorTabIndex">
+                    <div class="aci-standard-colors">
+                        <div class="aci-row aci-primary"></div>
+                    </div>
+                    <div class="aci-gray-colors"></div>
+                    <div class="aci-full-palette"></div>
+                </div>
+                <!-- True Color Tab -->
+                <div class="color-tab-content" id="colorTabTrue" style="display: none;">
+                    <div class="true-color-inputs">
+                        <label>Red: <input type="number" id="colorR" min="0" max="255" value="255"></label>
+                        <label>Green: <input type="number" id="colorG" min="0" max="255" value="255"></label>
+                        <label>Blue: <input type="number" id="colorB" min="0" max="255" value="255"></label>
+                    </div>
+                    <input type="color" id="colorHexPicker" value="#ffffff" class="true-color-picker">
+                </div>
+            </div>
+            <div class="color-picker-preview">
+                <span>Selected:</span>
+                <div class="color-preview-box" id="colorPreviewBox"></div>
+                <span id="colorPreviewText">#FFFFFF</span>
+            </div>
+            <div class="color-picker-actions">
+                <button class="btn-ok" onclick="UI.confirmColorPicker()">OK</button>
+                <button class="btn-cancel" onclick="UI.hideColorPicker()">Cancel</button>
             </div>
         </div>
     </div>

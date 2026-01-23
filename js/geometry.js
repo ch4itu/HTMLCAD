@@ -589,6 +589,18 @@ const Geometry = {
                     }
                 }
             }
+
+            // Perpendicular snap - requires a "from point" in the current drawing operation
+            if (snapModes.perpendicular && CAD.points && CAD.points.length > 0) {
+                const fromPoint = CAD.points[CAD.points.length - 1];
+                const perpPoint = this.getPerpendicularPoint(fromPoint, entity);
+                if (perpPoint) {
+                    const d = Utils.dist(point, perpPoint);
+                    if (d < tolerance) {
+                        snaps.push({ point: perpPoint, type: 'perpendicular', distance: d });
+                    }
+                }
+            }
         });
 
         // Intersection snap
@@ -691,6 +703,60 @@ const Geometry = {
             default:
                 return null;
         }
+    },
+
+    // Get perpendicular point from a point to an entity
+    getPerpendicularPoint(fromPoint, entity) {
+        switch (entity.type) {
+            case 'line':
+                return this.perpendicularToLine(fromPoint, entity.p1, entity.p2);
+            case 'polyline':
+                // Find perpendicular to closest segment
+                let minDist = Infinity;
+                let perpPoint = null;
+                for (let i = 0; i < entity.points.length - 1; i++) {
+                    const pp = this.perpendicularToLine(fromPoint, entity.points[i], entity.points[i + 1]);
+                    if (pp) {
+                        const d = Utils.dist(fromPoint, pp);
+                        if (d < minDist) {
+                            minDist = d;
+                            perpPoint = pp;
+                        }
+                    }
+                }
+                return perpPoint;
+            case 'circle':
+                // Perpendicular to circle is from center through the from point
+                const angle = Math.atan2(fromPoint.y - entity.center.y, fromPoint.x - entity.center.x);
+                return Utils.polarPoint(entity.center, angle, entity.r);
+            case 'arc':
+                // Similar to circle but check if point is within arc range
+                const arcAngle = Math.atan2(fromPoint.y - entity.center.y, fromPoint.x - entity.center.x);
+                // Simplified - just return the nearest point on arc
+                return Utils.polarPoint(entity.center, arcAngle, entity.r);
+            default:
+                return null;
+        }
+    },
+
+    // Calculate perpendicular point from a point to a line segment
+    perpendicularToLine(point, lineP1, lineP2) {
+        const dx = lineP2.x - lineP1.x;
+        const dy = lineP2.y - lineP1.y;
+        const lenSq = dx * dx + dy * dy;
+
+        if (lenSq === 0) return null; // Line has zero length
+
+        // Calculate projection parameter
+        const t = ((point.x - lineP1.x) * dx + (point.y - lineP1.y) * dy) / lenSq;
+
+        // Check if perpendicular point is on the segment
+        if (t < 0 || t > 1) return null;
+
+        return {
+            x: lineP1.x + t * dx,
+            y: lineP1.y + t * dy
+        };
     },
 
     // ==========================================
