@@ -347,6 +347,23 @@ const Utils = {
         return inside;
     },
 
+    // Point in ellipse test (supports rotation)
+    pointInEllipse(point, ellipse) {
+        const rotation = ellipse.rotation || 0;
+        const cos = Math.cos(-rotation);
+        const sin = Math.sin(-rotation);
+        const dx = point.x - ellipse.center.x;
+        const dy = point.y - ellipse.center.y;
+        const rx = ellipse.rx || 0;
+        const ry = ellipse.ry || 0;
+        if (rx === 0 || ry === 0) return false;
+
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+        const norm = (localX * localX) / (rx * rx) + (localY * localY) / (ry * ry);
+        return norm <= 1;
+    },
+
     // ==========================================
     // FORMATTING HELPERS
     // ==========================================

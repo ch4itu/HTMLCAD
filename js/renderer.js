@@ -33,6 +33,7 @@ const Renderer = {
             perpendicular: '#00ff88'
         }
     },
+    hatchPatterns: new Map(),
 
     // ==========================================
     // INITIALIZATION
@@ -228,17 +229,81 @@ const Renderer = {
 
             // Handle hatch fill
             if (entity.hatch) {
-                ctx.stroke();
-                ctx.fillStyle = color;
-                ctx.globalAlpha = 0.2;
+                const hatchStyle = this.getHatchStyle(entity, color);
+                ctx.save();
+                ctx.fillStyle = hatchStyle.fillStyle;
+                ctx.globalAlpha = hatchStyle.alpha;
                 ctx.fill();
-                ctx.globalAlpha = 1.0;
+                ctx.restore();
+                if (!entity.noStroke) {
+                    ctx.stroke();
+                }
             } else {
                 ctx.stroke();
             }
         });
 
         ctx.setLineDash([]);
+    },
+
+    getHatchStyle(entity, color) {
+        const hatch = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const pattern = hatch.pattern || 'solid';
+
+        if (pattern === 'solid') {
+            return { fillStyle: color, alpha: 0.2 };
+        }
+
+        const fillStyle = this.getHatchPattern(pattern, color);
+        return { fillStyle, alpha: 0.6 };
+    },
+
+    getHatchPattern(pattern, color) {
+        const zoomKey = Math.round(CAD.zoom * 100);
+        const key = `${pattern}-${color}-${zoomKey}`;
+        if (this.hatchPatterns.has(key)) {
+            return this.hatchPatterns.get(key);
+        }
+
+        const size = Math.max(4, 8 / CAD.zoom);
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = Math.max(0.5, 1 / CAD.zoom);
+
+        switch (pattern) {
+            case 'diagonal':
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+                break;
+            case 'cross':
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(size, size);
+                ctx.stroke();
+                break;
+            case 'dots':
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, Math.max(0.5, size / 6), 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            default:
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+        }
+
+        const patternFill = this.ctx.createPattern(canvas, 'repeat');
+        this.hatchPatterns.set(key, patternFill);
+        return patternFill;
     },
 
     drawEntity(entity, ctx) {

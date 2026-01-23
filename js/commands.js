@@ -386,7 +386,8 @@ const Commands = {
                 break;
 
             case 'hatch':
-                UI.log('HATCH: Select closed object to hatch:', 'prompt');
+                UI.log(`HATCH: Click inside a closed area or select a closed object.`, 'prompt');
+                UI.log(`HATCH: Pattern [${this.getHatchPatternOptions()}] <${CAD.hatchPattern}>:`, 'prompt');
                 break;
 
             case 'explode':
@@ -1112,15 +1113,201 @@ const Commands = {
     handleHatchClick(point) {
         const hit = this.hitTest(point);
         if (hit) {
-            if (hit.type === 'circle' || hit.type === 'rect' ||
-                (hit.type === 'polyline' && Utils.isPolygonClosed(hit.points))) {
-                CAD.updateEntity(hit.id, { hatch: true });
-                UI.log('Hatch applied.');
+            if (this.entitySupportsHatch(hit)) {
+                this.applyHatch(hit);
             } else {
                 UI.log('Object is not closed. Cannot hatch.', 'error');
             }
+            this.finishCommand();
+            return;
         }
+
+        const target = this.findHatchTarget(point);
+        if (target) {
+            this.applyHatch(target);
+        } else {
+            const loop = this.findLineLoopContainingPoint(point);
+            if (loop) {
+                CAD.addEntity({
+                    type: 'polyline',
+                    points: loop,
+                    hatch: { pattern: CAD.hatchPattern },
+                    noStroke: true
+                });
+                UI.log('Hatch applied from boundary.');
+            } else {
+                UI.log('No closed boundary found at that point.', 'error');
+            }
+        }
+
         this.finishCommand();
+    },
+
+    getHatchPatternOptions() {
+        return ['solid', 'diagonal', 'cross', 'dots'].join('/');
+    },
+
+    setHatchPattern(pattern) {
+        CAD.hatchPattern = pattern;
+        UI.log(`HATCH: Pattern set to ${pattern.toUpperCase()}.`, 'prompt');
+    },
+
+    entitySupportsHatch(entity) {
+        if (entity.type === 'circle' || entity.type === 'rect' || entity.type === 'ellipse') {
+            return true;
+        }
+        return entity.type === 'polyline' && Utils.isPolygonClosed(entity.points);
+    },
+
+    applyHatch(entity) {
+        CAD.updateEntity(entity.id, { hatch: { pattern: CAD.hatchPattern } });
+        UI.log('Hatch applied.');
+    },
+
+    findHatchTarget(point) {
+        const entities = CAD.getVisibleEntities();
+        for (const entity of entities) {
+            if (!this.entitySupportsHatch(entity)) {
+                continue;
+            }
+            if (this.pointInsideEntity(point, entity)) {
+                return entity;
+            }
+        }
+        return null;
+    },
+
+    pointInsideEntity(point, entity) {
+        switch (entity.type) {
+            case 'circle':
+                return Utils.dist(point, entity.center) <= entity.r;
+            case 'ellipse':
+                return Utils.pointInEllipse(point, entity);
+            case 'rect':
+                return Utils.pointInRect(point, entity.p1, entity.p2);
+            case 'polyline': {
+                const points = Utils.isPolygonClosed(entity.points)
+                    ? entity.points
+                    : [...entity.points, entity.points[0]];
+                return Utils.pointInPolygon(point, points);
+            }
+            default:
+                return false;
+        }
+    },
+
+    findLineLoopContainingPoint(point) {
+        const segments = [];
+        const entities = CAD.getVisibleEntities();
+
+        entities.forEach(entity => {
+            if (entity.type === 'line') {
+                segments.push({ p1: entity.p1, p2: entity.p2 });
+            } else if (entity.type === 'polyline' && entity.points.length > 1) {
+                for (let i = 0; i < entity.points.length - 1; i++) {
+                    segments.push({ p1: entity.points[i], p2: entity.points[i + 1] });
+                }
+                if (entity.closed || Utils.isPolygonClosed(entity.points)) {
+                    segments.push({ p1: entity.points[entity.points.length - 1], p2: entity.points[0] });
+                }
+            }
+        });
+
+        if (segments.length === 0) {
+            return null;
+        }
+
+        const loops = this.buildLineLoops(segments);
+        for (const loop of loops) {
+            if (Utils.pointInPolygon(point, loop)) {
+                return loop;
+            }
+        }
+
+        return null;
+    },
+
+    buildLineLoops(segments) {
+        const tolerance = 0.001;
+        const keyFor = (p) => `${Math.round(p.x / tolerance)}:${Math.round(p.y / tolerance)}`;
+        const pointForKey = new Map();
+        const adjacency = new Map();
+
+        const addAdjacency = (key, segmentIndex) => {
+            if (!adjacency.has(key)) {
+                adjacency.set(key, []);
+            }
+            adjacency.get(key).push(segmentIndex);
+        };
+
+        segments.forEach((segment, index) => {
+            const key1 = keyFor(segment.p1);
+            const key2 = keyFor(segment.p2);
+            if (!pointForKey.has(key1)) pointForKey.set(key1, segment.p1);
+            if (!pointForKey.has(key2)) pointForKey.set(key2, segment.p2);
+            addAdjacency(key1, index);
+            addAdjacency(key2, index);
+        });
+
+        const used = new Set();
+        const loops = [];
+
+        const followLoop = (startIndex) => {
+            const startSeg = segments[startIndex];
+            const startKey = keyFor(startSeg.p1);
+            const nextKey = keyFor(startSeg.p2);
+            const loop = [pointForKey.get(startKey)];
+            let currentKey = nextKey;
+            let prevKey = startKey;
+
+            used.add(startIndex);
+            loop.push(pointForKey.get(currentKey));
+
+            let guard = 0;
+            while (currentKey !== startKey && guard < segments.length + 5) {
+                guard += 1;
+                const options = (adjacency.get(currentKey) || []).filter(idx => !used.has(idx));
+                if (options.length === 0) {
+                    return null;
+                }
+
+                let nextIndex = options[0];
+                if (options.length > 1) {
+                    nextIndex = options.find(idx => {
+                        const seg = segments[idx];
+                        const keyA = keyFor(seg.p1);
+                        const keyB = keyFor(seg.p2);
+                        return keyA !== prevKey && keyB !== prevKey;
+                    }) ?? options[0];
+                }
+
+                used.add(nextIndex);
+                const seg = segments[nextIndex];
+                const keyA = keyFor(seg.p1);
+                const keyB = keyFor(seg.p2);
+                const nextKeyCandidate = keyA === currentKey ? keyB : keyA;
+
+                prevKey = currentKey;
+                currentKey = nextKeyCandidate;
+                loop.push(pointForKey.get(currentKey));
+            }
+
+            if (currentKey === startKey && loop.length >= 4) {
+                return loop;
+            }
+
+            return null;
+        };
+
+        segments.forEach((segment, index) => {
+            if (used.has(index)) return;
+            const loop = followLoop(index);
+            if (loop) {
+                loops.push(loop);
+            }
+        });
+
+        return loops;
     },
 
     handleDistanceClick(point) {
@@ -2090,6 +2277,29 @@ const Commands = {
                 state.cmdOptions.donutOuter = Math.abs(num);
                 state.cmdOptions.outerSet = true;
                 UI.log('DONUT: Specify center of donut:', 'prompt');
+                return true;
+            }
+        }
+
+        if (state.activeCmd === 'hatch') {
+            const pattern = input.toLowerCase();
+            const validPatterns = {
+                solid: 'solid',
+                diagonal: 'diagonal',
+                cross: 'cross',
+                dots: 'dots',
+                ansi31: 'diagonal',
+                ansi32: 'cross',
+                ansi37: 'dots'
+            };
+
+            if (pattern === 'list') {
+                UI.log(`HATCH patterns: ${this.getHatchPatternOptions()}`, 'prompt');
+                return true;
+            }
+
+            if (validPatterns[pattern]) {
+                this.setHatchPattern(validPatterns[pattern]);
                 return true;
             }
         }
