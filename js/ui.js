@@ -601,11 +601,16 @@ AUTOLISP:
 
         select.value = CAD.currentLayer;
 
-        // Update color picker
-        if (this.elements.layerColor) {
-            const currentLayer = CAD.getLayer(CAD.currentLayer);
-            if (currentLayer) {
+        // Update color picker/swatch
+        const currentLayer = CAD.getLayer(CAD.currentLayer);
+        if (currentLayer) {
+            if (this.elements.layerColor) {
                 this.elements.layerColor.value = currentLayer.color;
+            }
+            // Update the color swatch button
+            const swatch = document.getElementById('layerColorSwatch');
+            if (swatch) {
+                swatch.style.background = currentLayer.color;
             }
         }
     },
@@ -1208,6 +1213,266 @@ AUTOLISP:
         } else {
             this.hideCanvasSelectionToolbar();
         }
+    },
+
+    // ==========================================
+    // AUTOCAD-STYLE COLOR PICKER
+    // ==========================================
+
+    // AutoCAD Color Index palette
+    aciColors: [
+        // Standard 9 colors (1-9)
+        { index: 1, hex: '#ff0000', name: 'Red' },
+        { index: 2, hex: '#ffff00', name: 'Yellow' },
+        { index: 3, hex: '#00ff00', name: 'Green' },
+        { index: 4, hex: '#00ffff', name: 'Cyan' },
+        { index: 5, hex: '#0000ff', name: 'Blue' },
+        { index: 6, hex: '#ff00ff', name: 'Magenta' },
+        { index: 7, hex: '#ffffff', name: 'White' },
+        { index: 8, hex: '#808080', name: 'Gray' },
+        { index: 9, hex: '#c0c0c0', name: 'Light Gray' },
+        // Additional grays (250-255)
+        { index: 250, hex: '#333333' },
+        { index: 251, hex: '#464646' },
+        { index: 252, hex: '#585858' },
+        { index: 253, hex: '#6b6b6b' },
+        { index: 254, hex: '#808080' },
+        { index: 255, hex: '#ffffff' }
+    ],
+
+    // Generate full ACI palette (colors 10-249)
+    generateAciPalette() {
+        const palette = [];
+        // Generate spectrum colors
+        const baseColors = [
+            // Reds (10-19)
+            '#ff0000', '#ff5555', '#cc0000', '#cc4444', '#990000',
+            '#994444', '#660000', '#663333', '#330000', '#331a1a',
+            // Oranges (20-29)
+            '#ff5500', '#ff8855', '#cc4400', '#cc6d44', '#994400',
+            '#996644', '#663300', '#664433', '#331a00', '#33261a',
+            // Yellows (30-49)
+            '#ff8000', '#ffaa55', '#cc6600', '#cc8844', '#996600',
+            '#997744', '#664400', '#665533', '#332200', '#33291a',
+            '#ffaa00', '#ffcc55', '#cc8800', '#ccaa44', '#998800',
+            '#999944', '#665500', '#666633', '#332b00', '#333319',
+            // Yellow-greens (50-69)
+            '#ffff00', '#ffff55', '#cccc00', '#cccc44', '#999900',
+            '#999944', '#666600', '#666633', '#333300', '#33331a',
+            '#aaff00', '#ccff55', '#88cc00', '#aacc44', '#669900',
+            '#889944', '#446600', '#556633', '#223300', '#2b331a',
+            // Greens (70-89)
+            '#55ff00', '#88ff55', '#44cc00', '#6dcc44', '#339900',
+            '#559944', '#226600', '#446633', '#113300', '#22331a',
+            '#00ff00', '#55ff55', '#00cc00', '#44cc44', '#009900',
+            '#449944', '#006600', '#336633', '#003300', '#1a331a',
+            // Green-cyans (90-109)
+            '#00ff55', '#55ff88', '#00cc44', '#44cc6d', '#009933',
+            '#449955', '#006622', '#336644', '#003311', '#1a3322',
+            '#00ffaa', '#55ffcc', '#00cc88', '#44ccaa', '#009966',
+            '#449988', '#006644', '#336655', '#003322', '#1a332b',
+            // Cyans (110-129)
+            '#00ffff', '#55ffff', '#00cccc', '#44cccc', '#009999',
+            '#449999', '#006666', '#336666', '#003333', '#1a3333',
+            '#00aaff', '#55ccff', '#0088cc', '#44aacc', '#006699',
+            '#448899', '#004466', '#335566', '#002233', '#1a2b33',
+            // Blues (130-149)
+            '#0055ff', '#5588ff', '#0044cc', '#446dcc', '#003399',
+            '#445599', '#002266', '#334466', '#001133', '#1a2233',
+            '#0000ff', '#5555ff', '#0000cc', '#4444cc', '#000099',
+            '#444499', '#000066', '#333366', '#000033', '#1a1a33',
+            // Blue-magentas (150-169)
+            '#5500ff', '#8855ff', '#4400cc', '#6d44cc', '#330099',
+            '#554499', '#220066', '#443366', '#110033', '#221a33',
+            '#aa00ff', '#cc55ff', '#8800cc', '#aa44cc', '#660099',
+            '#884499', '#440066', '#553366', '#220033', '#2b1a33',
+            // Magentas (170-189)
+            '#ff00ff', '#ff55ff', '#cc00cc', '#cc44cc', '#990099',
+            '#994499', '#660066', '#663366', '#330033', '#331a33',
+            '#ff00aa', '#ff55cc', '#cc0088', '#cc44aa', '#990066',
+            '#994488', '#660044', '#663355', '#330022', '#331a2b',
+            // Reds again (190-209)
+            '#ff0055', '#ff5588', '#cc0044', '#cc446d', '#990033',
+            '#994455', '#660022', '#663344', '#330011', '#331a22'
+        ];
+
+        for (let i = 0; i < baseColors.length && i < 200; i++) {
+            palette.push({ index: 10 + i, hex: baseColors[i] });
+        }
+        return palette;
+    },
+
+    colorPickerCallback: null,
+    selectedColor: '#ffffff',
+
+    showColorPicker(currentColor, callback) {
+        this.colorPickerCallback = callback;
+        this.selectedColor = currentColor || '#ffffff';
+
+        const dialog = document.getElementById('colorPickerDialog');
+        if (!dialog) return;
+
+        // Build the color palette
+        this.buildColorPalette();
+
+        // Set preview
+        this.updateColorPreview(this.selectedColor);
+
+        // Show dialog
+        dialog.style.display = 'flex';
+    },
+
+    hideColorPicker() {
+        const dialog = document.getElementById('colorPickerDialog');
+        if (dialog) {
+            dialog.style.display = 'none';
+        }
+        this.colorPickerCallback = null;
+    },
+
+    buildColorPalette() {
+        // Build primary row (colors 1-9)
+        const primaryRow = document.querySelector('.aci-row.aci-primary');
+        if (primaryRow) {
+            primaryRow.innerHTML = '';
+            for (let i = 1; i <= 9; i++) {
+                const color = this.aciColors.find(c => c.index === i);
+                if (color) {
+                    const div = document.createElement('div');
+                    div.className = 'aci-color';
+                    div.style.backgroundColor = color.hex;
+                    div.title = `${color.name || 'Color ' + i} (${i})`;
+                    div.dataset.color = color.hex;
+                    div.onclick = () => this.selectColor(color.hex);
+                    primaryRow.appendChild(div);
+                }
+            }
+        }
+
+        // Build gray row
+        const grayRow = document.querySelector('.aci-gray-colors');
+        if (grayRow) {
+            grayRow.innerHTML = '';
+            const grays = ['#000000', '#333333', '#464646', '#585858', '#6b6b6b', '#808080', '#969696', '#b0b0b0', '#c0c0c0', '#e0e0e0', '#ffffff'];
+            grays.forEach((hex, i) => {
+                const div = document.createElement('div');
+                div.className = 'aci-color';
+                div.style.backgroundColor = hex;
+                div.title = `Gray ${i + 1}`;
+                div.dataset.color = hex;
+                div.onclick = () => this.selectColor(hex);
+                grayRow.appendChild(div);
+            });
+        }
+
+        // Build full palette
+        const fullPalette = document.querySelector('.aci-full-palette');
+        if (fullPalette) {
+            fullPalette.innerHTML = '';
+            const palette = this.generateAciPalette();
+            palette.forEach(color => {
+                const div = document.createElement('div');
+                div.className = 'aci-color';
+                div.style.backgroundColor = color.hex;
+                div.title = `Color ${color.index}`;
+                div.dataset.color = color.hex;
+                div.onclick = () => this.selectColor(color.hex);
+                fullPalette.appendChild(div);
+            });
+        }
+
+        // Setup true color picker
+        const hexPicker = document.getElementById('colorHexPicker');
+        if (hexPicker) {
+            hexPicker.value = this.selectedColor;
+            hexPicker.oninput = (e) => {
+                this.selectColor(e.target.value);
+                this.updateRgbInputs(e.target.value);
+            };
+        }
+
+        // Setup RGB inputs
+        ['colorR', 'colorG', 'colorB'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.oninput = () => this.updateFromRgb();
+            }
+        });
+    },
+
+    selectColor(hex) {
+        this.selectedColor = hex;
+        this.updateColorPreview(hex);
+
+        // Remove selection from all
+        document.querySelectorAll('.aci-color.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+
+        // Add selection to clicked one
+        const selected = document.querySelector(`.aci-color[data-color="${hex}"]`);
+        if (selected) {
+            selected.classList.add('selected');
+        }
+    },
+
+    updateColorPreview(hex) {
+        const previewBox = document.getElementById('colorPreviewBox');
+        const previewText = document.getElementById('colorPreviewText');
+        if (previewBox) previewBox.style.backgroundColor = hex;
+        if (previewText) previewText.textContent = hex.toUpperCase();
+    },
+
+    updateRgbInputs(hex) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const rInput = document.getElementById('colorR');
+        const gInput = document.getElementById('colorG');
+        const bInput = document.getElementById('colorB');
+        if (rInput) rInput.value = r;
+        if (gInput) gInput.value = g;
+        if (bInput) bInput.value = b;
+    },
+
+    updateFromRgb() {
+        const r = parseInt(document.getElementById('colorR')?.value || 0);
+        const g = parseInt(document.getElementById('colorG')?.value || 0);
+        const b = parseInt(document.getElementById('colorB')?.value || 0);
+        const hex = '#' + [r, g, b].map(x => {
+            const h = Math.max(0, Math.min(255, x)).toString(16);
+            return h.length === 1 ? '0' + h : h;
+        }).join('');
+        this.selectedColor = hex;
+        this.updateColorPreview(hex);
+        const hexPicker = document.getElementById('colorHexPicker');
+        if (hexPicker) hexPicker.value = hex;
+    },
+
+    switchColorTab(tab) {
+        document.querySelectorAll('.color-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        document.getElementById('colorTabIndex').style.display = tab === 'index' ? 'block' : 'none';
+        document.getElementById('colorTabTrue').style.display = tab === 'true' ? 'block' : 'none';
+    },
+
+    confirmColorPicker() {
+        if (this.colorPickerCallback) {
+            this.colorPickerCallback(this.selectedColor);
+        }
+        this.hideColorPicker();
+    },
+
+    // Override layer color change to use our picker
+    showLayerColorPicker() {
+        const currentColor = this.elements.layerColor?.value || '#ffffff';
+        this.showColorPicker(currentColor, (color) => {
+            if (this.elements.layerColor) {
+                this.elements.layerColor.value = color;
+            }
+            this.onLayerColorChange();
+        });
     }
 };
 

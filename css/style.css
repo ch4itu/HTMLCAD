@@ -318,6 +318,30 @@ body {
     border: 1px solid var(--border-medium);
     border-radius: 2px;
     cursor: pointer;
+}
+
+.color-btn {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--border-medium);
+    border-radius: 2px;
+    cursor: pointer;
+    background: var(--bg-dark);
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.color-btn:hover {
+    border-color: var(--accent-blue);
+}
+
+.color-swatch {
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.3);
     padding: 0;
     background: none;
 }
@@ -1103,6 +1127,213 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   AUTOCAD-STYLE COLOR PICKER DIALOG
+   ============================================ */
+
+.color-picker-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.color-picker-content {
+    background: var(--bg-medium);
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    width: 400px;
+    max-width: 95vw;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.color-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--border-medium);
+    font-weight: 500;
+}
+
+.color-picker-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.color-picker-close:hover {
+    color: var(--text-bright);
+}
+
+.color-picker-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-medium);
+}
+
+.color-tab {
+    flex: 1;
+    padding: 8px;
+    background: var(--bg-dark);
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.color-tab.active {
+    background: var(--bg-medium);
+    color: var(--text-bright);
+    border-bottom: 2px solid var(--accent-blue);
+}
+
+.color-picker-body {
+    padding: 15px;
+    min-height: 200px;
+}
+
+/* ACI Standard Colors - Top row of 9 primary colors */
+.aci-standard-colors {
+    margin-bottom: 10px;
+}
+
+.aci-row {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+}
+
+.aci-color {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.aci-color:hover {
+    transform: scale(1.15);
+    border-color: white;
+    z-index: 1;
+}
+
+.aci-color.selected {
+    border: 2px solid white;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+/* Gray colors row */
+.aci-gray-colors {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+/* Full ACI Palette */
+.aci-full-palette {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 1px;
+    margin-top: 10px;
+}
+
+.aci-full-palette .aci-color {
+    width: 100%;
+    height: 14px;
+}
+
+/* True Color Tab */
+.true-color-inputs {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.true-color-inputs label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+}
+
+.true-color-inputs input {
+    width: 60px;
+    padding: 4px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-medium);
+    color: var(--text-primary);
+    border-radius: 3px;
+}
+
+.true-color-picker {
+    width: 100%;
+    height: 40px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Preview and Actions */
+.color-picker-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-medium);
+    font-size: 12px;
+}
+
+.color-preview-box {
+    width: 40px;
+    height: 25px;
+    border: 1px solid var(--border-light);
+    background: #ffffff;
+}
+
+.color-picker-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-medium);
+}
+
+.color-picker-actions button {
+    padding: 6px 20px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-ok {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.btn-ok:hover {
+    background: var(--accent-blue-hover);
+}
+
+.btn-cancel {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+.btn-cancel:hover {
+    background: var(--border-medium);
 }
 
 /* ============================================

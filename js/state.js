@@ -45,7 +45,7 @@ class StateManager {
             midpoint: true,
             center: true,
             intersection: true,
-            perpendicular: false,
+            perpendicular: true,        // Enabled by default now
             tangent: false,
             nearest: true               // Enabled by default now
         };
