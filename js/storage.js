@@ -108,18 +108,42 @@ const Storage = {
     },
 
     // ==========================================
-    // FILE EXPORT - DXF
+    // FILE SAVE - DXF (Primary Format)
     // ==========================================
 
-    exportDXF() {
+    saveDXF() {
         try {
             const dxf = this.generateDXF();
             const blob = new Blob([dxf], { type: 'application/dxf' });
-            this.downloadBlob(blob, `${CAD.drawingName || 'drawing'}.dxf`);
-            UI.log('Drawing exported as DXF.');
+            const filename = `${CAD.drawingName || 'Untitled'}.dxf`;
+            this.downloadBlob(blob, filename);
+            CAD.modified = false;
+            this.updateFileName(CAD.drawingName || 'Untitled');
+            UI.log(`Drawing saved: ${filename}`);
         } catch (e) {
-            UI.log('Error exporting DXF: ' + e.message, 'error');
+            UI.log('Error saving DXF: ' + e.message, 'error');
         }
+    },
+
+    saveDXFAs() {
+        const currentName = CAD.drawingName || 'Untitled';
+        const newName = prompt('Save drawing as:', currentName);
+        if (newName && newName.trim()) {
+            CAD.drawingName = newName.trim().replace(/\.dxf$/i, ''); // Remove .dxf if user added it
+            this.saveDXF();
+        }
+    },
+
+    updateFileName(name) {
+        const fileNameEl = document.getElementById('fileName');
+        if (fileNameEl) {
+            fileNameEl.textContent = `${name}.dxf`;
+        }
+    },
+
+    // Alias for compatibility
+    exportDXF() {
+        this.saveDXF();
     },
 
     generateDXF() {
@@ -501,15 +525,21 @@ const Storage = {
                         CAD.addEntity(entity, true);
                     });
 
+                    // Set drawing name from file name
+                    const drawingName = file.name.replace(/\.dxf$/i, '');
+                    CAD.drawingName = drawingName;
+                    CAD.modified = false;
+                    this.updateFileName(drawingName);
+
                     UI.updateLayerUI();
                     Renderer.draw();
                     Commands.zoomExtents();
-                    UI.log(`DXF imported: ${entities.length} entities, ${CAD.layers.length} layers.`, 'success');
+                    UI.log(`DXF opened: ${entities.length} entities, ${CAD.layers.length} layers.`, 'success');
                 } else {
                     UI.log('No entities found in DXF file.', 'error');
                 }
             } catch (err) {
-                UI.log('Error importing DXF: ' + err.message, 'error');
+                UI.log('Error opening DXF: ' + err.message, 'error');
                 console.error('DXF Import Error:', err);
             }
         };

@@ -280,17 +280,17 @@ const UI = {
             return;
         }
 
-        // Ctrl+S - Save
+        // Ctrl+S - Save as DXF
         if (e.ctrlKey && e.key === 's') {
             e.preventDefault();
-            Storage.saveToLocalStorage();
+            Storage.saveDXF();
             return;
         }
 
-        // Ctrl+O - Open
+        // Ctrl+O - Open file
         if (e.ctrlKey && e.key === 'o') {
             e.preventDefault();
-            Storage.loadFromLocalStorage();
+            Storage.openFile();
             return;
         }
 
