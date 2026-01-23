@@ -213,6 +213,11 @@ const Renderer = {
                 color = state.getEntityColor(entity);
             }
 
+            if (entity.type === 'hatch') {
+                this.drawHatchEntity(entity, color);
+                return;
+            }
+
             ctx.beginPath();
             ctx.strokeStyle = color;
 
@@ -304,6 +309,79 @@ const Renderer = {
         const patternFill = this.ctx.createPattern(canvas, 'repeat');
         this.hatchPatterns.set(key, patternFill);
         return patternFill;
+    },
+
+    drawHatchEntity(entity, color) {
+        const clipIds = entity.clipIds || [];
+        if (clipIds.length === 0) {
+            return;
+        }
+
+        const ctx = this.ctx;
+        ctx.save();
+
+        clipIds.forEach(id => {
+            const clipEntity = CAD.getEntity(id);
+            if (!clipEntity) return;
+            ctx.beginPath();
+            this.traceEntityPath(clipEntity, ctx, true);
+            ctx.clip();
+        });
+
+        const hatchStyle = this.getHatchStyle(entity, color);
+        ctx.fillStyle = hatchStyle.fillStyle;
+        ctx.globalAlpha = hatchStyle.alpha;
+
+        const topLeft = Utils.screenToWorld(0, 0, CAD.pan, CAD.zoom);
+        const bottomRight = Utils.screenToWorld(this.canvas.width, this.canvas.height, CAD.pan, CAD.zoom);
+        ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+        ctx.restore();
+    },
+
+    traceEntityPath(entity, ctx, forceClose = false) {
+        switch (entity.type) {
+            case 'line':
+                ctx.moveTo(entity.p1.x, entity.p1.y);
+                ctx.lineTo(entity.p2.x, entity.p2.y);
+                break;
+            case 'circle':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, 0, Math.PI * 2);
+                ctx.closePath();
+                break;
+            case 'arc':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, entity.start, entity.end);
+                if (forceClose) {
+                    ctx.closePath();
+                }
+                break;
+            case 'rect':
+                ctx.rect(entity.p1.x, entity.p1.y, entity.p2.x - entity.p1.x, entity.p2.y - entity.p1.y);
+                ctx.closePath();
+                break;
+            case 'polyline': {
+                if (entity.points.length > 0) {
+                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                    for (let i = 1; i < entity.points.length; i++) {
+                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    }
+                    if (forceClose || entity.closed || Utils.isPolygonClosed(entity.points)) {
+                        ctx.closePath();
+                    }
+                }
+                break;
+            }
+            case 'ellipse':
+                ctx.save();
+                ctx.translate(entity.center.x, entity.center.y);
+                ctx.rotate(entity.rotation || 0);
+                ctx.scale(entity.rx, entity.ry);
+                ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                ctx.restore();
+                ctx.closePath();
+                break;
+            default:
+                break;
+        }
     },
 
     drawEntity(entity, ctx) {
@@ -722,7 +800,7 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
-        if (!state.snapEnabled || !state.snapPoint) return;
+        if (!(state.osnapEnabled || state.gridSnapEnabled) || !state.snapPoint) return;
 
         const screen = Utils.worldToScreen(state.snapPoint.x, state.snapPoint.y, state.pan, state.zoom);
         const size = 8;

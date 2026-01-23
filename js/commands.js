@@ -1111,6 +1111,24 @@ const Commands = {
     },
 
     handleHatchClick(point) {
+        const targets = this.findHatchTargets(point);
+        if (targets.length === 1) {
+            this.applyHatch(targets[0]);
+            this.finishCommand();
+            return;
+        }
+
+        if (targets.length > 1) {
+            CAD.addEntity({
+                type: 'hatch',
+                clipIds: targets.map(entity => entity.id),
+                hatch: { pattern: CAD.hatchPattern }
+            });
+            UI.log('Hatch applied to intersection.');
+            this.finishCommand();
+            return;
+        }
+
         const hit = this.hitTest(point);
         if (hit) {
             if (this.entitySupportsHatch(hit)) {
@@ -1122,22 +1140,17 @@ const Commands = {
             return;
         }
 
-        const target = this.findHatchTarget(point);
-        if (target) {
-            this.applyHatch(target);
+        const loop = this.findLineLoopContainingPoint(point);
+        if (loop) {
+            CAD.addEntity({
+                type: 'polyline',
+                points: loop,
+                hatch: { pattern: CAD.hatchPattern },
+                noStroke: true
+            });
+            UI.log('Hatch applied from boundary.');
         } else {
-            const loop = this.findLineLoopContainingPoint(point);
-            if (loop) {
-                CAD.addEntity({
-                    type: 'polyline',
-                    points: loop,
-                    hatch: { pattern: CAD.hatchPattern },
-                    noStroke: true
-                });
-                UI.log('Hatch applied from boundary.');
-            } else {
-                UI.log('No closed boundary found at that point.', 'error');
-            }
+            UI.log('No closed boundary found at that point.', 'error');
         }
 
         this.finishCommand();
@@ -1164,17 +1177,36 @@ const Commands = {
         UI.log('Hatch applied.');
     },
 
-    findHatchTarget(point) {
+    findHatchTargets(point) {
+        const targets = [];
         const entities = CAD.getVisibleEntities();
         for (const entity of entities) {
             if (!this.entitySupportsHatch(entity)) {
                 continue;
             }
             if (this.pointInsideEntity(point, entity)) {
-                return entity;
+                targets.push(entity);
             }
         }
-        return null;
+        if (targets.length > 1) {
+            targets.sort((a, b) => this.getEntityArea(a) - this.getEntityArea(b));
+        }
+        return targets;
+    },
+
+    getEntityArea(entity) {
+        switch (entity.type) {
+            case 'circle':
+                return Math.PI * entity.r * entity.r;
+            case 'ellipse':
+                return Math.PI * entity.rx * entity.ry;
+            case 'rect':
+                return Math.abs((entity.p2.x - entity.p1.x) * (entity.p2.y - entity.p1.y));
+            case 'polyline':
+                return Math.abs(Utils.polygonArea(entity.points));
+            default:
+                return Infinity;
+        }
     },
 
     pointInsideEntity(point, entity) {
