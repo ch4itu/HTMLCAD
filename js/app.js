@@ -111,11 +111,24 @@ const App = {
         const hit = Commands.hitTest(world);
         CAD.hoveredId = hit ? hit.id : null;
 
-        // Update snap point
-        if (CAD.snapEnabled) {
+        // Update snap point (separate OSNAP and Grid Snap)
+        if (CAD.osnapEnabled || CAD.gridSnapEnabled) {
             const entities = CAD.getVisibleEntities();
             const snapTolerance = 15 / CAD.zoom;
-            const snap = Geometry.findSnapPoints(world, entities, CAD.snapModes, snapTolerance, CAD.gridSize);
+
+            // Build effective snap modes based on current settings
+            const effectiveSnapModes = {
+                endpoint: CAD.osnapEnabled && CAD.snapModes.endpoint,
+                midpoint: CAD.osnapEnabled && CAD.snapModes.midpoint,
+                center: CAD.osnapEnabled && CAD.snapModes.center,
+                intersection: CAD.osnapEnabled && CAD.snapModes.intersection,
+                perpendicular: CAD.osnapEnabled && CAD.snapModes.perpendicular,
+                tangent: CAD.osnapEnabled && CAD.snapModes.tangent,
+                nearest: CAD.osnapEnabled && CAD.snapModes.nearest,
+                grid: CAD.gridSnapEnabled  // Grid snap is separate
+            };
+
+            const snap = Geometry.findSnapPoints(world, entities, effectiveSnapModes, snapTolerance, CAD.gridSize);
 
             if (snap) {
                 CAD.snapPoint = snap.point;
@@ -124,6 +137,9 @@ const App = {
                 CAD.snapPoint = null;
                 CAD.snapType = null;
             }
+        } else {
+            CAD.snapPoint = null;
+            CAD.snapType = null;
         }
 
         Renderer.draw();
