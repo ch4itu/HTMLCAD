@@ -37,7 +37,9 @@ class StateManager {
         this.panStart = { x: 0, y: 0 };
 
         // Snap settings
-        this.snapEnabled = true;
+        this.snapEnabled = true;        // Legacy - for compatibility
+        this.osnapEnabled = true;       // Object Snap (F3) - endpoint, midpoint, center, nearest, etc.
+        this.gridSnapEnabled = false;   // Grid Snap (F9) - snap to grid points
         this.snapModes = {
             endpoint: true,
             midpoint: true,
@@ -45,8 +47,7 @@ class StateManager {
             intersection: true,
             perpendicular: false,
             tangent: false,
-            nearest: false,
-            grid: true
+            nearest: true               // Enabled by default now
         };
         this.snapPoint = null;
         this.snapType = null;

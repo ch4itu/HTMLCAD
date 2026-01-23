@@ -24,12 +24,16 @@
         </div>
 
         <!-- Ribbon Toolbar -->
-        <div class="ribbon">
+        <div class="ribbon" id="ribbon">
             <div class="ribbon-tabs">
                 <div class="ribbon-tab active" data-tab="home" onclick="UI.switchRibbonTab('home')">Home</div>
                 <div class="ribbon-tab" data-tab="draw" onclick="UI.switchRibbonTab('draw')">Draw</div>
                 <div class="ribbon-tab" data-tab="modify" onclick="UI.switchRibbonTab('modify')">Modify</div>
                 <div class="ribbon-tab" data-tab="view" onclick="UI.switchRibbonTab('view')">View</div>
+                <div class="ribbon-spacer"></div>
+                <button class="ribbon-collapse-btn" onclick="UI.toggleRibbon()" title="Collapse/Expand Ribbon (Ctrl+F1)">
+                    <span id="ribbonCollapseIcon">▲</span>
+                </button>
             </div>
 
             <!-- Home Tab Content -->
@@ -454,8 +458,9 @@
                 <span class="status-mode">Model</span>
             </div>
             <div class="status-center">
-                <button class="status-btn active" id="statusSnap" onclick="UI.toggleSnap()" title="Object Snap (F3)">SNAP</button>
-                <button class="status-btn active" id="statusGrid" onclick="UI.toggleGrid()" title="Grid Display (F2)">GRID</button>
+                <button class="status-btn active" id="statusOsnap" onclick="UI.toggleOsnap()" title="Object Snap (F3)">OSNAP</button>
+                <button class="status-btn" id="statusGridSnap" onclick="UI.toggleGridSnap()" title="Grid Snap (F9)">SNAP</button>
+                <button class="status-btn active" id="statusGrid" onclick="UI.toggleGrid()" title="Grid Display (F7)">GRID</button>
                 <button class="status-btn" id="statusOrtho" onclick="UI.toggleOrtho()" title="Ortho Mode (F8)">ORTHO</button>
                 <button class="status-btn" id="statusPolar" onclick="UI.togglePolar()" title="Polar Tracking (F10)">POLAR</button>
             </div>

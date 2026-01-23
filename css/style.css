@@ -131,12 +131,41 @@ body {
 .ribbon {
     background: var(--bg-medium);
     border-bottom: 1px solid var(--border-dark);
+    transition: all 0.2s ease;
+}
+
+.ribbon.collapsed .ribbon-content {
+    display: none !important;
 }
 
 .ribbon-tabs {
     display: flex;
     background: var(--bg-light);
     border-bottom: 1px solid var(--border-medium);
+}
+
+.ribbon-spacer {
+    flex: 1;
+}
+
+.ribbon-collapse-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.15s ease;
+}
+
+.ribbon-collapse-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ribbon.collapsed .ribbon-collapse-btn span {
+    transform: rotate(180deg);
+    display: inline-block;
 }
 
 .ribbon-tab {

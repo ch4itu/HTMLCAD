@@ -294,6 +294,13 @@ const UI = {
             return;
         }
 
+        // Ctrl+F1 - Toggle ribbon collapse
+        if (e.ctrlKey && e.key === 'F1') {
+            e.preventDefault();
+            this.toggleRibbon();
+            return;
+        }
+
         // F1 - Help
         if (e.key === 'F1') {
             e.preventDefault();
@@ -301,21 +308,21 @@ const UI = {
             return;
         }
 
-        // F2 - Toggle grid
+        // F2 - Toggle grid display
         if (e.key === 'F2') {
             e.preventDefault();
             CAD.showGrid = !CAD.showGrid;
-            this.log(`Grid: ${CAD.showGrid ? 'ON' : 'OFF'}`);
+            this.log(`Grid display: ${CAD.showGrid ? 'ON' : 'OFF'}`);
             this.updateStatusBar();
             Renderer.draw();
             return;
         }
 
-        // F3 - Toggle snap
+        // F3 - Toggle Object Snap (OSNAP - endpoint, midpoint, center, etc.)
         if (e.key === 'F3') {
             e.preventDefault();
-            CAD.snapEnabled = !CAD.snapEnabled;
-            this.log(`Snap: ${CAD.snapEnabled ? 'ON' : 'OFF'}`);
+            CAD.osnapEnabled = !CAD.osnapEnabled;
+            this.log(`Object Snap (OSNAP): ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
             this.updateStatusBar();
             return;
         }
@@ -339,11 +346,12 @@ const UI = {
             return;
         }
 
-        // F9 - Toggle snap
+        // F9 - Toggle Grid Snap (snap cursor to grid points)
         if (e.key === 'F9') {
             e.preventDefault();
-            CAD.snapModes.grid = !CAD.snapModes.grid;
-            this.log(`Snap to grid: ${CAD.snapModes.grid ? 'ON' : 'OFF'}`);
+            CAD.gridSnapEnabled = !CAD.gridSnapEnabled;
+            this.log(`Grid Snap: ${CAD.gridSnapEnabled ? 'ON' : 'OFF'}`);
+            this.updateStatusBar();
             return;
         }
 
@@ -507,29 +515,56 @@ AUTOLISP:
     // ==========================================
 
     updateStatusBar() {
-        if (this.elements.statusSnap) {
-            this.elements.statusSnap.classList.toggle('active', CAD.snapEnabled);
+        // Object Snap (OSNAP)
+        const statusOsnap = document.getElementById('statusOsnap');
+        if (statusOsnap) {
+            statusOsnap.classList.toggle('active', CAD.osnapEnabled);
         }
+
+        // Grid Snap
+        const statusGridSnap = document.getElementById('statusGridSnap');
+        if (statusGridSnap) {
+            statusGridSnap.classList.toggle('active', CAD.gridSnapEnabled);
+        }
+
+        // Grid Display
         if (this.elements.statusGrid) {
             this.elements.statusGrid.classList.toggle('active', CAD.showGrid);
         }
+
+        // Ortho
         if (this.elements.statusOrtho) {
             this.elements.statusOrtho.classList.toggle('active', CAD.orthoEnabled);
         }
+
+        // Polar
         if (this.elements.statusPolar) {
             this.elements.statusPolar.classList.toggle('active', CAD.polarEnabled);
         }
     },
 
-    toggleSnap() {
-        CAD.snapEnabled = !CAD.snapEnabled;
-        this.log(`Snap: ${CAD.snapEnabled ? 'ON' : 'OFF'}`);
+    // Toggle Object Snap (F3) - endpoint, midpoint, center, nearest, etc.
+    toggleOsnap() {
+        CAD.osnapEnabled = !CAD.osnapEnabled;
+        this.log(`Object Snap (OSNAP): ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
         this.updateStatusBar();
+    },
+
+    // Toggle Grid Snap (F9) - snap to grid points
+    toggleGridSnap() {
+        CAD.gridSnapEnabled = !CAD.gridSnapEnabled;
+        this.log(`Grid Snap: ${CAD.gridSnapEnabled ? 'ON' : 'OFF'}`);
+        this.updateStatusBar();
+    },
+
+    // Legacy toggle - kept for compatibility
+    toggleSnap() {
+        this.toggleOsnap();
     },
 
     toggleGrid() {
         CAD.showGrid = !CAD.showGrid;
-        this.log(`Grid: ${CAD.showGrid ? 'ON' : 'OFF'}`);
+        this.log(`Grid Display: ${CAD.showGrid ? 'ON' : 'OFF'}`);
         this.updateStatusBar();
         Renderer.draw();
     },
@@ -1028,6 +1063,29 @@ AUTOLISP:
         document.querySelectorAll('.ribbon-content').forEach(content => {
             content.style.display = content.dataset.tab === tabName ? 'flex' : 'none';
         });
+
+        // If ribbon was collapsed, expand it when switching tabs
+        const ribbon = document.getElementById('ribbon');
+        if (ribbon && ribbon.classList.contains('collapsed')) {
+            this.toggleRibbon();
+        }
+    },
+
+    toggleRibbon() {
+        const ribbon = document.getElementById('ribbon');
+        const icon = document.getElementById('ribbonCollapseIcon');
+        if (ribbon) {
+            ribbon.classList.toggle('collapsed');
+            if (icon) {
+                icon.textContent = ribbon.classList.contains('collapsed') ? '▼' : '▲';
+            }
+            // Resize canvas after ribbon toggle
+            setTimeout(() => {
+                if (typeof Renderer !== 'undefined') {
+                    Renderer.resize();
+                }
+            }, 250);
+        }
     },
 
     // ==========================================
