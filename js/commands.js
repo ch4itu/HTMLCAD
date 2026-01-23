@@ -614,7 +614,6 @@ const Commands = {
                 }
             } else {
                 // Start window/crossing selection (first corner)
-                console.log('Starting selection mode at point:', point);
                 state.selectionMode = true;
                 state.selectStart = point;
                 UI.log('Specify opposite corner:');

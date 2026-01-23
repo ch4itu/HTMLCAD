@@ -17,6 +17,7 @@ const Renderer = {
         cursor: '#ffffff',
         selection: '#3399ff',
         selectionFill: 'rgba(51, 153, 255, 0.15)',
+        hover: '#ffcc00',  // Yellow-orange for hover highlight
         crossWindow: 'rgba(0, 255, 100, 0.15)',
         crossWindowBorder: 'rgba(0, 255, 100, 0.5)',
         windowSelect: 'rgba(0, 100, 255, 0.15)',
@@ -199,11 +200,28 @@ const Renderer = {
             if (!layer || !layer.visible) return;
 
             const isSelected = state.isSelected(entity.id);
-            const color = isSelected ? this.colors.selection : state.getEntityColor(entity);
+            const isHovered = state.hoveredId === entity.id && !isSelected;
+
+            // Determine color: selected > hovered > normal
+            let color;
+            if (isSelected) {
+                color = this.colors.selection;
+            } else if (isHovered) {
+                color = this.colors.hover;
+            } else {
+                color = state.getEntityColor(entity);
+            }
 
             ctx.beginPath();
             ctx.strokeStyle = color;
-            ctx.lineWidth = (isSelected ? 2 : 1) / state.zoom;
+
+            // Line width: selected = 2, hovered = 1.5, normal = 1
+            let lineWidth = 1;
+            if (isSelected) lineWidth = 2;
+            else if (isHovered) lineWidth = 2;
+            ctx.lineWidth = lineWidth / state.zoom;
+
+            // Line dash: selected = dashed, others = solid
             ctx.setLineDash(isSelected ? [5 / state.zoom, 3 / state.zoom] : []);
 
             this.drawEntity(entity, ctx);
@@ -579,29 +597,16 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
-        // Debug logging
-        console.log('drawSelectionWindow called:', {
-            selectionMode: state.selectionMode,
-            selectStart: state.selectStart,
-            tempEnd: state.tempEnd,
-            cursor: state.cursor
-        });
-
         if (!state.selectionMode || !state.selectStart) return;
 
         const start = state.selectStart;
         const end = state.tempEnd || state.cursor;
 
-        if (!end) {
-            console.log('No end point available');
-            return;
-        }
+        if (!end) return;
 
         const w = end.x - start.x;
         const h = end.y - start.y;
         const isCrossing = w < 0;
-
-        console.log('Drawing selection window:', { start, end, w, h, isCrossing });
 
         ctx.beginPath();
         ctx.fillStyle = isCrossing ? this.colors.crossWindow : this.colors.windowSelect;

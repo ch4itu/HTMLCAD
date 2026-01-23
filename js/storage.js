@@ -464,16 +464,49 @@ const Storage = {
             try {
                 const content = e.target.result;
                 UI.log(`File loaded, parsing DXF (${content.length} bytes)...`);
+
+                // Parse layers first
+                const layers = this.parseDXFLayers(content);
+
+                // Parse entities
                 const entities = this.parseDXF(content);
 
-                if (entities.length > 0) {
+                if (entities.length > 0 || layers.length > 0) {
+                    // Clear existing and set up layers
                     CAD.entities = [];
-                    entities.forEach(entity => CAD.addEntity(entity, true));
+
+                    // Add parsed layers (keep layer 0)
+                    CAD.layers = [{ name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }];
+                    layers.forEach(layer => {
+                        if (layer.name !== '0') {
+                            CAD.layers.push(layer);
+                        } else {
+                            // Update layer 0 color if specified
+                            CAD.layers[0].color = layer.color;
+                        }
+                    });
+
+                    // Add entities
+                    entities.forEach(entity => {
+                        // Ensure layer exists
+                        if (!CAD.getLayer(entity.layer)) {
+                            CAD.layers.push({
+                                name: entity.layer,
+                                color: '#ffffff',
+                                visible: true,
+                                locked: false,
+                                lineWeight: 'Default'
+                            });
+                        }
+                        CAD.addEntity(entity, true);
+                    });
+
+                    UI.updateLayerUI();
                     Renderer.draw();
                     Commands.zoomExtents();
-                    UI.log(`DXF imported: ${entities.length} entities loaded.`, 'success');
+                    UI.log(`DXF imported: ${entities.length} entities, ${CAD.layers.length} layers.`, 'success');
                 } else {
-                    UI.log('No entities found in DXF file. Check if file contains ENTITIES section.', 'error');
+                    UI.log('No entities found in DXF file.', 'error');
                 }
             } catch (err) {
                 UI.log('Error importing DXF: ' + err.message, 'error');
@@ -484,6 +517,126 @@ const Storage = {
             UI.log('Error reading file: ' + e.target.error.message, 'error');
         };
         reader.readAsText(file);
+    },
+
+    parseDXFLayers(content) {
+        const layers = [];
+        const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map(l => l.trim());
+        let i = 0;
+
+        // Find TABLES section
+        let inTablesSection = false;
+        let inLayerTable = false;
+
+        while (i < lines.length - 1) {
+            // Find TABLES section
+            if (lines[i] === '2' && lines[i + 1].toUpperCase() === 'TABLES') {
+                inTablesSection = true;
+                i += 2;
+                continue;
+            }
+
+            // Find LAYER table within TABLES
+            if (inTablesSection && lines[i] === '2' && lines[i + 1].toUpperCase() === 'LAYER') {
+                inLayerTable = true;
+                i += 2;
+                continue;
+            }
+
+            // End of LAYER table
+            if (inLayerTable && lines[i] === '0' && lines[i + 1].toUpperCase() === 'ENDTAB') {
+                break;
+            }
+
+            // Parse individual layer entry
+            if (inLayerTable && lines[i] === '0' && lines[i + 1].toUpperCase() === 'LAYER') {
+                i += 2;
+                const layerData = {};
+
+                // Read layer properties until next 0 group code
+                while (i < lines.length - 1 && lines[i] !== '0') {
+                    const code = parseInt(lines[i]);
+                    const value = lines[i + 1];
+                    layerData[code] = value;
+                    i += 2;
+                }
+
+                const layerName = layerData[2] || '0';
+                const colorIndex = parseInt(layerData[62]) || 7;
+                const color = this.aciToHex(colorIndex);
+
+                layers.push({
+                    name: layerName,
+                    color: color,
+                    visible: colorIndex >= 0, // Negative color = layer off
+                    locked: (parseInt(layerData[70]) & 4) !== 0,
+                    lineWeight: 'Default'
+                });
+
+                continue;
+            }
+
+            // End of TABLES section
+            if (inTablesSection && lines[i] === '0' && lines[i + 1].toUpperCase() === 'ENDSEC') {
+                break;
+            }
+
+            i++;
+        }
+
+        console.log(`DXF: Parsed ${layers.length} layers`);
+        return layers;
+    },
+
+    aciToHex(colorIndex) {
+        // AutoCAD Color Index to Hex color mapping
+        const aciColors = {
+            1: '#ff0000',   // Red
+            2: '#ffff00',   // Yellow
+            3: '#00ff00',   // Green
+            4: '#00ffff',   // Cyan
+            5: '#0000ff',   // Blue
+            6: '#ff00ff',   // Magenta
+            7: '#ffffff',   // White
+            8: '#808080',   // Gray
+            9: '#c0c0c0',   // Light gray
+            10: '#ff0000',
+            11: '#ff7f7f',
+            12: '#cc0000',
+            20: '#ff3f00',
+            30: '#ff7f00',
+            40: '#ffbf00',
+            50: '#ffff00',
+            60: '#bfff00',
+            70: '#7fff00',
+            80: '#3fff00',
+            90: '#00ff00',
+            100: '#00ff3f',
+            110: '#00ff7f',
+            120: '#00ffbf',
+            130: '#00ffff',
+            140: '#00bfff',
+            150: '#007fff',
+            160: '#003fff',
+            170: '#0000ff',
+            180: '#3f00ff',
+            190: '#7f00ff',
+            200: '#bf00ff',
+            210: '#ff00ff',
+            220: '#ff00bf',
+            230: '#ff007f',
+            240: '#ff003f',
+            250: '#333333',
+            251: '#464646',
+            252: '#585858',
+            253: '#6b6b6b',
+            254: '#808080',
+            255: '#ffffff'
+        };
+
+        // Handle negative (layer off) by using absolute value
+        const absIndex = Math.abs(colorIndex);
+        return aciColors[absIndex] || '#ffffff';
     },
 
     parseDXF(content) {
