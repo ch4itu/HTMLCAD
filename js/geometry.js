@@ -311,30 +311,62 @@ const Geometry = {
 
         if (offsetLines.length === 0) return null;
 
+        // OFFSETGAPTYPE: 0=Extend (default), 1=Fillet, 2=Chamfer
+        const gapType = (typeof CAD !== 'undefined' && CAD.offsetGapType) || 0;
+
         // Find intersection points between adjacent offset lines
         const newPoints = [];
         const isClosed = Utils.isPolygonClosed(entity.points);
 
+        // Helper to handle gap between two offset lines
+        const handleGap = (line1, line2, originalCorner) => {
+            const inter = this.lineLineIntersection(line1.p1, line1.p2, line2.p1, line2.p2);
+
+            if (inter) {
+                // Lines intersect - check if it's a valid intersection
+                const onLine1 = this.pointOnLineExtended(inter, line1.p1, line1.p2);
+                const onLine2 = this.pointOnLineExtended(inter, line2.p1, line2.p2);
+
+                if (onLine1 && onLine2) {
+                    return [inter];
+                }
+            }
+
+            // Gap exists - handle based on OFFSETGAPTYPE
+            switch (gapType) {
+                case 1: // Fillet (arc)
+                    // Add arc points to fill the gap
+                    const arcPoints = this.createFilletArc(line1.p2, line2.p1, originalCorner, distance);
+                    return arcPoints.length > 0 ? arcPoints : [line1.p2, line2.p1];
+
+                case 2: // Chamfer (straight line)
+                    // Just connect the endpoints with a chamfer
+                    return [line1.p2, line2.p1];
+
+                default: // 0 = Extend
+                    // Extend lines to intersection (original behavior)
+                    return inter ? [inter] : [line1.p2];
+            }
+        };
+
         if (isClosed) {
-            const inter = this.lineLineIntersection(
-                offsetLines[offsetLines.length - 1].p1,
-                offsetLines[offsetLines.length - 1].p2,
-                offsetLines[0].p1,
-                offsetLines[0].p2
+            const gapPoints = handleGap(
+                offsetLines[offsetLines.length - 1],
+                offsetLines[0],
+                entity.points[0]
             );
-            newPoints.push(inter || offsetLines[0].p1);
+            newPoints.push(...gapPoints);
         } else {
             newPoints.push(offsetLines[0].p1);
         }
 
         for (let i = 0; i < offsetLines.length - 1; i++) {
-            const inter = this.lineLineIntersection(
-                offsetLines[i].p1,
-                offsetLines[i].p2,
-                offsetLines[i + 1].p1,
-                offsetLines[i + 1].p2
+            const gapPoints = handleGap(
+                offsetLines[i],
+                offsetLines[i + 1],
+                entity.points[i + 1]
             );
-            newPoints.push(inter || offsetLines[i].p2);
+            newPoints.push(...gapPoints);
         }
 
         if (isClosed) {
@@ -344,6 +376,53 @@ const Geometry = {
         }
 
         return { points: newPoints };
+    },
+
+    // Helper to create fillet arc points for offset gaps
+    createFilletArc(p1, p2, center, radius) {
+        const points = [];
+        const angle1 = Math.atan2(p1.y - center.y, p1.x - center.x);
+        const angle2 = Math.atan2(p2.y - center.y, p2.x - center.x);
+
+        // Determine arc direction
+        let startAngle = angle1;
+        let endAngle = angle2;
+        let deltaAngle = endAngle - startAngle;
+
+        // Normalize to shortest arc
+        while (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+        while (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+
+        // Generate arc points
+        const numSegments = Math.max(3, Math.ceil(Math.abs(deltaAngle) / (Math.PI / 8)));
+        for (let i = 0; i <= numSegments; i++) {
+            const t = i / numSegments;
+            const angle = startAngle + t * deltaAngle;
+            points.push({
+                x: center.x + radius * Math.cos(angle),
+                y: center.y + radius * Math.sin(angle)
+            });
+        }
+
+        return points;
+    },
+
+    // Helper to check if point is on extended line
+    pointOnLineExtended(point, lineP1, lineP2) {
+        const dx = lineP2.x - lineP1.x;
+        const dy = lineP2.y - lineP1.y;
+        const len = Math.hypot(dx, dy);
+        if (len === 0) return false;
+
+        // Project point onto line
+        const t = ((point.x - lineP1.x) * dx + (point.y - lineP1.y) * dy) / (len * len);
+
+        // Check if projection is reasonably close
+        const projX = lineP1.x + t * dx;
+        const projY = lineP1.y + t * dy;
+        const dist = Math.hypot(point.x - projX, point.y - projY);
+
+        return dist < 0.001;
     },
 
     // ==========================================

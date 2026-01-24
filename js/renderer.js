@@ -438,13 +438,113 @@ const Renderer = {
                 ctx.restore();
                 break;
 
+            case 'mtext':
+                ctx.save();
+                ctx.font = `${entity.height}px Arial`;
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.translate(entity.position.x, entity.position.y);
+                if (entity.rotation) {
+                    ctx.rotate(Utils.degToRad(entity.rotation));
+                }
+                ctx.scale(1, -1); // Flip text (canvas Y is inverted)
+
+                // Draw multiline text
+                const lines = entity.text.split('\n');
+                const lineHeight = entity.height * 1.2;
+                lines.forEach((line, index) => {
+                    ctx.fillText(line, 0, index * lineHeight);
+                });
+
+                // Draw bounding box if selected
+                if (CAD.selectedIds.includes(entity.id)) {
+                    ctx.strokeStyle = this.colors.selection;
+                    ctx.lineWidth = 1 / CAD.zoom;
+                    const textWidth = entity.width || Math.max(...lines.map(l => ctx.measureText(l).width));
+                    const textHeight = lines.length * lineHeight;
+                    ctx.strokeRect(0, -entity.height, textWidth, textHeight);
+                }
+                ctx.restore();
+                break;
+
             case 'point':
-                // Draw point as small X
-                const size = 3 / CAD.zoom;
-                ctx.moveTo(entity.position.x - size, entity.position.y - size);
-                ctx.lineTo(entity.position.x + size, entity.position.y + size);
-                ctx.moveTo(entity.position.x + size, entity.position.y - size);
-                ctx.lineTo(entity.position.x - size, entity.position.y + size);
+                // Draw point based on PDMODE setting
+                const pdmode = CAD.pointDisplayMode || 3;
+                const pdsize = (CAD.pointDisplaySize || 5) / CAD.zoom;
+                const px = entity.position.x;
+                const py = entity.position.y;
+
+                switch (pdmode) {
+                    case 0: // Dot
+                        ctx.beginPath();
+                        ctx.arc(px, py, 1 / CAD.zoom, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    case 1: // Nothing (invisible)
+                        break;
+                    case 2: // Plus (+)
+                        ctx.moveTo(px - pdsize, py);
+                        ctx.lineTo(px + pdsize, py);
+                        ctx.moveTo(px, py - pdsize);
+                        ctx.lineTo(px, py + pdsize);
+                        break;
+                    case 3: // X (default)
+                        ctx.moveTo(px - pdsize, py - pdsize);
+                        ctx.lineTo(px + pdsize, py + pdsize);
+                        ctx.moveTo(px + pdsize, py - pdsize);
+                        ctx.lineTo(px - pdsize, py + pdsize);
+                        break;
+                    case 4: // Short vertical line
+                        ctx.moveTo(px, py - pdsize);
+                        ctx.lineTo(px, py + pdsize);
+                        break;
+                    case 32: // Square
+                        ctx.strokeRect(px - pdsize, py - pdsize, pdsize * 2, pdsize * 2);
+                        break;
+                    case 33: // Square with X
+                        ctx.strokeRect(px - pdsize, py - pdsize, pdsize * 2, pdsize * 2);
+                        ctx.moveTo(px - pdsize, py - pdsize);
+                        ctx.lineTo(px + pdsize, py + pdsize);
+                        ctx.moveTo(px + pdsize, py - pdsize);
+                        ctx.lineTo(px - pdsize, py + pdsize);
+                        break;
+                    case 34: // Square with +
+                        ctx.strokeRect(px - pdsize, py - pdsize, pdsize * 2, pdsize * 2);
+                        ctx.moveTo(px - pdsize, py);
+                        ctx.lineTo(px + pdsize, py);
+                        ctx.moveTo(px, py - pdsize);
+                        ctx.lineTo(px, py + pdsize);
+                        break;
+                    case 64: // Circle
+                        ctx.beginPath();
+                        ctx.arc(px, py, pdsize, 0, Math.PI * 2);
+                        ctx.stroke();
+                        break;
+                    case 65: // Circle with X
+                        ctx.beginPath();
+                        ctx.arc(px, py, pdsize, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(px - pdsize, py - pdsize);
+                        ctx.lineTo(px + pdsize, py + pdsize);
+                        ctx.moveTo(px + pdsize, py - pdsize);
+                        ctx.lineTo(px - pdsize, py + pdsize);
+                        break;
+                    case 66: // Circle with +
+                        ctx.beginPath();
+                        ctx.arc(px, py, pdsize, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(px - pdsize, py);
+                        ctx.lineTo(px + pdsize, py);
+                        ctx.moveTo(px, py - pdsize);
+                        ctx.lineTo(px, py + pdsize);
+                        break;
+                    default: // Default to X
+                        ctx.moveTo(px - pdsize, py - pdsize);
+                        ctx.lineTo(px + pdsize, py + pdsize);
+                        ctx.moveTo(px + pdsize, py - pdsize);
+                        ctx.lineTo(px - pdsize, py + pdsize);
+                }
                 break;
 
             case 'donut':

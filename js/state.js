@@ -71,6 +71,18 @@ class StateManager {
         this.lineType = 'continuous';
         this.hatchPattern = 'solid';
 
+        // Offset settings
+        this.offsetDist = 10;
+        this.offsetGapType = 0;         // 0=Extend, 1=Fillet, 2=Chamfer (OFFSETGAPTYPE)
+
+        // Point display settings (PDMODE, PDSIZE)
+        this.pointDisplayMode = 3;      // 0=dot, 1=none, 2=+, 3=X, 4=short line
+        this.pointDisplaySize = 5;      // Size in pixels
+
+        // Text settings
+        this.textHeight = 10;           // Default text height
+        this.textStyle = 'Standard';    // Text style name
+
         // Layers
         this.layers = [
             { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }

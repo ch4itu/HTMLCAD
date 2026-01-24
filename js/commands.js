@@ -29,8 +29,11 @@ const Commands = {
         'text': 'text',
         'dt': 'text',
         'dtext': 'text',
+        'mt': 'mtext',
+        'mtext': 'mtext',
         'po': 'point',
         'point': 'point',
+        'multiple': 'point',
         'pol': 'polygon',
         'polygon': 'polygon',
         'ray': 'ray',
@@ -153,6 +156,10 @@ const Commands = {
         'snap': 'snap',
         'ortho': 'ortho',
         'osnap': 'osnap',
+        'offsetgaptype': 'offsetgaptype',
+        'pdmode': 'pdmode',
+        'pdsize': 'pdsize',
+        'textsize': 'textsize',
 
         // AutoLISP
         'lisp': 'lisp',
@@ -291,6 +298,10 @@ const Commands = {
 
             case 'point':
                 UI.log('POINT: Specify a point:', 'prompt');
+                break;
+
+            case 'mtext':
+                UI.log('MTEXT: Specify first corner:', 'prompt');
                 break;
 
             case 'polygon':
@@ -578,6 +589,22 @@ const Commands = {
                 this.finishCommand();
                 break;
 
+            case 'offsetgaptype':
+                UI.log(`OFFSETGAPTYPE: Enter new value <${CAD.offsetGapType}> (0=Extend, 1=Fillet, 2=Chamfer):`, 'prompt');
+                break;
+
+            case 'pdmode':
+                UI.log(`PDMODE: Enter new value <${CAD.pointDisplayMode}> (0=dot, 2=+, 3=X, 32=square, 64=circle):`, 'prompt');
+                break;
+
+            case 'pdsize':
+                UI.log(`PDSIZE: Enter new value <${CAD.pointDisplaySize}>:`, 'prompt');
+                break;
+
+            case 'textsize':
+                UI.log(`TEXTSIZE: Enter new value <${CAD.textHeight}>:`, 'prompt');
+                break;
+
             case 'new':
                 if (confirm('Start a new drawing? All unsaved changes will be lost.')) {
                     CAD.newDrawing();
@@ -703,6 +730,10 @@ const Commands = {
 
             case 'text':
                 this.handleTextClick(point);
+                break;
+
+            case 'mtext':
+                this.handleMTextClick(point);
                 break;
 
             case 'point':
@@ -953,20 +984,72 @@ const Commands = {
     handleTextClick(point) {
         const state = CAD;
         state.points.push(point);
+        state.step++;
 
-        const text = prompt('Enter text:', '');
-        if (text) {
-            const height = parseFloat(prompt('Enter text height:', '10')) || 10;
+        if (state.step === 1) {
+            // First click - get text position
+            const defaultHeight = CAD.textHeight || 10;
+            UI.log(`TEXT: Specify height <${defaultHeight}>:`, 'prompt');
+            CAD.cmdOptions.textPosition = point;
+        } else if (state.step === 2) {
+            // Height entered via handleInput, now get rotation
+            UI.log('TEXT: Specify rotation angle <0>:', 'prompt');
+        }
+    },
+
+    completeTextCommand(text) {
+        const height = CAD.cmdOptions.textHeight || CAD.textHeight || 10;
+        const rotation = CAD.cmdOptions.textRotation || 0;
+        const position = CAD.cmdOptions.textPosition;
+
+        if (text && position) {
             CAD.addEntity({
                 type: 'text',
-                position: { ...point },
+                position: { ...position },
                 text: text,
                 height: height,
-                rotation: 0
+                rotation: rotation
             });
             UI.log('Text created.');
         }
         this.finishCommand();
+    },
+
+    handleMTextClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('MTEXT: Specify opposite corner or [Height/Justify/Line spacing/Rotation/Style/Width]:', 'prompt');
+        } else if (state.step === 2) {
+            // Two corners specified - create mtext box
+            const p1 = state.points[0];
+            const p2 = state.points[1];
+
+            // Calculate width from corners
+            const width = Math.abs(p2.x - p1.x);
+            const height = CAD.textHeight || 10;
+
+            // Prompt for text content
+            const text = prompt('Enter multiline text (use \\n for new lines):', '');
+            if (text) {
+                CAD.addEntity({
+                    type: 'mtext',
+                    position: {
+                        x: Math.min(p1.x, p2.x),
+                        y: Math.max(p1.y, p2.y)
+                    },
+                    text: text.replace(/\\n/g, '\n'),
+                    height: height,
+                    width: width,
+                    rotation: 0,
+                    attachment: 'topLeft' // TL, TC, TR, ML, MC, MR, BL, BC, BR
+                });
+                UI.log('MText created.');
+            }
+            this.finishCommand();
+        }
     },
 
     handlePointClick(point) {
@@ -974,7 +1057,8 @@ const Commands = {
             type: 'point',
             position: { ...point }
         });
-        UI.log(`Point: X=${point.x.toFixed(4)}, Y=${point.y.toFixed(4)}`);
+        UI.log(`Point: X=${point.x.toFixed(4)}, Y=${point.y.toFixed(4)}. Specify next point:`);
+        // Don't finish - allow multiple points (like AutoCAD)
     },
 
     // ==========================================
@@ -2330,6 +2414,28 @@ const Commands = {
         if (!input) {
             // Enter pressed with empty input
 
+            // TEXT - use default height
+            if (state.activeCmd === 'text' && state.step === 1) {
+                CAD.cmdOptions.textHeight = CAD.textHeight || 10;
+                state.step = 2;
+                UI.log('TEXT: Specify rotation angle <0>:', 'prompt');
+                return true;
+            }
+
+            // TEXT - use default rotation (0)
+            if (state.activeCmd === 'text' && state.step === 2) {
+                CAD.cmdOptions.textRotation = 0;
+                state.step = 3;
+                UI.log('TEXT: Enter text:', 'prompt');
+                return true;
+            }
+
+            // POINT - finish point command on Enter
+            if (state.activeCmd === 'point') {
+                this.finishCommand();
+                return true;
+            }
+
             // Confirm selection during modify commands
             if (state.cmdOptions.needSelection && state.selectedIds.length > 0) {
                 // Store for "Previous" option
@@ -2473,6 +2579,77 @@ const Commands = {
                 UI.log(`Circle created with radius ${num.toFixed(4)}`);
                 this.finishCommand();
                 Renderer.draw();
+                return true;
+            }
+
+            // TEXT - height input
+            if (state.activeCmd === 'text' && state.step === 1) {
+                CAD.cmdOptions.textHeight = num;
+                state.step = 2;
+                UI.log('TEXT: Specify rotation angle <0>:', 'prompt');
+                return true;
+            }
+
+            // TEXT - rotation input
+            if (state.activeCmd === 'text' && state.step === 2) {
+                CAD.cmdOptions.textRotation = num;
+                state.step = 3;
+                UI.log('TEXT: Enter text:', 'prompt');
+                return true;
+            }
+
+            // MTEXT - height input
+            if (state.activeCmd === 'mtext' && state.cmdOptions.waitingForHeight) {
+                CAD.cmdOptions.textHeight = num;
+                state.cmdOptions.waitingForHeight = false;
+                UI.log('MTEXT: Specify opposite corner:', 'prompt');
+                return true;
+            }
+
+            // POINT - set PDMODE
+            if (state.activeCmd === 'point' && input.toLowerCase() === 's') {
+                const mode = prompt('Enter PDMODE (0=dot, 2=+, 3=X, 32=square, 64=circle):', CAD.pointDisplayMode);
+                if (mode !== null) {
+                    CAD.pointDisplayMode = parseInt(mode) || 3;
+                    UI.log(`Point display mode set to ${CAD.pointDisplayMode}`);
+                    Renderer.draw();
+                }
+                return true;
+            }
+
+            // OFFSETGAPTYPE setting
+            if (state.activeCmd === 'offsetgaptype') {
+                const val = Math.max(0, Math.min(2, Math.round(num)));
+                CAD.offsetGapType = val;
+                const types = ['Extend', 'Fillet', 'Chamfer'];
+                UI.log(`OFFSETGAPTYPE set to ${val} (${types[val]})`);
+                this.finishCommand();
+                return true;
+            }
+
+            // PDMODE setting
+            if (state.activeCmd === 'pdmode') {
+                CAD.pointDisplayMode = Math.round(num);
+                UI.log(`PDMODE set to ${CAD.pointDisplayMode}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            // PDSIZE setting
+            if (state.activeCmd === 'pdsize') {
+                CAD.pointDisplaySize = Math.abs(num) || 5;
+                UI.log(`PDSIZE set to ${CAD.pointDisplaySize}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            // TEXTSIZE setting
+            if (state.activeCmd === 'textsize') {
+                CAD.textHeight = Math.abs(num) || 10;
+                UI.log(`TEXTSIZE set to ${CAD.textHeight}`);
+                this.finishCommand();
                 return true;
             }
 
@@ -2693,6 +2870,13 @@ const Commands = {
             }
 
             UI.log('PEDIT: Unknown option. [Close/Open/Join/Spline/Decurve/eXit]:', 'prompt');
+            return true;
+        }
+
+        // TEXT - text content input (step 3)
+        if (state.activeCmd === 'text' && state.step === 3 && input.length > 0) {
+            this.completeTextCommand(input);
+            Renderer.draw();
             return true;
         }
 
