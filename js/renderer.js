@@ -34,6 +34,7 @@ const Renderer = {
         }
     },
     hatchPatterns: new Map(),
+    imageCache: new Map(),
 
     // ==========================================
     // INITIALIZATION
@@ -221,6 +222,11 @@ const Renderer = {
                 return;
             }
 
+            if (entity.type === 'image') {
+                this.drawImageEntity(entity, color, isSelected, isHovered);
+                return;
+            }
+
             ctx.beginPath();
             ctx.strokeStyle = color;
 
@@ -252,6 +258,44 @@ const Renderer = {
         });
 
         ctx.setLineDash([]);
+    },
+
+    getImage(src) {
+        if (!src) return null;
+        if (!this.imageCache.has(src)) {
+            const img = new Image();
+            img.onload = () => this.draw();
+            img.src = src;
+            this.imageCache.set(src, img);
+        }
+        return this.imageCache.get(src);
+    },
+
+    drawImageEntity(entity, color, isSelected, isHovered) {
+        const ctx = this.ctx;
+        const image = this.getImage(entity.src);
+        if (!image || !image.complete) return;
+
+        const minX = Math.min(entity.p1.x, entity.p2.x);
+        const maxX = Math.max(entity.p1.x, entity.p2.x);
+        const minY = Math.min(entity.p1.y, entity.p2.y);
+        const maxY = Math.max(entity.p1.y, entity.p2.y);
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        ctx.save();
+        ctx.globalAlpha = entity.opacity ?? 0.6;
+        ctx.drawImage(image, minX, minY, width, height);
+        ctx.restore();
+
+        if (isSelected || isHovered) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = (isSelected ? 2 : 1.5) / CAD.zoom;
+            ctx.setLineDash(isSelected ? [5 / CAD.zoom, 3 / CAD.zoom] : []);
+            ctx.strokeRect(minX, minY, width, height);
+            ctx.restore();
+        }
     },
 
     getHatchStyle(entity, color) {
@@ -688,14 +732,15 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
-        if (!state.activeCmd || state.points.length === 0) return;
+        if (!state.activeCmd) return;
+        if (state.activeCmd !== 'imageattach' && state.points.length === 0) return;
 
         ctx.beginPath();
         ctx.strokeStyle = this.colors.preview;
         ctx.lineWidth = 1 / state.zoom;
         ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
 
-        const lastPoint = state.points[state.points.length - 1];
+        const lastPoint = state.points.length ? state.points[state.points.length - 1] : null;
         let endPoint = state.tempEnd || state.cursor;
 
         // Apply ortho if enabled
@@ -832,6 +877,17 @@ const Renderer = {
                         const preview = Geometry.mirrorEntity(entity, state.points[0], endPoint);
                         this.drawEntity(preview, ctx);
                     });
+                }
+                break;
+
+            case 'imageattach':
+                if (state.cmdOptions.imageInsert) {
+                    const insert = state.cmdOptions.imageInsert;
+                    ctx.rect(
+                        insert.x, insert.y,
+                        endPoint.x - insert.x,
+                        endPoint.y - insert.y
+                    );
                 }
                 break;
         }

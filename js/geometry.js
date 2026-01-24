@@ -582,6 +582,17 @@ const Geometry = {
                        point.y >= entity.position.y - entity.height &&
                        point.y <= entity.position.y;
 
+            case 'image': {
+                const minX = Math.min(entity.p1.x, entity.p2.x);
+                const maxX = Math.max(entity.p1.x, entity.p2.x);
+                const minY = Math.min(entity.p1.y, entity.p2.y);
+                const maxY = Math.max(entity.p1.y, entity.p2.y);
+                return point.x >= minX - tolerance &&
+                       point.x <= maxX + tolerance &&
+                       point.y >= minY - tolerance &&
+                       point.y <= maxY + tolerance;
+            }
+
             case 'donut':
                 // Hit test for donut - check if point is between inner and outer radius
                 const donutDist = Utils.dist(point, entity.center);
