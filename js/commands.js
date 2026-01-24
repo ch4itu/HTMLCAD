@@ -395,6 +395,8 @@ const Commands = {
                 } else {
                     UI.log('SCALE: Specify base point:', 'prompt');
                 }
+                CAD.cmdOptions.scaleMode = 'factor'; // factor, reference
+                CAD.cmdOptions.scaleCopy = false;
                 break;
 
             case 'mirror':
@@ -407,7 +409,8 @@ const Commands = {
                 break;
 
             case 'offset':
-                UI.log(`OFFSET: Specify offset distance <${CAD.offsetDist}>:`, 'prompt');
+                UI.log(`OFFSET: Specify offset distance or [Through/Erase] <${CAD.offsetDist}>:`, 'prompt');
+                CAD.cmdOptions.offsetMode = 'distance'; // distance, through, picking
                 break;
 
             case 'trim':
@@ -1160,24 +1163,55 @@ const Commands = {
         state.step++;
 
         if (state.step === 1) {
-            UI.log('SCALE: Specify scale factor or [Reference]:', 'prompt');
+            UI.log('SCALE: Specify scale factor or [Copy/Reference]:', 'prompt');
         } else if (state.step === 2) {
-            UI.log('SCALE: Specify second point:', 'prompt');
+            // Visual scaling by second point (scale factor from distance)
+            if (state.cmdOptions.scaleMode === 'reference') {
+                UI.log('SCALE: Specify second reference point:', 'prompt');
+            } else {
+                // Direct visual scale - calculate from first to second point
+                const scale = Utils.dist(state.points[0], point);
+                this.applyScale(state.points[0], scale, state.cmdOptions.scaleCopy);
+            }
         } else if (state.step === 3) {
-            const baseDist = Utils.dist(state.points[0], state.points[1]);
-            const newDist = Utils.dist(state.points[0], state.points[2]);
-            const scale = newDist / baseDist;
+            // Reference mode - have first two reference points
+            if (state.cmdOptions.scaleMode === 'reference') {
+                UI.log('SCALE: Specify new length or [Points]:', 'prompt');
+            }
+        } else if (state.step === 4) {
+            // Reference mode with new length from points
+            const refDist = Utils.dist(state.points[1], state.points[2]);
+            const newDist = Utils.dist(state.points[1], point);
+            if (refDist > 0) {
+                const scale = newDist / refDist;
+                this.applyScale(state.points[0], scale, state.cmdOptions.scaleCopy);
+            }
+        }
+    },
 
-            CAD.saveUndoState('Scale');
+    applyScale(basePoint, scaleFactor, makeCopy = false) {
+        const state = CAD;
+        CAD.saveUndoState('Scale');
+
+        if (makeCopy) {
+            // Create scaled copies
             state.getSelectedEntities().forEach(entity => {
-                const scaled = Geometry.scaleEntity(entity, state.points[0], scale);
+                const scaled = Geometry.scaleEntity(entity, basePoint, scaleFactor);
+                delete scaled.id;
+                CAD.addEntity(scaled, true);
+            });
+            UI.log(`${state.selectedIds.length} objects scaled (copy) by factor ${scaleFactor.toFixed(4)}`);
+        } else {
+            // Scale in place
+            state.getSelectedEntities().forEach(entity => {
+                const scaled = Geometry.scaleEntity(entity, basePoint, scaleFactor);
                 CAD.updateEntity(entity.id, scaled, true);
             });
-
-            UI.log(`${state.selectedIds.length} objects scaled by factor ${scale.toFixed(4)}`);
-            state.clearSelection();
-            this.finishCommand();
+            UI.log(`${state.selectedIds.length} objects scaled by factor ${scaleFactor.toFixed(4)}`);
         }
+
+        state.clearSelection();
+        this.finishCommand();
     },
 
     handleMirrorClick(point) {
@@ -1327,7 +1361,23 @@ const Commands = {
         const state = CAD;
 
         if (state.step === 0) {
-            // Waiting for distance - check if a number was entered
+            // Step 0: Waiting for distance - user can pick first point for two-point distance
+            if (state.cmdOptions.offsetMode === 'picking') {
+                // Second point picked - calculate distance
+                const firstPoint = state.points[0];
+                const distance = Utils.dist(firstPoint, point);
+                CAD.offsetDist = distance;
+                state.points = [];
+                state.step = 1;
+                UI.log(`Offset distance: ${distance.toFixed(4)}`);
+                UI.log('OFFSET: Select object to offset:', 'prompt');
+            } else {
+                // First click - start two-point distance picking
+                state.points = [point];
+                state.cmdOptions.offsetMode = 'picking';
+                UI.log(`First point: ${point.x.toFixed(4)}, ${point.y.toFixed(4)}`);
+                UI.log('OFFSET: Specify second point:', 'prompt');
+            }
             return;
         }
 
@@ -2004,6 +2054,7 @@ const Commands = {
         UI.setActiveButton(null);
         UI.hideCanvasSelectionToolbar();
         UI.updateSelectionRibbon();
+        UI.resetPrompt();
         Renderer.draw();
 
         // Auto-restart repeatable commands (like AutoCAD)
@@ -2025,6 +2076,7 @@ const Commands = {
         CAD.cmdOptions.forceWindowMode = null;
         UI.setActiveButton(null);
         UI.log('*Cancel*');
+        UI.resetPrompt();
         UI.updateSelectionRibbon();
         UI.hideCanvasSelectionToolbar();
         Renderer.draw();
@@ -2556,15 +2608,38 @@ const Commands = {
             }
 
             if (state.activeCmd === 'scale' && state.step === 1) {
-                // Direct scale factor input
-                CAD.saveUndoState('Scale');
-                state.getSelectedEntities().forEach(entity => {
-                    const scaled = Geometry.scaleEntity(entity, state.points[0], num);
-                    CAD.updateEntity(entity.id, scaled, true);
-                });
-                UI.log(`${state.selectedIds.length} objects scaled by factor ${num.toFixed(4)}`);
-                state.clearSelection();
-                this.finishCommand();
+                if (state.cmdOptions.scaleMode === 'reference') {
+                    // Reference mode - first number is reference length
+                    state.cmdOptions.refLength = num;
+                    UI.log(`Reference length: ${num}`);
+                    UI.log('SCALE: Specify new length:', 'prompt');
+                    state.step = 5; // Special step for new length input
+                } else {
+                    // Direct scale factor input
+                    this.applyScale(state.points[0], num, state.cmdOptions.scaleCopy);
+                }
+                Renderer.draw();
+                return true;
+            }
+
+            if (state.activeCmd === 'scale' && state.step === 5) {
+                // Reference mode - new length entered after reference length
+                const refLen = state.cmdOptions.refLength || 1;
+                if (refLen > 0) {
+                    const scale = num / refLen;
+                    this.applyScale(state.points[0], scale, state.cmdOptions.scaleCopy);
+                }
+                Renderer.draw();
+                return true;
+            }
+
+            if (state.activeCmd === 'scale' && state.step === 3 && state.cmdOptions.scaleMode === 'reference') {
+                // Reference mode by points - numeric new length input
+                const refDist = Utils.dist(state.points[1], state.points[2]);
+                if (refDist > 0) {
+                    const scale = num / refDist;
+                    this.applyScale(state.points[0], scale, state.cmdOptions.scaleCopy);
+                }
                 Renderer.draw();
                 return true;
             }
@@ -2811,6 +2886,30 @@ const Commands = {
         }
 
         // Check for special command options
+
+        // SCALE options: Copy, Reference, Points
+        if (state.activeCmd === 'scale') {
+            const option = input.toLowerCase();
+
+            if ((option === 'c' || option === 'copy') && state.step === 1) {
+                state.cmdOptions.scaleCopy = true;
+                UI.log('SCALE: Copy mode enabled. Specify scale factor or [Reference]:', 'prompt');
+                return true;
+            }
+
+            if ((option === 'r' || option === 'reference') && state.step === 1) {
+                state.cmdOptions.scaleMode = 'reference';
+                UI.log('SCALE: Specify reference length or [Points] <1>:', 'prompt');
+                return true;
+            }
+
+            if ((option === 'p' || option === 'points') && state.step === 1 && state.cmdOptions.scaleMode === 'reference') {
+                state.step = 2;
+                UI.log('SCALE: Specify first reference point:', 'prompt');
+                return true;
+            }
+        }
+
         if (state.activeCmd === 'fillet' && input.toLowerCase() === 'r') {
             const radius = prompt('Enter fillet radius:', CAD.filletRadius || '0');
             if (radius !== null) {
