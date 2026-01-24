@@ -66,6 +66,7 @@ const Commands = {
         'extend': 'extend',
         'f': 'fillet',
         'fillet': 'fillet',
+        'cha': 'chamfer',
         'ch': 'chamfer',
         'chamfer': 'chamfer',
         'x': 'explode',
@@ -75,16 +76,20 @@ const Commands = {
         'h': 'hatch',
         'hatch': 'hatch',
         'bh': 'hatch',
+        'bhatch': 'hatch',
         'ar': 'array',
         'array': 'array',
         'arrayrect': 'arrayrect',
         'arraypolar': 'arraypolar',
+        '-array': 'array',
         'br': 'break',
         'break': 'break',
         'len': 'lengthen',
         'lengthen': 'lengthen',
         's': 'stretch',
         'stretch': 'stretch',
+        'pe': 'pedit',
+        'pedit': 'pedit',
 
         // Dimension commands
         'dim': 'dimlinear',
@@ -102,23 +107,34 @@ const Commands = {
         'u': 'undo',
         'undo': 'undo',
         'redo': 'redo',
+        'mredo': 'redo',
         'z': 'zoom',
         'zoom': 'zoom',
+        'ze': 'zoomextents',
+        'zoomextents': 'zoomextents',
         'p': 'pan',
         'pan': 'pan',
         're': 'regen',
         'regen': 'regen',
         'redraw': 'regen',
+        'redrawall': 'regen',
         'la': 'layer',
+        '-la': 'layer',
         'layer': 'layer',
         'id': 'id',
         'dist': 'distance',
         'di': 'distance',
         'distance': 'distance',
+        'measuregeom': 'distance',
         'area': 'area',
         'aa': 'area',
         'list': 'list',
         'li': 'list',
+        'properties': 'list',
+        'props': 'list',
+        'pr': 'list',
+        'qselect': 'selectall',
+        'selectsimilar': 'selectall',
 
         // Selection
         'all': 'selectall',
@@ -166,6 +182,13 @@ const Commands = {
         // Check for close command during active drawing
         if ((cmdName === 'c' || cmdName === 'close') && CAD.activeCmd) {
             this.closeShape();
+            return;
+        }
+
+        // Check for undo command during active line/polyline drawing
+        if ((cmdName === 'u') && CAD.activeCmd &&
+            (CAD.activeCmd === 'line' || CAD.activeCmd === 'polyline' || CAD.activeCmd === 'spline')) {
+            this.handleInput('u');
             return;
         }
 
@@ -443,8 +466,9 @@ const Commands = {
                 break;
 
             case 'stretch':
-                UI.log('STRETCH: Select objects to stretch by crossing-window:', 'prompt');
+                UI.log('STRETCH: Select objects to stretch by crossing-window or polygon:', 'prompt');
                 CAD.cmdOptions.needSelection = true;
+                CAD.cmdOptions.stretchMode = 'selectWindow';
                 CAD.selectionMode = true;
                 break;
 
@@ -454,6 +478,23 @@ const Commands = {
                     CAD.cmdOptions.needSelection = true;
                 } else {
                     UI.log('JOIN: Select objects to join to source:', 'prompt');
+                }
+                break;
+
+            case 'pedit':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('PEDIT: Select polyline or [Multiple]:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.peditMode = null;
+                } else {
+                    const selected = CAD.getSelectedEntities();
+                    if (selected.length === 1 && (selected[0].type === 'polyline' || selected[0].type === 'line')) {
+                        CAD.cmdOptions.peditTarget = selected[0];
+                        UI.log('PEDIT: [Close/Open/Join/Width/Edit vertex/Spline/Decurve]:', 'prompt');
+                    } else {
+                        UI.log('PEDIT: Select a single polyline.', 'error');
+                        this.finishCommand();
+                    }
                 }
                 break;
 
@@ -474,6 +515,10 @@ const Commands = {
                 } else {
                     UI.log('ZOOM: [All/Center/Extents/Window] <realtime>:', 'prompt');
                 }
+                break;
+
+            case 'zoomextents':
+                this.zoomExtents();
                 break;
 
             case 'pan':
@@ -692,6 +737,10 @@ const Commands = {
                 this.handleTrimClick(point);
                 break;
 
+            case 'extend':
+                this.handleExtendClick(point);
+                break;
+
             case 'hatch':
                 this.handleHatchClick(point);
                 break;
@@ -744,6 +793,10 @@ const Commands = {
 
             case 'chamfer':
                 this.handleChamferClick(point);
+                break;
+
+            case 'stretch':
+                this.handleStretchClick(point);
                 break;
 
             case 'break':
@@ -1057,6 +1110,120 @@ const Commands = {
         }
     },
 
+    handleStretchClick(point) {
+        const state = CAD;
+        const mode = state.cmdOptions.stretchMode;
+
+        if (mode === 'basePoint') {
+            state.points.push(point);
+            state.cmdOptions.stretchMode = 'displacement';
+            UI.log('STRETCH: Specify second point or <use first point as displacement>:', 'prompt');
+        } else if (mode === 'displacement') {
+            const basePoint = state.points[0];
+            const displacement = {
+                x: point.x - basePoint.x,
+                y: point.y - basePoint.y
+            };
+
+            CAD.saveUndoState('Stretch');
+
+            // Get selected entities and stretch them
+            const selectedEntities = state.getSelectedEntities();
+            const stretchWindow = state.cmdOptions.stretchWindow;
+
+            selectedEntities.forEach(entity => {
+                const stretched = this.stretchEntity(entity, displacement, stretchWindow);
+                if (stretched) {
+                    CAD.updateEntity(entity.id, stretched, true);
+                }
+            });
+
+            UI.log(`${state.selectedIds.length} objects stretched.`);
+            state.clearSelection();
+            this.finishCommand();
+        }
+    },
+
+    stretchEntity(entity, displacement, window) {
+        // Helper function to check if a point is in the stretch window
+        const inWindow = (p) => {
+            if (!window) return true;
+            return p.x >= window.minX && p.x <= window.maxX &&
+                   p.y >= window.minY && p.y <= window.maxY;
+        };
+
+        // Helper to move point if in window
+        const stretchPoint = (p) => {
+            if (inWindow(p)) {
+                return { x: p.x + displacement.x, y: p.y + displacement.y };
+            }
+            return { ...p };
+        };
+
+        switch (entity.type) {
+            case 'line':
+                return {
+                    ...entity,
+                    p1: stretchPoint(entity.p1),
+                    p2: stretchPoint(entity.p2)
+                };
+
+            case 'circle':
+                // Circles move if center is in window
+                if (inWindow(entity.center)) {
+                    return {
+                        ...entity,
+                        center: stretchPoint(entity.center)
+                    };
+                }
+                return entity;
+
+            case 'arc':
+                // Arcs move if center is in window
+                if (inWindow(entity.center)) {
+                    return {
+                        ...entity,
+                        center: stretchPoint(entity.center)
+                    };
+                }
+                return entity;
+
+            case 'rect':
+                return {
+                    ...entity,
+                    p1: stretchPoint(entity.p1),
+                    p2: stretchPoint(entity.p2)
+                };
+
+            case 'polyline':
+                return {
+                    ...entity,
+                    points: entity.points.map(p => stretchPoint(p))
+                };
+
+            case 'ellipse':
+                if (inWindow(entity.center)) {
+                    return {
+                        ...entity,
+                        center: stretchPoint(entity.center)
+                    };
+                }
+                return entity;
+
+            case 'text':
+                if (inWindow(entity.position)) {
+                    return {
+                        ...entity,
+                        position: stretchPoint(entity.position)
+                    };
+                }
+                return entity;
+
+            default:
+                return entity;
+        }
+    },
+
     handleOffsetClick(point) {
         const state = CAD;
 
@@ -1107,6 +1274,46 @@ const Commands = {
             }
         } else {
             UI.log('No object found to trim.', 'error');
+        }
+    },
+
+    handleExtendClick(point) {
+        const state = CAD;
+
+        if (state.cmdOptions.selectingEdges) {
+            // Use all entities as boundary edges (AutoCAD behavior when Enter is pressed without selection)
+            return;
+        }
+
+        const hit = this.hitTest(point);
+        if (hit && hit.type === 'line') {
+            const allEntities = CAD.getVisibleEntities().filter(e => e.id !== hit.id);
+            const result = Geometry.extendLine(hit, point, allEntities);
+
+            if (result) {
+                CAD.saveUndoState('Extend');
+                CAD.updateEntity(hit.id, result, true);
+                UI.log('Object extended. Select next object to extend or [Exit]:');
+                Renderer.draw();
+            } else {
+                UI.log('Cannot extend to any boundary.', 'error');
+            }
+        } else if (hit && hit.type === 'arc') {
+            const allEntities = CAD.getVisibleEntities().filter(e => e.id !== hit.id);
+            const result = Geometry.extendArc(hit, point, allEntities);
+
+            if (result) {
+                CAD.saveUndoState('Extend');
+                CAD.updateEntity(hit.id, result, true);
+                UI.log('Arc extended. Select next object to extend or [Exit]:');
+                Renderer.draw();
+            } else {
+                UI.log('Cannot extend arc to any boundary.', 'error');
+            }
+        } else if (hit) {
+            UI.log('Only lines and arcs can be extended.', 'error');
+        } else {
+            UI.log('No object found to extend.', 'error');
         }
     },
 
@@ -1480,6 +1687,10 @@ const Commands = {
                 break;
             case 'mirror':
                 UI.log('MIRROR: Specify first point of mirror line:', 'prompt');
+                break;
+            case 'stretch':
+                CAD.cmdOptions.stretchMode = 'basePoint';
+                UI.log('STRETCH: Specify base point:', 'prompt');
                 break;
         }
     },
@@ -2350,6 +2561,36 @@ const Commands = {
             }
         }
 
+        // Undo last point during LINE or POLYLINE drawing
+        if ((input.toLowerCase() === 'u' || input.toLowerCase() === 'undo') &&
+            (state.activeCmd === 'line' || state.activeCmd === 'polyline' || state.activeCmd === 'spline')) {
+            if (state.points.length > 1) {
+                // Remove the last point
+                state.points.pop();
+                // For line, we also need to undo the last created entity
+                if (state.activeCmd === 'line' && CAD.entities.length > 0) {
+                    const lastEntity = CAD.entities[CAD.entities.length - 1];
+                    if (lastEntity.type === 'line') {
+                        CAD.removeEntity(lastEntity.id, true);
+                        UI.log('LINE: Last segment undone. Specify next point:', 'prompt');
+                    }
+                }
+                if (state.activeCmd === 'polyline') {
+                    UI.log('PLINE: Last point undone. Specify next point or [Arc/Close/Undo]:', 'prompt');
+                }
+                if (state.activeCmd === 'spline') {
+                    UI.log('SPLINE: Last point undone. Specify next point:', 'prompt');
+                }
+                Renderer.draw();
+            } else if (state.points.length === 1) {
+                state.points = [];
+                UI.log(`${state.activeCmd.toUpperCase()}: Cannot undo - specify first point:`, 'prompt');
+            } else {
+                UI.log('Nothing to undo.', 'error');
+            }
+            return true;
+        }
+
         // Check for special command options
         if (state.activeCmd === 'fillet' && input.toLowerCase() === 'r') {
             const radius = prompt('Enter fillet radius:', CAD.filletRadius || '0');
@@ -2368,6 +2609,90 @@ const Commands = {
                 CAD.chamferDist2 = d2 !== null ? Math.abs(parseFloat(d2)) || CAD.chamferDist1 : CAD.chamferDist1;
                 UI.log(`CHAMFER: Distances = ${CAD.chamferDist1}, ${CAD.chamferDist2}. Select first line:`, 'prompt');
             }
+            return true;
+        }
+
+        // PEDIT options handling
+        if (state.activeCmd === 'pedit' && state.cmdOptions.peditTarget) {
+            const option = input.toLowerCase();
+            const target = state.cmdOptions.peditTarget;
+
+            if (option === 'c' || option === 'close') {
+                // Close polyline
+                if (target.type === 'polyline' && target.points.length >= 3) {
+                    if (!Utils.isPolygonClosed(target.points)) {
+                        CAD.saveUndoState('PEDIT Close');
+                        target.points.push({ ...target.points[0] });
+                        target.closed = true;
+                        CAD.updateEntity(target.id, target, true);
+                        UI.log('Polyline closed.');
+                        Renderer.draw();
+                    } else {
+                        UI.log('Polyline is already closed.');
+                    }
+                }
+                this.finishCommand();
+                return true;
+            }
+
+            if (option === 'o' || option === 'open') {
+                // Open polyline
+                if (target.type === 'polyline' && target.points.length >= 3) {
+                    if (Utils.isPolygonClosed(target.points)) {
+                        CAD.saveUndoState('PEDIT Open');
+                        target.points.pop();
+                        target.closed = false;
+                        CAD.updateEntity(target.id, target, true);
+                        UI.log('Polyline opened.');
+                        Renderer.draw();
+                    } else {
+                        UI.log('Polyline is already open.');
+                    }
+                }
+                this.finishCommand();
+                return true;
+            }
+
+            if (option === 'j' || option === 'join') {
+                // Join nearby lines/polylines
+                UI.log('PEDIT Join: Select objects to join:', 'prompt');
+                state.cmdOptions.peditMode = 'join';
+                state.cmdOptions.needSelection = true;
+                return true;
+            }
+
+            if (option === 's' || option === 'spline') {
+                // Convert to spline curve
+                if (target.type === 'polyline') {
+                    CAD.saveUndoState('PEDIT Spline');
+                    target.isSpline = true;
+                    CAD.updateEntity(target.id, target, true);
+                    UI.log('Polyline converted to spline.');
+                    Renderer.draw();
+                }
+                this.finishCommand();
+                return true;
+            }
+
+            if (option === 'd' || option === 'decurve') {
+                // Remove spline curve
+                if (target.type === 'polyline') {
+                    CAD.saveUndoState('PEDIT Decurve');
+                    target.isSpline = false;
+                    CAD.updateEntity(target.id, target, true);
+                    UI.log('Spline removed from polyline.');
+                    Renderer.draw();
+                }
+                this.finishCommand();
+                return true;
+            }
+
+            if (option === 'x' || option === 'exit') {
+                this.finishCommand();
+                return true;
+            }
+
+            UI.log('PEDIT: Unknown option. [Close/Open/Join/Spline/Decurve/eXit]:', 'prompt');
             return true;
         }
 

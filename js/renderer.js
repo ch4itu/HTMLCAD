@@ -100,6 +100,9 @@ const Renderer = {
         // Draw snap indicator
         this.drawSnapIndicator();
 
+        // Draw tracking lines (polar and object snap tracking)
+        this.drawTrackingLines();
+
         // Draw UCS icon
         this.drawUCSIcon();
     },
@@ -423,7 +426,7 @@ const Renderer = {
 
             case 'text':
                 ctx.save();
-                const fontSize = entity.height * CAD.zoom;
+                // Font size is in world units - zoom is already applied to the context
                 ctx.font = `${entity.height}px Arial`;
                 ctx.fillStyle = ctx.strokeStyle;
                 ctx.translate(entity.position.x, entity.position.y);
@@ -775,20 +778,32 @@ const Renderer = {
         const state = CAD;
 
         const screen = Utils.worldToScreen(state.cursor.x, state.cursor.y, state.pan, state.zoom);
-        const size = 15;
+
+        // Check if full-screen crosshair is enabled (AutoCAD-like)
+        const fullCrosshair = state.fullCrosshair || false;
 
         ctx.strokeStyle = this.colors.cursor;
         ctx.lineWidth = 1;
 
-        // Crosshair lines
         ctx.beginPath();
-        ctx.moveTo(screen.x - size, screen.y);
-        ctx.lineTo(screen.x + size, screen.y);
-        ctx.moveTo(screen.x, screen.y - size);
-        ctx.lineTo(screen.x, screen.y + size);
+
+        if (fullCrosshair) {
+            // Full-screen crosshair (like AutoCAD with CURSORSIZE = 100)
+            ctx.moveTo(0, screen.y);
+            ctx.lineTo(this.canvas.width, screen.y);
+            ctx.moveTo(screen.x, 0);
+            ctx.lineTo(screen.x, this.canvas.height);
+        } else {
+            // Small crosshair
+            const size = state.crosshairSize || 15;
+            ctx.moveTo(screen.x - size, screen.y);
+            ctx.lineTo(screen.x + size, screen.y);
+            ctx.moveTo(screen.x, screen.y - size);
+            ctx.lineTo(screen.x, screen.y + size);
+        }
         ctx.stroke();
 
-        // Small box at center
+        // Small box at center (pick aperture)
         ctx.strokeRect(screen.x - 3, screen.y - 3, 6, 6);
     },
 
@@ -875,6 +890,112 @@ const Renderer = {
                 ctx.lineTo(screen.x, screen.y + size);
                 ctx.stroke();
         }
+    },
+
+    // ==========================================
+    // TRACKING LINES
+    // ==========================================
+
+    drawTrackingLines() {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        // Don't draw tracking lines if no active command or no points
+        if (!state.activeCmd || state.points.length === 0) return;
+
+        const cursorWorld = state.cursorWorld;
+        if (!cursorWorld) return;
+
+        const lastPoint = state.points[state.points.length - 1];
+        const cursorScreen = Utils.worldToScreen(cursorWorld.x, cursorWorld.y, state.pan, state.zoom);
+        const lastScreen = Utils.worldToScreen(lastPoint.x, lastPoint.y, state.pan, state.zoom);
+
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+
+        // Polar tracking lines (if enabled)
+        if (state.polarEnabled) {
+            const polarAngle = state.polarAngle || 45;
+            const angle = Utils.angleDeg(lastPoint, cursorWorld);
+            const nearestPolar = Math.round(angle / polarAngle) * polarAngle;
+            const tolerance = 5; // degrees
+
+            // Check if cursor is near a polar angle
+            if (Math.abs(Utils.normalizeAngle(angle) - Utils.normalizeAngle(nearestPolar)) < tolerance ||
+                Math.abs(Utils.normalizeAngle(angle) - Utils.normalizeAngle(nearestPolar) + 360) % 360 < tolerance) {
+
+                ctx.strokeStyle = '#00ffff';
+                ctx.beginPath();
+
+                // Draw line from last point through cursor, extending to canvas edges
+                const radians = Utils.degToRad(nearestPolar);
+                const extendDist = Math.max(this.canvas.width, this.canvas.height) * 2;
+
+                const extPoint = Utils.polarPoint(lastPoint, radians, extendDist);
+                const extScreen = Utils.worldToScreen(extPoint.x, extPoint.y, state.pan, state.zoom);
+
+                ctx.moveTo(lastScreen.x, lastScreen.y);
+                ctx.lineTo(extScreen.x, extScreen.y);
+                ctx.stroke();
+
+                // Draw angle label
+                const midX = (lastScreen.x + cursorScreen.x) / 2;
+                const midY = (lastScreen.y + cursorScreen.y) / 2 - 15;
+                ctx.font = '11px Arial';
+                ctx.fillStyle = '#00ffff';
+                ctx.fillText(`${nearestPolar}°`, midX, midY);
+            }
+        }
+
+        // Ortho tracking lines (if enabled)
+        if (state.orthoEnabled && !state.polarEnabled) {
+            const dx = Math.abs(cursorWorld.x - lastPoint.x);
+            const dy = Math.abs(cursorWorld.y - lastPoint.y);
+
+            ctx.strokeStyle = '#00ff00';
+            ctx.beginPath();
+
+            if (dx > dy) {
+                // Horizontal constraint
+                ctx.moveTo(0, lastScreen.y);
+                ctx.lineTo(this.canvas.width, lastScreen.y);
+            } else {
+                // Vertical constraint
+                ctx.moveTo(lastScreen.x, 0);
+                ctx.lineTo(lastScreen.x, this.canvas.height);
+            }
+            ctx.stroke();
+        }
+
+        // Object Snap Tracking lines (if there's a snap point)
+        if (state.osnapEnabled && state.snapPoint && state.snapType !== 'grid') {
+            const snapScreen = Utils.worldToScreen(state.snapPoint.x, state.snapPoint.y, state.pan, state.zoom);
+
+            ctx.strokeStyle = '#ffff00';
+
+            // Draw horizontal tracking line from snap point
+            const horizontalDist = Math.abs(cursorWorld.y - state.snapPoint.y);
+            const horizontalTolerance = 5 / state.zoom;
+            if (horizontalDist < horizontalTolerance) {
+                ctx.beginPath();
+                ctx.moveTo(snapScreen.x, snapScreen.y);
+                ctx.lineTo(cursorScreen.x, snapScreen.y);
+                ctx.stroke();
+            }
+
+            // Draw vertical tracking line from snap point
+            const verticalDist = Math.abs(cursorWorld.x - state.snapPoint.x);
+            const verticalTolerance = 5 / state.zoom;
+            if (verticalDist < verticalTolerance) {
+                ctx.beginPath();
+                ctx.moveTo(snapScreen.x, snapScreen.y);
+                ctx.lineTo(snapScreen.x, cursorScreen.y);
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
     },
 
     // ==========================================

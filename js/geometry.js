@@ -940,9 +940,9 @@ const Geometry = {
     // ==========================================
 
     filletLines(line1, line2, radius) {
-        // Find intersection point of the two lines
+        // Find intersection point of the two lines (infinite lines)
         const intersection = this.lineLineIntersection(
-            line1.p1, line1.p2, line2.p1, line2.p2, false
+            line1.p1, line1.p2, line2.p1, line2.p2
         );
 
         if (!intersection) return null;
@@ -1041,9 +1041,9 @@ const Geometry = {
     },
 
     chamferLines(line1, line2, dist1, dist2) {
-        // Find intersection point
+        // Find intersection point (infinite lines)
         const intersection = this.lineLineIntersection(
-            line1.p1, line1.p2, line2.p1, line2.p2, false
+            line1.p1, line1.p2, line2.p1, line2.p2
         );
 
         if (!intersection) return null;
@@ -1097,6 +1097,184 @@ const Geometry = {
                 p2: chamferP2
             }
         };
+    },
+
+    // Extend a line to meet the nearest boundary entity
+    extendLine(entity, clickPoint, allEntities) {
+        if (entity.type !== 'line') return null;
+
+        // Determine which end to extend based on click point
+        const distToP1 = Utils.dist(clickPoint, entity.p1);
+        const distToP2 = Utils.dist(clickPoint, entity.p2);
+        const extendFromP1 = distToP1 < distToP2;
+
+        // Direction of the line
+        const dx = entity.p2.x - entity.p1.x;
+        const dy = entity.p2.y - entity.p1.y;
+        const len = Math.hypot(dx, dy);
+        if (len === 0) return null;
+
+        // Extend the line infinitely in the direction
+        const extendDist = 100000; // Large distance
+        let extP1, extP2;
+
+        if (extendFromP1) {
+            // Extend from p1 (backward direction)
+            extP1 = {
+                x: entity.p1.x - (dx / len) * extendDist,
+                y: entity.p1.y - (dy / len) * extendDist
+            };
+            extP2 = entity.p1;
+        } else {
+            // Extend from p2 (forward direction)
+            extP1 = entity.p2;
+            extP2 = {
+                x: entity.p2.x + (dx / len) * extendDist,
+                y: entity.p2.y + (dy / len) * extendDist
+            };
+        }
+
+        // Find closest intersection with any boundary
+        let closestInt = null;
+        let minDist = Infinity;
+
+        for (const boundary of allEntities) {
+            let intersections = [];
+
+            if (boundary.type === 'line') {
+                const int = this.lineLineIntersection(extP1, extP2, boundary.p1, boundary.p2);
+                if (int && this.pointOnSegment(int, boundary.p1, boundary.p2)) {
+                    intersections.push(int);
+                }
+            } else if (boundary.type === 'circle') {
+                const ints = this.lineCircleIntersection(extP1, extP2, boundary.center, boundary.r);
+                intersections.push(...ints);
+            } else if (boundary.type === 'arc') {
+                const ints = this.lineCircleIntersection(extP1, extP2, boundary.center, boundary.r);
+                ints.forEach(int => {
+                    if (this.pointOnArc(int, boundary)) {
+                        intersections.push(int);
+                    }
+                });
+            } else if (boundary.type === 'rect') {
+                const corners = [
+                    boundary.p1,
+                    { x: boundary.p2.x, y: boundary.p1.y },
+                    boundary.p2,
+                    { x: boundary.p1.x, y: boundary.p2.y }
+                ];
+                for (let i = 0; i < 4; i++) {
+                    const int = this.lineLineIntersection(extP1, extP2, corners[i], corners[(i + 1) % 4]);
+                    if (int && this.pointOnSegment(int, corners[i], corners[(i + 1) % 4])) {
+                        intersections.push(int);
+                    }
+                }
+            } else if (boundary.type === 'polyline') {
+                for (let i = 0; i < boundary.points.length - 1; i++) {
+                    const int = this.lineLineIntersection(extP1, extP2, boundary.points[i], boundary.points[i + 1]);
+                    if (int && this.pointOnSegment(int, boundary.points[i], boundary.points[i + 1])) {
+                        intersections.push(int);
+                    }
+                }
+            }
+
+            // Find the closest intersection in the extend direction
+            for (const int of intersections) {
+                const refPoint = extendFromP1 ? entity.p1 : entity.p2;
+                const dist = Utils.dist(refPoint, int);
+
+                // Only consider points in the extend direction
+                const toInt = { x: int.x - refPoint.x, y: int.y - refPoint.y };
+                const extDir = extendFromP1
+                    ? { x: -dx, y: -dy }
+                    : { x: dx, y: dy };
+                const dotProduct = toInt.x * extDir.x + toInt.y * extDir.y;
+
+                if (dotProduct > 0 && dist < minDist && dist > 0.001) {
+                    minDist = dist;
+                    closestInt = int;
+                }
+            }
+        }
+
+        if (closestInt) {
+            // Return the extended line
+            return extendFromP1
+                ? { type: 'line', p1: closestInt, p2: { ...entity.p2 } }
+                : { type: 'line', p1: { ...entity.p1 }, p2: closestInt };
+        }
+
+        return null;
+    },
+
+    // Extend an arc to meet the nearest boundary entity
+    extendArc(entity, clickPoint, allEntities) {
+        if (entity.type !== 'arc') return null;
+
+        // Determine which end to extend based on click point
+        const startPoint = {
+            x: entity.center.x + entity.r * Math.cos(entity.start),
+            y: entity.center.y + entity.r * Math.sin(entity.start)
+        };
+        const endPoint = {
+            x: entity.center.x + entity.r * Math.cos(entity.end),
+            y: entity.center.y + entity.r * Math.sin(entity.end)
+        };
+
+        const distToStart = Utils.dist(clickPoint, startPoint);
+        const distToEnd = Utils.dist(clickPoint, endPoint);
+        const extendStart = distToStart < distToEnd;
+
+        // Find intersections with boundary entities on the arc's circle
+        let closestAngle = null;
+        let minAngleDist = Infinity;
+
+        for (const boundary of allEntities) {
+            let intersections = [];
+
+            if (boundary.type === 'line') {
+                const ints = this.lineCircleIntersection(boundary.p1, boundary.p2, entity.center, entity.r);
+                intersections.push(...ints.filter(int => this.pointOnSegment(int, boundary.p1, boundary.p2)));
+            } else if (boundary.type === 'circle') {
+                const ints = this.circleCircleIntersection(entity.center, entity.r, boundary.center, boundary.r);
+                intersections.push(...ints);
+            }
+
+            for (const int of intersections) {
+                const angle = Math.atan2(int.y - entity.center.y, int.x - entity.center.x);
+
+                // Check if this angle is in the extension direction
+                if (extendStart) {
+                    // Extending from start in decreasing angle direction
+                    let angleDist = entity.start - angle;
+                    while (angleDist < 0) angleDist += 2 * Math.PI;
+                    while (angleDist > 2 * Math.PI) angleDist -= 2 * Math.PI;
+
+                    if (angleDist > 0.001 && angleDist < minAngleDist) {
+                        minAngleDist = angleDist;
+                        closestAngle = angle;
+                    }
+                } else {
+                    // Extending from end in increasing angle direction
+                    let angleDist = angle - entity.end;
+                    while (angleDist < 0) angleDist += 2 * Math.PI;
+                    while (angleDist > 2 * Math.PI) angleDist -= 2 * Math.PI;
+
+                    if (angleDist > 0.001 && angleDist < minAngleDist) {
+                        minAngleDist = angleDist;
+                        closestAngle = angle;
+                    }
+                }
+            }
+        }
+
+        if (closestAngle !== null) {
+            return extendStart
+                ? { type: 'arc', center: { ...entity.center }, r: entity.r, start: closestAngle, end: entity.end }
+                : { type: 'arc', center: { ...entity.center }, r: entity.r, start: entity.start, end: closestAngle };
+        }
+
+        return null;
     },
 
     breakLine(entity, breakPoint1, breakPoint2) {

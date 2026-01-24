@@ -53,6 +53,12 @@ class StateManager {
         this.snapType = null;
         this.gridSize = 10;
 
+        // Cursor settings (AutoCAD-like)
+        this.crosshairSize = 15;        // Crosshair size in pixels
+        this.fullCrosshair = false;     // Full-screen crosshair (CURSORSIZE = 100 in AutoCAD)
+        this.pickboxSize = 3;           // Selection aperture size
+        this.cursorWorld = null;        // Cursor position in world coordinates
+
         // Ortho mode (constrain to horizontal/vertical)
         this.orthoEnabled = false;
 
