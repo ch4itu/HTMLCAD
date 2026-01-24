@@ -160,6 +160,9 @@ const Commands = {
         'pdmode': 'pdmode',
         'pdsize': 'pdsize',
         'textsize': 'textsize',
+        'dimtxt': 'dimtxt',
+        'dimasz': 'dimasz',
+        'dimscale': 'dimscale',
 
         // AutoLISP
         'lisp': 'lisp',
@@ -603,6 +606,18 @@ const Commands = {
 
             case 'textsize':
                 UI.log(`TEXTSIZE: Enter new value <${CAD.textHeight}>:`, 'prompt');
+                break;
+
+            case 'dimtxt':
+                UI.log(`DIMTXT: Enter new dimension text height <${CAD.dimTextHeight}>:`, 'prompt');
+                break;
+
+            case 'dimasz':
+                UI.log(`DIMASZ: Enter new dimension arrow size <${CAD.dimArrowSize}>:`, 'prompt');
+                break;
+
+            case 'dimscale':
+                UI.log(`DIMSCALE: Enter new dimension scale factor <${CAD.dimScale}>:`, 'prompt');
                 break;
 
             case 'new':
@@ -2649,6 +2664,33 @@ const Commands = {
             if (state.activeCmd === 'textsize') {
                 CAD.textHeight = Math.abs(num) || 10;
                 UI.log(`TEXTSIZE set to ${CAD.textHeight}`);
+                this.finishCommand();
+                return true;
+            }
+
+            // DIMTXT setting (dimension text height)
+            if (state.activeCmd === 'dimtxt') {
+                CAD.dimTextHeight = Math.abs(num) || 2.5;
+                UI.log(`DIMTXT set to ${CAD.dimTextHeight}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            // DIMASZ setting (dimension arrow size)
+            if (state.activeCmd === 'dimasz') {
+                CAD.dimArrowSize = Math.abs(num) || 2.5;
+                UI.log(`DIMASZ set to ${CAD.dimArrowSize}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            // DIMSCALE setting (overall dimension scale)
+            if (state.activeCmd === 'dimscale') {
+                CAD.dimScale = Math.abs(num) || 1;
+                UI.log(`DIMSCALE set to ${CAD.dimScale}`);
+                Renderer.draw();
                 this.finishCommand();
                 return true;
             }
