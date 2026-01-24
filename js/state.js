@@ -53,6 +53,12 @@ class StateManager {
         this.snapType = null;
         this.gridSize = 10;
 
+        // Cursor settings (AutoCAD-like)
+        this.crosshairSize = 15;        // Crosshair size in pixels
+        this.fullCrosshair = false;     // Full-screen crosshair (CURSORSIZE = 100 in AutoCAD)
+        this.pickboxSize = 3;           // Selection aperture size
+        this.cursorWorld = null;        // Cursor position in world coordinates
+
         // Ortho mode (constrain to horizontal/vertical)
         this.orthoEnabled = false;
 
@@ -64,6 +70,18 @@ class StateManager {
         this.lineWeight = 1;
         this.lineType = 'continuous';
         this.hatchPattern = 'solid';
+
+        // Offset settings
+        this.offsetDist = 10;
+        this.offsetGapType = 0;         // 0=Extend, 1=Fillet, 2=Chamfer (OFFSETGAPTYPE)
+
+        // Point display settings (PDMODE, PDSIZE)
+        this.pointDisplayMode = 3;      // 0=dot, 1=none, 2=+, 3=X, 4=short line
+        this.pointDisplaySize = 5;      // Size in pixels
+
+        // Text settings
+        this.textHeight = 10;           // Default text height
+        this.textStyle = 'Standard';    // Text style name
 
         // Layers
         this.layers = [
