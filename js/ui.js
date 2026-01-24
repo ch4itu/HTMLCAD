@@ -9,6 +9,7 @@ const UI = {
     historyIndex: -1,
     lastCommand: null,
     maxHistorySize: 50,
+    defaultPlaceholder: 'Type a command',
 
     // ==========================================
     // INITIALIZATION
@@ -460,6 +461,25 @@ AUTOLISP:
 
         this.elements.cmdHistory.appendChild(line);
         this.elements.cmdHistory.scrollTop = this.elements.cmdHistory.scrollHeight;
+
+        // If it's a prompt, also show in input placeholder (AutoCAD-like)
+        if (type === 'prompt') {
+            this.setPrompt(message);
+        }
+    },
+
+    // Set prompt text in the command input placeholder (AutoCAD-like behavior)
+    setPrompt(text) {
+        if (this.elements.cmdInput) {
+            this.elements.cmdInput.placeholder = text || this.defaultPlaceholder;
+        }
+    },
+
+    // Reset prompt to default
+    resetPrompt() {
+        if (this.elements.cmdInput) {
+            this.elements.cmdInput.placeholder = this.defaultPlaceholder;
+        }
     },
 
     clearHistory() {

@@ -318,39 +318,37 @@ const Geometry = {
         const newPoints = [];
         const isClosed = Utils.isPolygonClosed(entity.points);
 
-        // Helper to handle gap between two offset lines
-        const handleGap = (line1, line2, originalCorner) => {
+        // Helper to handle corner between two offset lines
+        const handleCorner = (line1, line2, originalCorner) => {
             const inter = this.lineLineIntersection(line1.p1, line1.p2, line2.p1, line2.p2);
 
-            if (inter) {
-                // Lines intersect - check if it's a valid intersection
-                const onLine1 = this.pointOnLineExtended(inter, line1.p1, line1.p2);
-                const onLine2 = this.pointOnLineExtended(inter, line2.p1, line2.p2);
-
-                if (onLine1 && onLine2) {
-                    return [inter];
-                }
-            }
-
-            // Gap exists - handle based on OFFSETGAPTYPE
+            // Handle based on OFFSETGAPTYPE - check this FIRST for all corners
             switch (gapType) {
-                case 1: // Fillet (arc)
-                    // Add arc points to fill the gap
+                case 1: // Fillet (arc) - always use arc at corners
+                    // Create fillet arc from the offset endpoints around the original corner
                     const arcPoints = this.createFilletArc(line1.p2, line2.p1, originalCorner, distance);
-                    return arcPoints.length > 0 ? arcPoints : [line1.p2, line2.p1];
+                    return arcPoints.length > 0 ? arcPoints : (inter ? [inter] : [line1.p2, line2.p1]);
 
-                case 2: // Chamfer (straight line)
-                    // Just connect the endpoints with a chamfer
+                case 2: // Chamfer (straight line) - connect endpoints with line
+                    // Return both endpoints to create a chamfer line
                     return [line1.p2, line2.p1];
 
-                default: // 0 = Extend
-                    // Extend lines to intersection (original behavior)
+                default: // 0 = Extend (sharp corners)
+                    // Find intersection and extend to it (original AutoCAD behavior)
+                    if (inter) {
+                        const onLine1 = this.pointOnLineExtended(inter, line1.p1, line1.p2);
+                        const onLine2 = this.pointOnLineExtended(inter, line2.p1, line2.p2);
+                        if (onLine1 && onLine2) {
+                            return [inter];
+                        }
+                    }
+                    // Fallback: extend to intersection if possible
                     return inter ? [inter] : [line1.p2];
             }
         };
 
         if (isClosed) {
-            const gapPoints = handleGap(
+            const gapPoints = handleCorner(
                 offsetLines[offsetLines.length - 1],
                 offsetLines[0],
                 entity.points[0]
@@ -361,7 +359,7 @@ const Geometry = {
         }
 
         for (let i = 0; i < offsetLines.length - 1; i++) {
-            const gapPoints = handleGap(
+            const gapPoints = handleCorner(
                 offsetLines[i],
                 offsetLines[i + 1],
                 entity.points[i + 1]
