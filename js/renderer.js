@@ -431,10 +431,9 @@ const Renderer = {
                 ctx.fillStyle = ctx.strokeStyle;
                 ctx.translate(entity.position.x, entity.position.y);
                 if (entity.rotation) {
-                    ctx.rotate(Utils.degToRad(entity.rotation));
+                    ctx.rotate(-Utils.degToRad(entity.rotation)); // Negative for correct rotation direction
                 }
-                ctx.scale(1, -1); // Flip text (canvas Y is inverted)
-                ctx.fillText(entity.text, 0, 0);
+                ctx.fillText(entity.text, 0, entity.height * 0.3); // Offset for baseline
                 ctx.restore();
                 break;
 
@@ -444,15 +443,14 @@ const Renderer = {
                 ctx.fillStyle = ctx.strokeStyle;
                 ctx.translate(entity.position.x, entity.position.y);
                 if (entity.rotation) {
-                    ctx.rotate(Utils.degToRad(entity.rotation));
+                    ctx.rotate(-Utils.degToRad(entity.rotation));
                 }
-                ctx.scale(1, -1); // Flip text (canvas Y is inverted)
 
                 // Draw multiline text
                 const lines = entity.text.split('\n');
                 const lineHeight = entity.height * 1.2;
                 lines.forEach((line, index) => {
-                    ctx.fillText(line, 0, index * lineHeight);
+                    ctx.fillText(line, 0, entity.height + index * lineHeight);
                 });
 
                 // Draw bounding box if selected
@@ -569,9 +567,13 @@ const Renderer = {
     },
 
     drawDimension(entity, ctx) {
-        const arrowSize = 3 / CAD.zoom;
-        const textHeight = 10 / CAD.zoom;
-        const extensionOffset = 2 / CAD.zoom;
+        // Use CAD settings for dimension appearance (DIMTXT, DIMASZ)
+        const dimTextHeight = CAD.dimTextHeight || 2.5;
+        const dimArrowSize = CAD.dimArrowSize || 2.5;
+        const textHeight = dimTextHeight;
+        const arrowSize = dimArrowSize;
+        const extensionOffset = dimTextHeight * 0.5;
+        const extensionGap = dimTextHeight * 0.2;
 
         ctx.save();
         ctx.font = `${textHeight}px Arial`;
@@ -598,11 +600,13 @@ const Renderer = {
                 dimP2 = { x: dimPos.x, y: p2.y };
             }
 
-            // Draw extension lines
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(dimP1.x, dimP1.y + extensionOffset);
-            ctx.moveTo(p2.x, p2.y);
-            ctx.lineTo(dimP2.x, dimP2.y + extensionOffset);
+            // Draw extension lines (with gap near the points)
+            const ext1Dir = Math.sign(dimP1.y - p1.y) || 1;
+            const ext2Dir = Math.sign(dimP2.y - p2.y) || 1;
+            ctx.moveTo(p1.x, p1.y + extensionGap * ext1Dir);
+            ctx.lineTo(dimP1.x, dimP1.y + extensionOffset * ext1Dir);
+            ctx.moveTo(p2.x, p2.y + extensionGap * ext2Dir);
+            ctx.lineTo(dimP2.x, dimP2.y + extensionOffset * ext2Dir);
 
             // Draw dimension line
             ctx.moveTo(dimP1.x, dimP1.y);
@@ -613,14 +617,15 @@ const Renderer = {
             this.drawArrow(ctx, dimP1, angle, arrowSize);
             this.drawArrow(ctx, dimP2, angle + Math.PI, arrowSize);
 
-            // Draw text
+            // Draw text (centered on dimension line)
             const midX = (dimP1.x + dimP2.x) / 2;
             const midY = (dimP1.y + dimP2.y) / 2;
             ctx.save();
             ctx.translate(midX, midY);
-            ctx.scale(1, -1);
             ctx.textAlign = 'center';
-            ctx.fillText(entity.text, 0, -textHeight / 2);
+            ctx.textBaseline = 'bottom';
+            // Offset text above the dimension line
+            ctx.fillText(entity.text, 0, -textHeight * 0.3);
             ctx.restore();
 
         } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
@@ -650,13 +655,13 @@ const Renderer = {
             this.drawArrow(ctx, edgePoint, angle + Math.PI, arrowSize);
 
             // Draw text
-            const textX = center.x + (entity.radius / 2) * Math.cos(angle);
-            const textY = center.y + (entity.radius / 2) * Math.sin(angle);
+            const textX = center.x + (entity.radius * 0.6) * Math.cos(angle);
+            const textY = center.y + (entity.radius * 0.6) * Math.sin(angle);
             ctx.save();
             ctx.translate(textX, textY);
-            ctx.scale(1, -1);
             ctx.textAlign = 'center';
-            ctx.fillText(entity.text, 0, -textHeight / 2);
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(entity.text, 0, -textHeight * 0.3);
             ctx.restore();
         }
 

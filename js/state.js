@@ -83,6 +83,12 @@ class StateManager {
         this.textHeight = 10;           // Default text height
         this.textStyle = 'Standard';    // Text style name
 
+        // Dimension settings (DIMTXT, DIMASZ, DIMSCALE, etc.)
+        this.dimTextHeight = 2.5;       // Dimension text height (DIMTXT)
+        this.dimArrowSize = 2.5;        // Dimension arrow size (DIMASZ)
+        this.dimScale = 1;              // Overall dimension scale (DIMSCALE)
+        this.dimPrecision = 4;          // Decimal precision (DIMDEC)
+
         // Layers
         this.layers = [
             { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }
