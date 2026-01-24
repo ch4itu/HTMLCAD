@@ -589,6 +589,13 @@ class StateManager {
                     minY: entity.position.y - entity.height,
                     maxY: entity.position.y
                 };
+            case 'image': {
+                const minX = Math.min(entity.p1.x, entity.p2.x);
+                const maxX = Math.max(entity.p1.x, entity.p2.x);
+                const minY = Math.min(entity.p1.y, entity.p2.y);
+                const maxY = Math.max(entity.p1.y, entity.p2.y);
+                return { minX, maxX, minY, maxY };
+            }
             case 'donut':
                 return {
                     minX: entity.center.x - entity.outerRadius,

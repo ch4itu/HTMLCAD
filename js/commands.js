@@ -156,6 +156,9 @@ const Commands = {
         'snap': 'snap',
         'ortho': 'ortho',
         'osnap': 'osnap',
+        'image': 'imageattach',
+        'imageattach': 'imageattach',
+        'attach': 'imageattach',
         'offsetgaptype': 'offsetgaptype',
         'pdmode': 'pdmode',
         'pdsize': 'pdsize',
@@ -262,6 +265,7 @@ const Commands = {
 
         CAD.startCommand(name);
         UI.setActiveButton(name);
+        UI.updateCommandPrompt(name);
 
         // Update selection ribbon (for modify commands that need selection)
         UI.updateSelectionRibbon();
@@ -599,6 +603,19 @@ const Commands = {
                 UI.log(`OFFSETGAPTYPE: Enter new value <${CAD.offsetGapType}> (0=Extend, 1=Fillet, 2=Chamfer):`, 'prompt');
                 break;
 
+            case 'imageattach':
+                UI.log('IMAGEATTACH: Select image file to attach.', 'prompt');
+                UI.promptImageAttach((imageData) => {
+                    if (!imageData) {
+                        this.finishCommand(true);
+                        return;
+                    }
+                    CAD.cmdOptions.imageData = imageData;
+                    CAD.step = 0;
+                    UI.log('IMAGEATTACH: Specify insertion point:', 'prompt');
+                });
+                break;
+
             case 'pdmode':
                 UI.log(`PDMODE: Enter new value <${CAD.pointDisplayMode}> (0=dot, 2=+, 3=X, 32=square, 64=circle):`, 'prompt');
                 break;
@@ -780,6 +797,10 @@ const Commands = {
 
             case 'offset':
                 this.handleOffsetClick(point);
+                break;
+
+            case 'imageattach':
+                this.handleImageAttachClick(point);
                 break;
 
             case 'trim':
@@ -1400,6 +1421,27 @@ const Commands = {
         }
     },
 
+    handleImageAttachClick(point) {
+        const state = CAD;
+        const imageData = state.cmdOptions.imageData;
+
+        if (!imageData) {
+            UI.log('IMAGEATTACH: No image loaded.', 'error');
+            return;
+        }
+
+        if (state.step === 0) {
+            state.cmdOptions.imageInsert = point;
+            state.step = 1;
+            UI.log('IMAGEATTACH: Specify opposite corner or press Enter for default size:', 'prompt');
+            return;
+        }
+
+        if (state.step === 1) {
+            this.createImageEntity(state.cmdOptions.imageInsert, point);
+        }
+    },
+
     handleTrimClick(point) {
         const state = CAD;
 
@@ -1848,6 +1890,41 @@ const Commands = {
     // UTILITY METHODS
     // ==========================================
 
+    getImageDefaultCorner() {
+        const imageData = CAD.cmdOptions.imageData;
+        const insert = CAD.cmdOptions.imageInsert;
+        if (!imageData || !insert) return null;
+        return {
+            x: insert.x + imageData.width,
+            y: insert.y + imageData.height
+        };
+    },
+
+    createImageEntity(insertPoint, cornerPoint) {
+        if (!insertPoint || !cornerPoint) {
+            this.finishCommand();
+            return;
+        }
+
+        const imageData = CAD.cmdOptions.imageData;
+        if (!imageData) {
+            UI.log('IMAGEATTACH: No image loaded.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.addEntity({
+            type: 'image',
+            p1: { ...insertPoint },
+            p2: { ...cornerPoint },
+            src: imageData.src,
+            opacity: 0.6
+        });
+        UI.log('Image attached.');
+        this.finishCommand();
+        Renderer.draw();
+    },
+
     hitTest(point) {
         const tolerance = 10 / CAD.zoom;
         const entities = CAD.getVisibleEntities();
@@ -1907,9 +1984,23 @@ const Commands = {
                 break;
 
             case 'rect':
-                const offsetRect = Geometry.offsetRect(entity.p1, entity.p2, CAD.offsetDist, clickPoint);
-                if (offsetRect) {
-                    newData = { type: 'rect', ...offsetRect };
+                if (CAD.offsetGapType === 0) {
+                    const offsetRect = Geometry.offsetRect(entity.p1, entity.p2, CAD.offsetDist, clickPoint);
+                    if (offsetRect) {
+                        newData = { type: 'rect', ...offsetRect };
+                    }
+                } else {
+                    const rectPoints = [
+                        { x: entity.p1.x, y: entity.p1.y },
+                        { x: entity.p2.x, y: entity.p1.y },
+                        { x: entity.p2.x, y: entity.p2.y },
+                        { x: entity.p1.x, y: entity.p2.y },
+                        { x: entity.p1.x, y: entity.p1.y }
+                    ];
+                    const offsetPoly = Geometry.offsetPolyline({ points: rectPoints }, CAD.offsetDist, clickPoint);
+                    if (offsetPoly) {
+                        newData = { type: 'polyline', ...offsetPoly };
+                    }
                 }
                 break;
 
@@ -2052,6 +2143,7 @@ const Commands = {
         const lastCmd = CAD.activeCmd;
         CAD.finishCommand();
         UI.setActiveButton(null);
+        UI.updateCommandPrompt(null);
         UI.hideCanvasSelectionToolbar();
         UI.updateSelectionRibbon();
         UI.resetPrompt();
@@ -2075,6 +2167,7 @@ const Commands = {
         CAD.selectStart = null;
         CAD.cmdOptions.forceWindowMode = null;
         UI.setActiveButton(null);
+        UI.updateCommandPrompt(null);
         UI.log('*Cancel*');
         UI.resetPrompt();
         UI.updateSelectionRibbon();
@@ -2576,6 +2669,11 @@ const Commands = {
                 state.cmdOptions.waitingForItems = false;
                 state.cmdOptions.waitingForAngle = true;
                 UI.log('ARRAYPOLAR: Specify angle to fill <360>:', 'prompt');
+                return true;
+            }
+
+            if (state.activeCmd === 'imageattach' && state.step === 1) {
+                this.createImageEntity(state.cmdOptions.imageInsert, this.getImageDefaultCorner());
                 return true;
             }
 
