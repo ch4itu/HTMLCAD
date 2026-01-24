@@ -20,6 +20,7 @@ const UI = {
         this.elements = {
             cmdInput: document.getElementById('cmdInput'),
             cmdHistory: document.getElementById('cmdHistory'),
+            cmdPrompt: document.getElementById('cmdPrompt'),
             coordDisplay: document.getElementById('coordDisplay'),
             layerSelect: document.getElementById('layerSelect'),
             layerColor: document.getElementById('layerColor'),
@@ -475,11 +476,25 @@ AUTOLISP:
         }
     },
 
+    // Set the active command label (shows which command is active)
+    setActiveCommand(cmdName) {
+        if (this.elements.cmdPrompt) {
+            if (cmdName) {
+                this.elements.cmdPrompt.textContent = `${cmdName.toUpperCase()}:`;
+                this.elements.cmdPrompt.classList.add('active');
+            } else {
+                this.elements.cmdPrompt.textContent = 'Command:';
+                this.elements.cmdPrompt.classList.remove('active');
+            }
+        }
+    },
+
     // Reset prompt to default
     resetPrompt() {
         if (this.elements.cmdInput) {
             this.elements.cmdInput.placeholder = this.defaultPlaceholder;
         }
+        this.setActiveCommand(null);
     },
 
     clearHistory() {

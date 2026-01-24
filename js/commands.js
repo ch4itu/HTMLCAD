@@ -262,6 +262,7 @@ const Commands = {
 
         CAD.startCommand(name);
         UI.setActiveButton(name);
+        UI.setActiveCommand(name);
 
         // Update selection ribbon (for modify commands that need selection)
         UI.updateSelectionRibbon();

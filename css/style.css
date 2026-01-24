@@ -805,6 +805,11 @@ body {
     font-weight: bold;
     margin-right: 8px;
     font-size: 12px;
+    min-width: 70px;
+}
+
+.command-prompt.active {
+    color: var(--accent-color, #4fc3f7);
 }
 
 .command-input {
