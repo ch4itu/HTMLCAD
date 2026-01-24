@@ -200,8 +200,9 @@ const UI = {
     handleKeyboard(e) {
         // Don't handle if typing in input (except specific keys)
         if (e.target.tagName === 'INPUT') {
-            // Allow F-keys even in input
-            if (!e.key.startsWith('F')) return;
+            const isFunctionKey = e.key.startsWith('F');
+            const isGlobalShortcut = (e.ctrlKey && e.key === 'a') || e.key === 'Delete';
+            if (!isFunctionKey && !isGlobalShortcut) return;
         }
 
         // Escape - cancel current operation
@@ -228,7 +229,7 @@ const UI = {
         }
 
         // Delete - erase selected
-        if (e.key === 'Delete' && e.target.tagName !== 'INPUT') {
+        if (e.key === 'Delete') {
             e.preventDefault();
             if (CAD.selectedIds.length > 0) {
                 Commands.startCommand('erase');
@@ -251,7 +252,7 @@ const UI = {
         }
 
         // Ctrl+A - Select all
-        if (e.ctrlKey && e.key === 'a' && e.target.tagName !== 'INPUT') {
+        if (e.ctrlKey && e.key === 'a') {
             e.preventDefault();
             CAD.selectAll();
             this.log(`${CAD.selectedIds.length} objects selected.`);

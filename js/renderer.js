@@ -33,6 +33,7 @@ const Renderer = {
             perpendicular: '#00ff88'
         }
     },
+    hatchPatterns: new Map(),
 
     // ==========================================
     // INITIALIZATION
@@ -212,6 +213,11 @@ const Renderer = {
                 color = state.getEntityColor(entity);
             }
 
+            if (entity.type === 'hatch') {
+                this.drawHatchEntity(entity, color);
+                return;
+            }
+
             ctx.beginPath();
             ctx.strokeStyle = color;
 
@@ -228,17 +234,154 @@ const Renderer = {
 
             // Handle hatch fill
             if (entity.hatch) {
-                ctx.stroke();
-                ctx.fillStyle = color;
-                ctx.globalAlpha = 0.2;
+                const hatchStyle = this.getHatchStyle(entity, color);
+                ctx.save();
+                ctx.fillStyle = hatchStyle.fillStyle;
+                ctx.globalAlpha = hatchStyle.alpha;
                 ctx.fill();
-                ctx.globalAlpha = 1.0;
+                ctx.restore();
+                if (!entity.noStroke) {
+                    ctx.stroke();
+                }
             } else {
                 ctx.stroke();
             }
         });
 
         ctx.setLineDash([]);
+    },
+
+    getHatchStyle(entity, color) {
+        const hatch = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const pattern = hatch.pattern || 'solid';
+
+        if (pattern === 'solid') {
+            return { fillStyle: color, alpha: 0.2 };
+        }
+
+        const fillStyle = this.getHatchPattern(pattern, color);
+        return { fillStyle, alpha: 0.6 };
+    },
+
+    getHatchPattern(pattern, color) {
+        const zoomKey = Math.round(CAD.zoom * 100);
+        const key = `${pattern}-${color}-${zoomKey}`;
+        if (this.hatchPatterns.has(key)) {
+            return this.hatchPatterns.get(key);
+        }
+
+        const size = Math.max(4, 8 / CAD.zoom);
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = Math.max(0.5, 1 / CAD.zoom);
+
+        switch (pattern) {
+            case 'diagonal':
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+                break;
+            case 'cross':
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(size, size);
+                ctx.stroke();
+                break;
+            case 'dots':
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, Math.max(0.5, size / 6), 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            default:
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+        }
+
+        const patternFill = this.ctx.createPattern(canvas, 'repeat');
+        this.hatchPatterns.set(key, patternFill);
+        return patternFill;
+    },
+
+    drawHatchEntity(entity, color) {
+        const clipIds = entity.clipIds || [];
+        if (clipIds.length === 0) {
+            return;
+        }
+
+        const ctx = this.ctx;
+        ctx.save();
+
+        clipIds.forEach(id => {
+            const clipEntity = CAD.getEntity(id);
+            if (!clipEntity) return;
+            ctx.beginPath();
+            this.traceEntityPath(clipEntity, ctx, true);
+            ctx.clip();
+        });
+
+        const hatchStyle = this.getHatchStyle(entity, color);
+        ctx.fillStyle = hatchStyle.fillStyle;
+        ctx.globalAlpha = hatchStyle.alpha;
+
+        const topLeft = Utils.screenToWorld(0, 0, CAD.pan, CAD.zoom);
+        const bottomRight = Utils.screenToWorld(this.canvas.width, this.canvas.height, CAD.pan, CAD.zoom);
+        ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+        ctx.restore();
+    },
+
+    traceEntityPath(entity, ctx, forceClose = false) {
+        switch (entity.type) {
+            case 'line':
+                ctx.moveTo(entity.p1.x, entity.p1.y);
+                ctx.lineTo(entity.p2.x, entity.p2.y);
+                break;
+            case 'circle':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, 0, Math.PI * 2);
+                ctx.closePath();
+                break;
+            case 'arc':
+                ctx.arc(entity.center.x, entity.center.y, entity.r, entity.start, entity.end);
+                if (forceClose) {
+                    ctx.closePath();
+                }
+                break;
+            case 'rect':
+                ctx.rect(entity.p1.x, entity.p1.y, entity.p2.x - entity.p1.x, entity.p2.y - entity.p1.y);
+                ctx.closePath();
+                break;
+            case 'polyline': {
+                if (entity.points.length > 0) {
+                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                    for (let i = 1; i < entity.points.length; i++) {
+                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    }
+                    if (forceClose || entity.closed || Utils.isPolygonClosed(entity.points)) {
+                        ctx.closePath();
+                    }
+                }
+                break;
+            }
+            case 'ellipse':
+                ctx.save();
+                ctx.translate(entity.center.x, entity.center.y);
+                ctx.rotate(entity.rotation || 0);
+                ctx.scale(entity.rx, entity.ry);
+                ctx.arc(0, 0, 1, 0, Math.PI * 2);
+                ctx.restore();
+                ctx.closePath();
+                break;
+            default:
+                break;
+        }
     },
 
     drawEntity(entity, ctx) {
@@ -657,7 +800,7 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
-        if (!state.snapEnabled || !state.snapPoint) return;
+        if (!(state.osnapEnabled || state.gridSnapEnabled) || !state.snapPoint) return;
 
         const screen = Utils.worldToScreen(state.snapPoint.x, state.snapPoint.y, state.pan, state.zoom);
         const size = 8;

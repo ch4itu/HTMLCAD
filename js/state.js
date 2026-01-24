@@ -63,6 +63,7 @@ class StateManager {
         // Drawing settings
         this.lineWeight = 1;
         this.lineType = 'continuous';
+        this.hatchPattern = 'solid';
 
         // Layers
         this.layers = [

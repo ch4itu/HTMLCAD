@@ -618,8 +618,23 @@ const Geometry = {
             }
         }
 
-        // Sort by distance and return closest
-        snaps.sort((a, b) => a.distance - b.distance);
+        // Sort by priority then distance and return best snap
+        const priority = {
+            intersection: 0,
+            endpoint: 1,
+            midpoint: 2,
+            center: 3,
+            perpendicular: 4,
+            nearest: 5,
+            grid: 6
+        };
+
+        snaps.sort((a, b) => {
+            const pa = priority[a.type] ?? 99;
+            const pb = priority[b.type] ?? 99;
+            if (pa !== pb) return pa - pb;
+            return a.distance - b.distance;
+        });
         return snaps.length > 0 ? snaps[0] : null;
     },
 
