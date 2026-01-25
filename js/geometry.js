@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Geometry Engine Module
+   BrowserCAD - Geometry Engine Module
    ============================================ */
 
 const Geometry = {

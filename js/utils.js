@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Utilities Module
+   BrowserCAD - Utilities Module
    ============================================ */
 
 const Utils = {

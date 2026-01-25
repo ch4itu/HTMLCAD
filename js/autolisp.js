@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - AutoLISP Interpreter Module
+   BrowserCAD - AutoLISP Interpreter Module
    ============================================ */
 
 const AutoLISP = {

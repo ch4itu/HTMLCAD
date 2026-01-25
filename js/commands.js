@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Commands Module
+   BrowserCAD - Commands Module
    ============================================ */
 
 const Commands = {
@@ -170,6 +170,8 @@ const Commands = {
         // AutoLISP
         'lisp': 'lisp',
         'vlisp': 'lisp',
+        'appload': 'appload',
+        'load': 'appload',
 
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
@@ -673,6 +675,19 @@ const Commands = {
                 UI.log('Examples: (+ 1 2 3), (setq x 10), (command "circle" \'(0 0) 50)');
                 UI.log('Type (help) for available functions.');
                 this.finishCommand();
+                break;
+
+            case 'appload':
+                UI.log('APPLOAD: Select a LISP file to load.', 'prompt');
+                UI.promptLispAttach(async (lispFile) => {
+                    if (!lispFile) {
+                        this.finishCommand(true);
+                        return;
+                    }
+                    await AutoLISP.load(lispFile.code);
+                    UI.log(`APPLOAD: Loaded ${lispFile.name}.`);
+                    this.finishCommand(true);
+                });
                 break;
 
             default:

@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - State Management Module
+   BrowserCAD - State Management Module
    ============================================ */
 
 // Unique ID generator with collision prevention

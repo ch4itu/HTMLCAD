@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Rendering Module
+   BrowserCAD - Rendering Module
    ============================================ */
 
 const Renderer = {

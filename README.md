@@ -1,6 +1,6 @@
-# HTMLCAD
+# BrowserCAD
 
-HTMLCAD is a browser-based CAD experience inspired by AutoCAD workflows. It supports classic command-line entry, a ribbon interface, and a growing set of drawing, modify, and utility commands.
+BrowserCAD is a browser-based CAD experience inspired by AutoCAD workflows. It supports classic command-line entry, a ribbon interface, and a growing set of drawing, modify, and utility commands.
 
 ## Quick Start
 
@@ -97,6 +97,7 @@ Defaults for scale/rotation are reused when you press **Enter** or **Space**.
 | SELECTALL | `ALL` | Select all entities. |
 | UNDO | `U` | Undo last action. |
 | REDO | `Y` | Redo last action. |
+| APPLOAD | `LOAD` | Load AutoLISP scripts from file. |
 
 ## Settings Commands
 
@@ -125,13 +126,28 @@ Defaults for scale/rotation are reused when you press **Enter** or **Space**.
 
 ## AutoLISP Guide
 
-HTMLCAD includes a lightweight AutoLISP interpreter. Enter expressions in the command line using parentheses:
+BrowserCAD includes a lightweight AutoLISP interpreter for scripting and automation. Enter expressions in the command line using parentheses:
 
 ```
 (+ 1 2 3)
 (setq x 10)
 (command "circle" '(0 0) 50)
 ```
+
+### Loading LISP scripts
+
+Use `APPLOAD` (or `LOAD`) to upload a `.lsp` file from your machine. The script is loaded into the session and can define new functions/commands.
+
+### Common AutoLISP helpers
+
+- `(command "line" '(0 0) '(100 0))` - run a built-in command with arguments.
+- `(getpoint "Pick a point:")` - prompt for a point.
+- `(getstring "Name:")` - prompt for text input.
+- `(getreal "Enter a value:")` - prompt for a real number.
+- `(getint "Enter an integer:")` - prompt for an integer.
+- `(entsel "Select object:")` - select a single entity.
+- `(ssget)` - select multiple entities.
+- `(entget (car (entsel)))` - get entity data from a selection.
 
 ### Tips
 
