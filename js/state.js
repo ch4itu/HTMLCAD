@@ -74,6 +74,9 @@ class StateManager {
         // Offset settings
         this.offsetDist = 10;
         this.offsetGapType = 0;         // 0=Extend, 1=Fillet, 2=Chamfer (OFFSETGAPTYPE)
+        this.lastScaleFactor = 1;
+        this.imageAttachScale = 1;
+        this.imageAttachRotation = 0;
 
         // Point display settings (PDMODE, PDSIZE)
         this.pointDisplayMode = 3;      // 0=dot, 1=none, 2=+, 3=X, 4=short line
@@ -589,6 +592,25 @@ class StateManager {
                     minY: entity.position.y - entity.height,
                     maxY: entity.position.y
                 };
+            case 'image': {
+                const width = entity.width ?? Math.abs(entity.p2.x - entity.p1.x);
+                const height = entity.height ?? Math.abs(entity.p2.y - entity.p1.y);
+                const rotation = Utils.degToRad(entity.rotation || 0);
+                const corners = [
+                    { x: entity.p1.x, y: entity.p1.y },
+                    { x: entity.p1.x + width, y: entity.p1.y },
+                    { x: entity.p1.x + width, y: entity.p1.y + height },
+                    { x: entity.p1.x, y: entity.p1.y + height }
+                ].map(point => Utils.rotatePoint(point, entity.p1, rotation));
+                const xs = corners.map(p => p.x);
+                const ys = corners.map(p => p.y);
+                return {
+                    minX: Math.min(...xs),
+                    maxX: Math.max(...xs),
+                    minY: Math.min(...ys),
+                    maxY: Math.max(...ys)
+                };
+            }
             case 'donut':
                 return {
                     minX: entity.center.x - entity.outerRadius,

@@ -156,6 +156,9 @@ const Commands = {
         'snap': 'snap',
         'ortho': 'ortho',
         'osnap': 'osnap',
+        'image': 'imageattach',
+        'imageattach': 'imageattach',
+        'attach': 'imageattach',
         'offsetgaptype': 'offsetgaptype',
         'pdmode': 'pdmode',
         'pdsize': 'pdsize',
@@ -262,6 +265,7 @@ const Commands = {
 
         CAD.startCommand(name);
         UI.setActiveButton(name);
+        UI.updateCommandPrompt(name);
 
         // Update selection ribbon (for modify commands that need selection)
         UI.updateSelectionRibbon();
@@ -599,6 +603,22 @@ const Commands = {
                 UI.log(`OFFSETGAPTYPE: Enter new value <${CAD.offsetGapType}> (0=Extend, 1=Fillet, 2=Chamfer):`, 'prompt');
                 break;
 
+            case 'imageattach':
+                UI.log('IMAGEATTACH: Select image file to attach.', 'prompt');
+                UI.promptImageAttach((imageData) => {
+                    if (!imageData) {
+                        this.finishCommand(true);
+                        return;
+                    }
+                    CAD.cmdOptions.imageData = imageData;
+                    CAD.cmdOptions.imageInsert = null;
+                    CAD.cmdOptions.imageScale = CAD.imageAttachScale || 1;
+                    CAD.cmdOptions.imageRotation = CAD.imageAttachRotation || 0;
+                    CAD.step = 0;
+                    UI.log('IMAGEATTACH: Specify insertion point:', 'prompt');
+                });
+                break;
+
             case 'pdmode':
                 UI.log(`PDMODE: Enter new value <${CAD.pointDisplayMode}> (0=dot, 2=+, 3=X, 32=square, 64=circle):`, 'prompt');
                 break;
@@ -780,6 +800,10 @@ const Commands = {
 
             case 'offset':
                 this.handleOffsetClick(point);
+                break;
+
+            case 'imageattach':
+                this.handleImageAttachClick(point);
                 break;
 
             case 'trim':
@@ -1163,7 +1187,7 @@ const Commands = {
         state.step++;
 
         if (state.step === 1) {
-            UI.log('SCALE: Specify scale factor or [Copy/Reference]:', 'prompt');
+            UI.log(`SCALE: Specify scale factor or [Copy/Reference] <${CAD.lastScaleFactor}>:`, 'prompt');
         } else if (state.step === 2) {
             // Visual scaling by second point (scale factor from distance)
             if (state.cmdOptions.scaleMode === 'reference') {
@@ -1192,6 +1216,7 @@ const Commands = {
     applyScale(basePoint, scaleFactor, makeCopy = false) {
         const state = CAD;
         CAD.saveUndoState('Scale');
+        state.lastScaleFactor = scaleFactor;
 
         if (makeCopy) {
             // Create scaled copies
@@ -1397,6 +1422,39 @@ const Commands = {
             state.step = 1;
             state.targetId = null;
             UI.log('OFFSET: Select object to offset or [Exit]:', 'prompt');
+        }
+    },
+
+    handleImageAttachClick(point) {
+        const state = CAD;
+        const imageData = state.cmdOptions.imageData;
+
+        if (!imageData) {
+            UI.log('IMAGEATTACH: No image loaded.', 'error');
+            return;
+        }
+
+        if (state.step === 0) {
+            state.cmdOptions.imageInsert = point;
+            state.step = 1;
+            UI.log(`IMAGEATTACH: Specify scale factor or corner <${CAD.imageAttachScale}>:`, 'prompt');
+            return;
+        }
+
+        if (state.step === 1) {
+            const scale = this.getImageScaleFromCorner(state.cmdOptions.imageInsert, point);
+            state.cmdOptions.imageScale = scale;
+            CAD.imageAttachScale = scale;
+            state.step = 2;
+            UI.log(`IMAGEATTACH: Specify rotation angle <${CAD.imageAttachRotation}>:`, 'prompt');
+            return;
+        }
+
+        if (state.step === 2) {
+            const angle = Utils.radToDeg(Utils.angle(state.cmdOptions.imageInsert, point));
+            state.cmdOptions.imageRotation = angle;
+            CAD.imageAttachRotation = angle;
+            this.createImageEntity(state.cmdOptions.imageInsert, state.cmdOptions.imageScale, angle);
         }
     },
 
@@ -1848,6 +1906,51 @@ const Commands = {
     // UTILITY METHODS
     // ==========================================
 
+    getImageScaleFromCorner(insertPoint, cornerPoint) {
+        const imageData = CAD.cmdOptions.imageData;
+        if (!imageData || !insertPoint || !cornerPoint) return CAD.imageAttachScale || 1;
+
+        const width = Math.abs(cornerPoint.x - insertPoint.x);
+        const height = Math.abs(cornerPoint.y - insertPoint.y);
+        const scaleX = width / imageData.width;
+        const scaleY = height / imageData.height;
+        const scale = Math.max(scaleX, scaleY);
+        return scale > 0 ? scale : (CAD.imageAttachScale || 1);
+    },
+
+    createImageEntity(insertPoint, scaleFactor, rotationAngle) {
+        if (!insertPoint || !scaleFactor) {
+            this.finishCommand();
+            return;
+        }
+
+        const imageData = CAD.cmdOptions.imageData;
+        if (!imageData) {
+            UI.log('IMAGEATTACH: No image loaded.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        const width = imageData.width * scaleFactor;
+        const height = imageData.height * scaleFactor;
+        const rotation = rotationAngle ?? CAD.imageAttachRotation ?? 0;
+
+        CAD.addEntity({
+            type: 'image',
+            p1: { ...insertPoint },
+            p2: { x: insertPoint.x + width, y: insertPoint.y + height },
+            width,
+            height,
+            src: imageData.src,
+            opacity: 0.6,
+            scale: scaleFactor,
+            rotation
+        });
+        UI.log('Image attached.');
+        this.finishCommand();
+        Renderer.draw();
+    },
+
     hitTest(point) {
         const tolerance = 10 / CAD.zoom;
         const entities = CAD.getVisibleEntities();
@@ -1907,9 +2010,23 @@ const Commands = {
                 break;
 
             case 'rect':
-                const offsetRect = Geometry.offsetRect(entity.p1, entity.p2, CAD.offsetDist, clickPoint);
-                if (offsetRect) {
-                    newData = { type: 'rect', ...offsetRect };
+                if (CAD.offsetGapType === 0) {
+                    const offsetRect = Geometry.offsetRect(entity.p1, entity.p2, CAD.offsetDist, clickPoint);
+                    if (offsetRect) {
+                        newData = { type: 'rect', ...offsetRect };
+                    }
+                } else {
+                    const rectPoints = [
+                        { x: entity.p1.x, y: entity.p1.y },
+                        { x: entity.p2.x, y: entity.p1.y },
+                        { x: entity.p2.x, y: entity.p2.y },
+                        { x: entity.p1.x, y: entity.p2.y },
+                        { x: entity.p1.x, y: entity.p1.y }
+                    ];
+                    const offsetPoly = Geometry.offsetPolyline({ points: rectPoints }, CAD.offsetDist, clickPoint);
+                    if (offsetPoly) {
+                        newData = { type: 'polyline', ...offsetPoly };
+                    }
                 }
                 break;
 
@@ -2014,6 +2131,13 @@ const Commands = {
                     UI.log(`  Vertices: ${entity.points.length}`);
                     UI.log(`  Closed: ${Utils.isPolygonClosed(entity.points)}`);
                     break;
+                case 'image':
+                    UI.log(`  Insertion: ${Utils.formatPoint(entity.p1)}`);
+                    UI.log(`  Width: ${(entity.width ?? Math.abs(entity.p2.x - entity.p1.x)).toFixed(4)}`);
+                    UI.log(`  Height: ${(entity.height ?? Math.abs(entity.p2.y - entity.p1.y)).toFixed(4)}`);
+                    UI.log(`  Scale: ${(entity.scale ?? 1).toFixed(4)}`);
+                    UI.log(`  Rotation: ${(entity.rotation ?? 0).toFixed(2)}°`);
+                    break;
             }
         });
     },
@@ -2052,6 +2176,7 @@ const Commands = {
         const lastCmd = CAD.activeCmd;
         CAD.finishCommand();
         UI.setActiveButton(null);
+        UI.updateCommandPrompt(null);
         UI.hideCanvasSelectionToolbar();
         UI.updateSelectionRibbon();
         UI.resetPrompt();
@@ -2075,6 +2200,7 @@ const Commands = {
         CAD.selectStart = null;
         CAD.cmdOptions.forceWindowMode = null;
         UI.setActiveButton(null);
+        UI.updateCommandPrompt(null);
         UI.log('*Cancel*');
         UI.resetPrompt();
         UI.updateSelectionRibbon();
@@ -2521,6 +2647,34 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'offset' && state.step === 0) {
+                state.step = 1;
+                UI.log(`Offset distance: ${CAD.offsetDist.toFixed(4)}`);
+                UI.log('OFFSET: Select object to offset:', 'prompt');
+                return true;
+            }
+
+            if (state.activeCmd === 'scale' && state.step === 1 && state.cmdOptions.scaleMode === 'factor') {
+                const scaleFactor = CAD.lastScaleFactor || 1;
+                this.applyScale(state.points[0], scaleFactor, state.cmdOptions.scaleCopy);
+                return true;
+            }
+
+            if (state.activeCmd === 'imageattach' && state.step === 1) {
+                const scaleFactor = CAD.imageAttachScale || 1;
+                state.cmdOptions.imageScale = scaleFactor;
+                state.step = 2;
+                UI.log(`IMAGEATTACH: Specify rotation angle <${CAD.imageAttachRotation}>:`, 'prompt');
+                return true;
+            }
+
+            if (state.activeCmd === 'imageattach' && state.step === 2) {
+                const rotation = CAD.imageAttachRotation || 0;
+                state.cmdOptions.imageRotation = rotation;
+                this.createImageEntity(state.cmdOptions.imageInsert, state.cmdOptions.imageScale, rotation);
+                return true;
+            }
+
             if (state.activeCmd === 'polyline' && state.points.length >= 2) {
                 // Finish polyline
                 CAD.addEntity({
@@ -2619,6 +2773,23 @@ const Commands = {
                     this.applyScale(state.points[0], num, state.cmdOptions.scaleCopy);
                 }
                 Renderer.draw();
+                return true;
+            }
+
+            if (state.activeCmd === 'imageattach' && state.step === 1) {
+                const scale = Math.abs(num) || 1;
+                state.cmdOptions.imageScale = scale;
+                CAD.imageAttachScale = scale;
+                state.step = 2;
+                UI.log(`IMAGEATTACH: Specify rotation angle <${CAD.imageAttachRotation}>:`, 'prompt');
+                return true;
+            }
+
+            if (state.activeCmd === 'imageattach' && state.step === 2) {
+                const rotation = num;
+                state.cmdOptions.imageRotation = rotation;
+                CAD.imageAttachRotation = rotation;
+                this.createImageEntity(state.cmdOptions.imageInsert, state.cmdOptions.imageScale, rotation);
                 return true;
             }
 
@@ -2893,7 +3064,7 @@ const Commands = {
 
             if ((option === 'c' || option === 'copy') && state.step === 1) {
                 state.cmdOptions.scaleCopy = true;
-                UI.log('SCALE: Copy mode enabled. Specify scale factor or [Reference]:', 'prompt');
+                UI.log(`SCALE: Copy mode enabled. Specify scale factor or [Reference] <${CAD.lastScaleFactor}>:`, 'prompt');
                 return true;
             }
 

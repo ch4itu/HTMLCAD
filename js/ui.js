@@ -20,6 +20,8 @@ const UI = {
         this.elements = {
             cmdInput: document.getElementById('cmdInput'),
             cmdHistory: document.getElementById('cmdHistory'),
+            cmdPrompt: document.getElementById('commandPrompt'),
+            imageAttachInput: document.getElementById('imageAttachInput'),
             coordDisplay: document.getElementById('coordDisplay'),
             layerSelect: document.getElementById('layerSelect'),
             layerColor: document.getElementById('layerColor'),
@@ -34,6 +36,7 @@ const UI = {
         this.setupEventListeners();
         this.updateLayerUI();
         this.updateStatusBar();
+        this.updateCommandPrompt(null);
 
         // Focus command line
         this.focusCommandLine();
@@ -387,6 +390,7 @@ DRAWING COMMANDS:
   A, ARC        - Draw arcs
   REC, RECT     - Draw rectangles
   EL, ELLIPSE   - Draw ellipses
+  IMAGE, IMAGEATTACH - Attach images for tracing
   T, TEXT       - Add text
   POL, POLYGON  - Draw regular polygons
   DO, DONUT     - Draw donuts
@@ -394,6 +398,7 @@ DRAWING COMMANDS:
   XL, XLINE     - Draw construction lines
   SPL, SPLINE   - Draw splines
   H, HATCH      - Hatch closed areas
+  IMAGE, IMAGEATTACH - Attach image for tracing
 
 MODIFY COMMANDS:
   M, MOVE       - Move objects
@@ -475,11 +480,61 @@ AUTOLISP:
         }
     },
 
+    updateCommandPrompt(activeCommand) {
+        if (!this.elements.cmdPrompt) return;
+        if (activeCommand) {
+            this.elements.cmdPrompt.textContent = `Command [${activeCommand.toUpperCase()}]:`;
+        } else {
+            this.elements.cmdPrompt.textContent = 'Command:';
+        }
+    },
+
     // Reset prompt to default
     resetPrompt() {
         if (this.elements.cmdInput) {
             this.elements.cmdInput.placeholder = this.defaultPlaceholder;
         }
+    },
+
+    promptImageAttach(onLoad) {
+        const input = this.elements.imageAttachInput;
+        if (!input) return;
+
+        input.value = '';
+        input.onchange = () => {
+            if (!input.files || input.files.length === 0) {
+                this.log('IMAGEATTACH: No file selected.', 'error');
+                if (onLoad) onLoad(null);
+                return;
+            }
+
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    if (onLoad) {
+                        onLoad({
+                            src: reader.result,
+                            width: img.width,
+                            height: img.height
+                        });
+                    }
+                };
+                img.onerror = () => {
+                    this.log('IMAGEATTACH: Failed to load image.', 'error');
+                    if (onLoad) onLoad(null);
+                };
+                img.src = reader.result;
+            };
+            reader.onerror = () => {
+                this.log('IMAGEATTACH: Failed to read image.', 'error');
+                if (onLoad) onLoad(null);
+            };
+            reader.readAsDataURL(file);
+        };
+
+        input.click();
     },
 
     clearHistory() {

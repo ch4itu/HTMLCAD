@@ -65,6 +65,10 @@
                             <i class="icon">&#11053;</i>
                             <span class="label">Ellipse</span>
                         </button>
+                        <button class="tool-btn" data-cmd="imageattach" onclick="App.executeCommand('imageattach')" title="Attach Image (IMAGEATTACH)">
+                            <i class="icon">&#128247;</i>
+                            <span class="label">Image</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
                 </div>
@@ -168,6 +172,10 @@
                         <button class="tool-btn" data-cmd="ellipse" onclick="App.executeCommand('ellipse')" title="Ellipse (EL)">
                             <i class="icon">&#11053;</i>
                             <span class="label">Ellipse</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="imageattach" onclick="App.executeCommand('imageattach')" title="Attach Image (IMAGEATTACH)">
+                            <i class="icon">&#128247;</i>
+                            <span class="label">Image</span>
                         </button>
                         <button class="tool-btn" data-cmd="text" onclick="App.executeCommand('text')" title="Text (T)">
                             <i class="icon">A</i>
@@ -448,11 +456,12 @@
                 <div class="line">Type commands or use toolbar buttons. Press F1 for help.</div>
             </div>
             <div class="command-input-row">
-                <span class="command-prompt">Command:</span>
+                <span class="command-prompt" id="commandPrompt">Command:</span>
                 <input type="text" id="cmdInput" class="command-input"
                        placeholder="Type command here..." autocomplete="off" autofocus>
             </div>
         </div>
+        <input type="file" id="imageAttachInput" accept="image/*" style="display: none;">
 
         <!-- Status Bar -->
         <div class="status-bar">
