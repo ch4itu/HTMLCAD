@@ -156,4 +156,4 @@ Use `APPLOAD` (or `LOAD`) to upload a `.lsp` file from your machine. The script 
 
 ---
 
-Try it live: https://ch4itu.github.io/HTMLCAD/
+Try it live: https://ch4itu.github.io/BrowserCAD/
