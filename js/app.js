@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Main Application Module
+   BrowserCAD - Main Application Module
    ============================================ */
 
 const App = {
@@ -22,7 +22,7 @@ const App = {
         Renderer.draw();
 
         // Welcome message
-        UI.log('HTMLCAD initialized. Type commands or use toolbar buttons.');
+        UI.log('BrowserCAD initialized. Type commands or use toolbar buttons.');
         UI.log('Press F1 for help, F2 for grid, F3 for snap, F8 for ortho.');
 
         // Check for saved drawing
@@ -33,7 +33,7 @@ const App = {
         // Center the view
         this.centerView();
 
-        console.log('HTMLCAD initialized successfully.');
+        console.log('BrowserCAD initialized successfully.');
     },
 
     // ==========================================

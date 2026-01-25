@@ -65,6 +65,10 @@
                             <i class="icon">&#11053;</i>
                             <span class="label">Ellipse</span>
                         </button>
+                        <button class="tool-btn" data-cmd="imageattach" onclick="App.executeCommand('imageattach')" title="Attach Image (IMAGEATTACH)">
+                            <i class="icon">&#128247;</i>
+                            <span class="label">Image</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
                 </div>
@@ -136,6 +140,10 @@
                             <i class="icon">&#8631;</i>
                             <span class="label">Redo</span>
                         </button>
+                        <button class="tool-btn" data-cmd="appload" onclick="App.executeCommand('appload')" title="Load LISP (APPLOAD)">
+                            <i class="icon">&#128194;</i>
+                            <span class="label">Load LISP</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Utilities</div>
                 </div>
@@ -168,6 +176,10 @@
                         <button class="tool-btn" data-cmd="ellipse" onclick="App.executeCommand('ellipse')" title="Ellipse (EL)">
                             <i class="icon">&#11053;</i>
                             <span class="label">Ellipse</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="imageattach" onclick="App.executeCommand('imageattach')" title="Attach Image (IMAGEATTACH)">
+                            <i class="icon">&#128247;</i>
+                            <span class="label">Image</span>
                         </button>
                         <button class="tool-btn" data-cmd="text" onclick="App.executeCommand('text')" title="Text (T)">
                             <i class="icon">A</i>
@@ -454,6 +466,7 @@
             </div>
         </div>
         <input type="file" id="imageAttachInput" accept="image/*" style="display: none;">
+        <input type="file" id="lispScriptInput" accept=".lsp,.lisp,.vlx,.txt" style="display: none;">
 
         <!-- Status Bar -->
         <div class="status-bar">

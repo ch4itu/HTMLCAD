@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Rendering Module
+   BrowserCAD - Rendering Module
    ============================================ */
 
 const Renderer = {
@@ -276,16 +276,19 @@ const Renderer = {
         const image = this.getImage(entity.src);
         if (!image || !image.complete) return;
 
-        const minX = Math.min(entity.p1.x, entity.p2.x);
-        const maxX = Math.max(entity.p1.x, entity.p2.x);
-        const minY = Math.min(entity.p1.y, entity.p2.y);
-        const maxY = Math.max(entity.p1.y, entity.p2.y);
-        const width = maxX - minX;
-        const height = maxY - minY;
+        const width = entity.width ?? Math.abs(entity.p2.x - entity.p1.x);
+        const height = entity.height ?? Math.abs(entity.p2.y - entity.p1.y);
+        const rotation = Utils.degToRad(entity.rotation || 0);
+        const minX = entity.p1.x;
+        const minY = entity.p1.y;
 
         ctx.save();
         ctx.globalAlpha = entity.opacity ?? 0.6;
-        ctx.drawImage(image, minX, minY, width, height);
+        ctx.translate(minX, minY);
+        if (rotation) {
+            ctx.rotate(rotation);
+        }
+        ctx.drawImage(image, 0, 0, width, height);
         ctx.restore();
 
         if (isSelected || isHovered) {
@@ -293,7 +296,11 @@ const Renderer = {
             ctx.strokeStyle = color;
             ctx.lineWidth = (isSelected ? 2 : 1.5) / CAD.zoom;
             ctx.setLineDash(isSelected ? [5 / CAD.zoom, 3 / CAD.zoom] : []);
-            ctx.strokeRect(minX, minY, width, height);
+            ctx.translate(minX, minY);
+            if (rotation) {
+                ctx.rotate(rotation);
+            }
+            ctx.strokeRect(0, 0, width, height);
             ctx.restore();
         }
     },
@@ -883,11 +890,26 @@ const Renderer = {
             case 'imageattach':
                 if (state.cmdOptions.imageInsert) {
                     const insert = state.cmdOptions.imageInsert;
-                    ctx.rect(
-                        insert.x, insert.y,
-                        endPoint.x - insert.x,
-                        endPoint.y - insert.y
-                    );
+                    if (state.step === 1) {
+                        ctx.rect(
+                            insert.x, insert.y,
+                            endPoint.x - insert.x,
+                            endPoint.y - insert.y
+                        );
+                    } else if (state.step === 2) {
+                        const imageData = state.cmdOptions.imageData;
+                        const scale = state.cmdOptions.imageScale || 1;
+                        if (imageData) {
+                            const width = imageData.width * scale;
+                            const height = imageData.height * scale;
+                            const angle = Utils.angle(insert, endPoint);
+                            ctx.save();
+                            ctx.translate(insert.x, insert.y);
+                            ctx.rotate(angle);
+                            ctx.rect(0, 0, width, height);
+                            ctx.restore();
+                        }
+                    }
                 }
                 break;
         }

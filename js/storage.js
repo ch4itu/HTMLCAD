@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Storage Module
+   BrowserCAD - Storage Module
    ============================================ */
 
 const Storage = {

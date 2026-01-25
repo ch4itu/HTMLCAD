@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - Geometry Engine Module
+   BrowserCAD - Geometry Engine Module
    ============================================ */
 
 const Geometry = {
@@ -583,14 +583,19 @@ const Geometry = {
                        point.y <= entity.position.y;
 
             case 'image': {
-                const minX = Math.min(entity.p1.x, entity.p2.x);
-                const maxX = Math.max(entity.p1.x, entity.p2.x);
-                const minY = Math.min(entity.p1.y, entity.p2.y);
-                const maxY = Math.max(entity.p1.y, entity.p2.y);
-                return point.x >= minX - tolerance &&
-                       point.x <= maxX + tolerance &&
-                       point.y >= minY - tolerance &&
-                       point.y <= maxY + tolerance;
+                const width = entity.width ?? Math.abs(entity.p2.x - entity.p1.x);
+                const height = entity.height ?? Math.abs(entity.p2.y - entity.p1.y);
+                const rotation = Utils.degToRad(entity.rotation || 0);
+                const cos = Math.cos(-rotation);
+                const sin = Math.sin(-rotation);
+                const dx = point.x - entity.p1.x;
+                const dy = point.y - entity.p1.y;
+                const localX = dx * cos - dy * sin;
+                const localY = dx * sin + dy * cos;
+                return localX >= -tolerance &&
+                       localX <= width + tolerance &&
+                       localY >= -tolerance &&
+                       localY <= height + tolerance;
             }
 
             case 'donut':
@@ -898,6 +903,14 @@ const Geometry = {
                 moved.position.x += delta.x;
                 moved.position.y += delta.y;
                 break;
+            case 'image':
+                moved.p1.x += delta.x;
+                moved.p1.y += delta.y;
+                moved.p2 = {
+                    x: moved.p1.x + (moved.width ?? Math.abs(moved.p2.x - moved.p1.x)),
+                    y: moved.p1.y + (moved.height ?? Math.abs(moved.p2.y - moved.p1.y))
+                };
+                break;
         }
 
         return moved;
@@ -944,6 +957,14 @@ const Geometry = {
                 rotated.position = Utils.rotatePoint(rotated.position, center, angle);
                 rotated.rotation = (rotated.rotation || 0) + Utils.radToDeg(angle);
                 break;
+            case 'image':
+                rotated.p1 = Utils.rotatePoint(rotated.p1, center, angle);
+                rotated.rotation = (rotated.rotation || 0) + Utils.radToDeg(angle);
+                rotated.p2 = {
+                    x: rotated.p1.x + (rotated.width ?? Math.abs(rotated.p2.x - rotated.p1.x)),
+                    y: rotated.p1.y + (rotated.height ?? Math.abs(rotated.p2.y - rotated.p1.y))
+                };
+                break;
         }
 
         return rotated;
@@ -981,6 +1002,16 @@ const Geometry = {
                 scaled.position = Utils.scalePoint(scaled.position, center, scale);
                 scaled.height *= scale;
                 break;
+            case 'image':
+                scaled.p1 = Utils.scalePoint(scaled.p1, center, scale);
+                scaled.width = (scaled.width ?? Math.abs(scaled.p2.x - scaled.p1.x)) * scale;
+                scaled.height = (scaled.height ?? Math.abs(scaled.p2.y - scaled.p1.y)) * scale;
+                scaled.scale = (scaled.scale ?? 1) * scale;
+                scaled.p2 = {
+                    x: scaled.p1.x + scaled.width,
+                    y: scaled.p1.y + scaled.height
+                };
+                break;
         }
 
         return scaled;
@@ -1017,6 +1048,14 @@ const Geometry = {
                 break;
             case 'text':
                 mirrored.position = Utils.mirrorPoint(mirrored.position, lineP1, lineP2);
+                break;
+            case 'image':
+                mirrored.p1 = Utils.mirrorPoint(mirrored.p1, lineP1, lineP2);
+                mirrored.rotation = -(mirrored.rotation || 0);
+                mirrored.p2 = {
+                    x: mirrored.p1.x + (mirrored.width ?? Math.abs(mirrored.p2.x - mirrored.p1.x)),
+                    y: mirrored.p1.y + (mirrored.height ?? Math.abs(mirrored.p2.y - mirrored.p1.y))
+                };
                 break;
         }
 

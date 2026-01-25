@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - AutoLISP Interpreter Module
+   BrowserCAD - AutoLISP Interpreter Module
    ============================================ */
 
 const AutoLISP = {
@@ -776,6 +776,16 @@ const AutoLISP = {
 
             // ========== LAYER FUNCTIONS ==========
             'LAYERP': (name) => CAD.getLayer(name) ? true : null,
+        };
+
+        functions['HELP'] = () => {
+            const names = Object.keys(functions).sort();
+            UI.log('AutoLISP functions:');
+            const chunkSize = 12;
+            for (let i = 0; i < names.length; i += chunkSize) {
+                UI.log(names.slice(i, i + chunkSize).join(', '));
+            }
+            return true;
         };
 
         return functions[name] || null;

@@ -1,5 +1,5 @@
 /* ============================================
-   HTMLCAD - UI Module
+   BrowserCAD - UI Module
    ============================================ */
 
 const UI = {
@@ -22,6 +22,7 @@ const UI = {
             cmdHistory: document.getElementById('cmdHistory'),
             cmdPrompt: document.getElementById('commandPrompt'),
             imageAttachInput: document.getElementById('imageAttachInput'),
+            lispScriptInput: document.getElementById('lispScriptInput'),
             coordDisplay: document.getElementById('coordDisplay'),
             layerSelect: document.getElementById('layerSelect'),
             layerColor: document.getElementById('layerColor'),
@@ -80,11 +81,12 @@ const UI = {
         const input = this.elements.cmdInput;
         const currentValue = input.value;
 
-        // For LISP expressions (starting with '('), don't treat space as Enter
-        // This allows typing multi-word LISP code like (command "circle" '(0 0) 50)
+        // For LISP expressions (starting with '('), allow space for input,
+        // but submit on space if the expression is balanced.
         if (e.key === ' ' && currentValue.startsWith('(')) {
-            // Allow space in LISP expressions - don't intercept
-            return;
+            if (!this.isBalancedLisp(currentValue.trim())) {
+                return;
+            }
         }
 
         // Handle Enter and Space keys (Space acts like Enter in AutoCAD)
@@ -199,6 +201,32 @@ const UI = {
             // Show available completions
             this.log(`Completions: ${matches.slice(0, 10).join(', ')}${matches.length > 10 ? '...' : ''}`);
         }
+    },
+
+    isBalancedLisp(input) {
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+
+        for (const char of input) {
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (char === '\\' && inString) {
+                escape = true;
+                continue;
+            }
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) continue;
+            if (char === '(') depth++;
+            if (char === ')') depth--;
+        }
+
+        return depth === 0 && !inString;
     },
 
     handleKeyboard(e) {
@@ -381,7 +409,7 @@ const UI = {
 
     showHelp() {
         const helpText = `
-HTMLCAD Quick Reference:
+BrowserCAD Quick Reference:
 
 DRAWING COMMANDS:
   L, LINE       - Draw lines
@@ -390,6 +418,7 @@ DRAWING COMMANDS:
   A, ARC        - Draw arcs
   REC, RECT     - Draw rectangles
   EL, ELLIPSE   - Draw ellipses
+  IMAGE, IMAGEATTACH - Attach images for tracing
   T, TEXT       - Add text
   POL, POLYGON  - Draw regular polygons
   DO, DONUT     - Draw donuts
@@ -445,6 +474,7 @@ KEYBOARD SHORTCUTS:
 
 AUTOLISP:
   Type (expression) to execute AutoLISP code
+  APPLOAD - Load .lsp scripts from a local file
   Example: (+ 1 2 3) => 6
   Example: (command "circle" '(0 0) 50)
   Example: (setq x 10)
@@ -531,6 +561,38 @@ AUTOLISP:
                 if (onLoad) onLoad(null);
             };
             reader.readAsDataURL(file);
+        };
+
+        input.click();
+    },
+
+    promptLispAttach(onLoad) {
+        const input = this.elements.lispScriptInput;
+        if (!input) return;
+
+        input.value = '';
+        input.onchange = () => {
+            if (!input.files || input.files.length === 0) {
+                this.log('APPLOAD: No file selected.', 'error');
+                if (onLoad) onLoad(null);
+                return;
+            }
+
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (onLoad) {
+                    onLoad({
+                        name: file.name,
+                        code: reader.result
+                    });
+                }
+            };
+            reader.onerror = () => {
+                this.log('APPLOAD: Failed to read file.', 'error');
+                if (onLoad) onLoad(null);
+            };
+            reader.readAsText(file);
         };
 
         input.click();
