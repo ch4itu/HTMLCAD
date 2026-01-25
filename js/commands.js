@@ -2748,6 +2748,11 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'imageattach' && state.step === 1) {
+                this.createImageEntity(state.cmdOptions.imageInsert, this.getImageDefaultCorner());
+                return true;
+            }
+
             if (state.activeCmd) {
                 this.finishCommand();
                 Renderer.draw();
