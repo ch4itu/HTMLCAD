@@ -64,9 +64,34 @@ Defaults for scale/rotation are reused when you press **Enter** or **Space**.
 | JOIN | `J` | Join line/polyline segments. |
 | PEDIT | `PE` | Edit polylines. |
 | ERASE | `E` | Erase objects. |
-| EXPLODE | `X` | Explode objects. |
+| EXPLODE | `X` | Explode objects (rects, polylines, blocks). |
 | ARRAY | `AR` | Rectangular array. |
 | ARRAYPOLAR | `ARPO` | Polar array. |
+
+## Block Commands
+
+| Command | Alias | Description |
+| --- | --- | --- |
+| BLOCK | `B`, `BMAKE` | Create a block from selected objects. |
+| INSERT | `I`, `DDINSERT` | Insert a block reference. |
+
+### BLOCK workflow
+
+1. Select the objects you want to include in the block.
+2. Run `BLOCK` (or `B`).
+3. Enter a name for the block.
+4. Specify the base point (insertion point).
+5. The original objects are replaced with a block reference.
+
+### INSERT workflow
+
+1. Run `INSERT` (or `I`).
+2. Enter the block name (available blocks are listed).
+3. Specify scale factor (default: 1).
+4. Specify rotation angle (default: 0).
+5. Click to place the block. Press **Enter** to finish.
+
+Block references can be moved, rotated, scaled, mirrored, and copied like any other entity. Use `EXPLODE` to convert a block reference back to individual entities.
 
 ## Dimension Commands
 
