@@ -614,7 +614,60 @@ const Renderer = {
             case 'dimension':
                 this.drawDimension(entity, ctx);
                 break;
+
+            case 'block':
+                // Draw block reference by expanding its entities
+                this.drawBlockReference(entity, ctx);
+                break;
         }
+    },
+
+    drawBlockReference(blockRef, ctx) {
+        // Get expanded entities from the block definition
+        const expandedEntities = CAD.getBlockEntities(blockRef);
+
+        if (expandedEntities.length === 0) {
+            // Block not found or empty - draw a placeholder
+            const ip = blockRef.insertPoint;
+            const size = 10 / CAD.zoom;
+
+            ctx.save();
+            ctx.strokeStyle = '#ff0000'; // Red for missing block
+            ctx.lineWidth = 1 / CAD.zoom;
+            ctx.setLineDash([2 / CAD.zoom, 2 / CAD.zoom]);
+
+            // Draw an X at the insertion point
+            ctx.beginPath();
+            ctx.moveTo(ip.x - size, ip.y - size);
+            ctx.lineTo(ip.x + size, ip.y + size);
+            ctx.moveTo(ip.x + size, ip.y - size);
+            ctx.lineTo(ip.x - size, ip.y + size);
+            ctx.stroke();
+
+            // Draw block name
+            ctx.font = `${12 / CAD.zoom}px Arial`;
+            ctx.fillStyle = '#ff0000';
+            ctx.fillText(`[${blockRef.blockName}]`, ip.x + size, ip.y - size);
+
+            ctx.restore();
+            return;
+        }
+
+        // Save current stroke style (for selection/hover highlighting)
+        const currentStrokeStyle = ctx.strokeStyle;
+        const currentLineWidth = ctx.lineWidth;
+        const currentLineDash = ctx.getLineDash();
+
+        // Draw each entity in the block
+        expandedEntities.forEach(entity => {
+            ctx.beginPath();
+            // Use the block's selection color for all its entities
+            ctx.strokeStyle = currentStrokeStyle;
+            ctx.lineWidth = currentLineWidth;
+            ctx.setLineDash(currentLineDash);
+            this.drawEntity(entity, ctx);
+            ctx.stroke();
+        });
     },
 
     drawDimension(entity, ctx) {
