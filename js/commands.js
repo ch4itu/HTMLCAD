@@ -173,6 +173,14 @@ const Commands = {
         'appload': 'appload',
         'load': 'appload',
 
+        // Block commands
+        'b': 'block',
+        'block': 'block',
+        'bmake': 'block',
+        'i': 'insert',
+        'insert': 'insert',
+        'ddinsert': 'insert',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -690,6 +698,32 @@ const Commands = {
                 });
                 break;
 
+            // Block commands
+            case 'block':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('BLOCK: Select objects for block:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('BLOCK: Enter block name:', 'prompt');
+                    CAD.cmdOptions.waitingForName = true;
+                }
+                break;
+
+            case 'insert':
+                // Show available blocks
+                const blockList = CAD.getBlockList();
+                if (blockList.length === 0) {
+                    UI.log('INSERT: No blocks defined. Use BLOCK command to create blocks first.', 'error');
+                    this.finishCommand();
+                } else {
+                    UI.log(`INSERT: Available blocks: ${blockList.join(', ')}`, 'prompt');
+                    UI.log('INSERT: Enter block name to insert:', 'prompt');
+                    CAD.cmdOptions.waitingForBlockName = true;
+                    CAD.cmdOptions.insertScale = { x: 1, y: 1 };
+                    CAD.cmdOptions.insertRotation = 0;
+                }
+                break;
+
             default:
                 UI.log(`Command "${name}" not yet implemented.`, 'error');
                 this.finishCommand();
@@ -899,6 +933,14 @@ const Commands = {
             case 'dimradius':
             case 'dimdiameter':
                 this.handleDimRadiusClick(point);
+                break;
+
+            case 'block':
+                this.handleBlockClick(point);
+                break;
+
+            case 'insert':
+                this.handleInsertClick(point);
                 break;
 
             default:
@@ -2101,6 +2143,20 @@ const Commands = {
                 }
                 CAD.removeEntity(entity.id, true);
                 explodedCount++;
+            } else if (entity.type === 'block') {
+                // Explode block reference into individual entities
+                const expandedEntities = CAD.getBlockEntities(entity);
+                if (expandedEntities.length > 0) {
+                    expandedEntities.forEach(expandedEntity => {
+                        expandedEntity.layer = entity.layer || expandedEntity.layer;
+                        CAD.addEntity(expandedEntity, true);
+                    });
+                    CAD.removeEntity(entity.id, true);
+                    explodedCount++;
+                    UI.log(`Block "${entity.blockName}" exploded into ${expandedEntities.length} object(s).`);
+                } else {
+                    UI.log(`Block "${entity.blockName}" not found or empty.`, 'error');
+                }
             }
         });
 
@@ -2152,6 +2208,17 @@ const Commands = {
                     UI.log(`  Height: ${(entity.height ?? Math.abs(entity.p2.y - entity.p1.y)).toFixed(4)}`);
                     UI.log(`  Scale: ${(entity.scale ?? 1).toFixed(4)}`);
                     UI.log(`  Rotation: ${(entity.rotation ?? 0).toFixed(2)}°`);
+                    break;
+                case 'block':
+                    UI.log(`  Block Name: ${entity.blockName}`);
+                    UI.log(`  Insertion Point: ${Utils.formatPoint(entity.insertPoint)}`);
+                    UI.log(`  Scale X: ${(entity.scale?.x ?? 1).toFixed(4)}`);
+                    UI.log(`  Scale Y: ${(entity.scale?.y ?? 1).toFixed(4)}`);
+                    UI.log(`  Rotation: ${Utils.radToDeg(entity.rotation ?? 0).toFixed(2)}°`);
+                    const block = CAD.getBlock(entity.blockName);
+                    if (block) {
+                        UI.log(`  Block Entities: ${block.entities.length}`);
+                    }
                     break;
             }
         });
@@ -2346,6 +2413,94 @@ const Commands = {
         });
 
         UI.log('Donut created. Specify center of next donut or press Enter to finish:', 'prompt');
+    },
+
+    // ==========================================
+    // BLOCK COMMAND HANDLERS
+    // ==========================================
+
+    handleBlockClick(point) {
+        const state = CAD;
+
+        // If we're waiting for base point
+        if (state.cmdOptions.waitingForBasePoint) {
+            state.cmdOptions.blockBasePoint = { ...point };
+            state.cmdOptions.waitingForBasePoint = false;
+
+            // Now create the block
+            this.createBlock();
+        }
+    },
+
+    createBlock() {
+        const state = CAD;
+        const name = state.cmdOptions.blockName;
+        const basePoint = state.cmdOptions.blockBasePoint;
+        const selectedEntities = state.getSelectedEntities();
+
+        if (!name || !basePoint || selectedEntities.length === 0) {
+            UI.log('BLOCK: Invalid block parameters.', 'error');
+            this.finishCommand(true);
+            return;
+        }
+
+        // Check if block already exists
+        if (CAD.getBlock(name)) {
+            UI.log(`BLOCK: Block "${name}" already exists. Use a different name.`, 'error');
+            this.finishCommand(true);
+            return;
+        }
+
+        CAD.saveUndoState('Create Block');
+
+        // Create the block definition
+        const block = CAD.addBlock(name, basePoint, selectedEntities);
+        if (block) {
+            // Remove the original entities (like AutoCAD)
+            CAD.removeEntities(state.selectedIds, true);
+
+            // Insert a block reference at the base point
+            CAD.addEntity({
+                type: 'block',
+                blockName: name,
+                insertPoint: { ...basePoint },
+                scale: { x: 1, y: 1 },
+                rotation: 0
+            }, true);
+
+            UI.log(`BLOCK: Block "${name}" created with ${selectedEntities.length} object(s).`);
+        } else {
+            UI.log('BLOCK: Failed to create block.', 'error');
+        }
+
+        state.clearSelection();
+        this.finishCommand(true);
+    },
+
+    handleInsertClick(point) {
+        const state = CAD;
+
+        // If block is selected and we're placing it
+        if (state.cmdOptions.insertBlockName) {
+            const blockName = state.cmdOptions.insertBlockName;
+            const scale = state.cmdOptions.insertScale || { x: 1, y: 1 };
+            const rotation = state.cmdOptions.insertRotation || 0;
+
+            CAD.saveUndoState('Insert Block');
+
+            CAD.addEntity({
+                type: 'block',
+                blockName: blockName,
+                insertPoint: { ...point },
+                scale: scale,
+                rotation: Utils.degToRad(rotation)
+            });
+
+            UI.log(`INSERT: Block "${blockName}" inserted.`);
+
+            // Ask for next insertion point (like AutoCAD)
+            UI.log('INSERT: Specify insertion point or [Enter] to finish:', 'prompt');
+        }
     },
 
     // ==========================================
@@ -2753,6 +2908,29 @@ const Commands = {
                 return true;
             }
 
+            // INSERT - accept default scale with Enter
+            if (state.activeCmd === 'insert' && state.cmdOptions.waitingForScale) {
+                state.cmdOptions.insertScale = { x: 1, y: 1 };
+                state.cmdOptions.waitingForScale = false;
+                state.cmdOptions.waitingForRotation = true;
+                UI.log(`INSERT: Specify rotation angle <0>:`, 'prompt');
+                return true;
+            }
+
+            // INSERT - accept default rotation with Enter
+            if (state.activeCmd === 'insert' && state.cmdOptions.waitingForRotation) {
+                state.cmdOptions.insertRotation = 0;
+                state.cmdOptions.waitingForRotation = false;
+                UI.log('INSERT: Specify insertion point:', 'prompt');
+                return true;
+            }
+
+            // INSERT - finish on empty Enter during placement
+            if (state.activeCmd === 'insert' && state.cmdOptions.insertBlockName && !state.cmdOptions.waitingForScale && !state.cmdOptions.waitingForRotation) {
+                this.finishCommand(true);
+                return true;
+            }
+
             if (state.activeCmd) {
                 this.finishCommand();
                 Renderer.draw();
@@ -3017,6 +3195,56 @@ const Commands = {
                 UI.log('DONUT: Specify center of donut:', 'prompt');
                 return true;
             }
+
+            // INSERT - scale factor input
+            if (state.activeCmd === 'insert' && state.cmdOptions.waitingForScale) {
+                state.cmdOptions.insertScale = { x: num, y: num };
+                state.cmdOptions.waitingForScale = false;
+                state.cmdOptions.waitingForRotation = true;
+                UI.log(`INSERT: Specify rotation angle <0>:`, 'prompt');
+                return true;
+            }
+
+            // INSERT - rotation angle input
+            if (state.activeCmd === 'insert' && state.cmdOptions.waitingForRotation) {
+                state.cmdOptions.insertRotation = num;
+                state.cmdOptions.waitingForRotation = false;
+                UI.log('INSERT: Specify insertion point:', 'prompt');
+                return true;
+            }
+        }
+
+        // BLOCK - name input
+        if (state.activeCmd === 'block' && state.cmdOptions.waitingForName) {
+            const blockName = input.trim();
+            if (!blockName) {
+                UI.log('BLOCK: Invalid block name.', 'error');
+                return true;
+            }
+            if (CAD.getBlock(blockName)) {
+                UI.log(`BLOCK: Block "${blockName}" already exists. Enter a different name:`, 'prompt');
+                return true;
+            }
+            state.cmdOptions.blockName = blockName;
+            state.cmdOptions.waitingForName = false;
+            state.cmdOptions.waitingForBasePoint = true;
+            UI.log('BLOCK: Specify base point:', 'prompt');
+            return true;
+        }
+
+        // INSERT - block name input
+        if (state.activeCmd === 'insert' && state.cmdOptions.waitingForBlockName) {
+            const blockName = input.trim();
+            if (!CAD.getBlock(blockName)) {
+                const blockList = CAD.getBlockList();
+                UI.log(`INSERT: Block "${blockName}" not found. Available blocks: ${blockList.join(', ')}`, 'error');
+                return true;
+            }
+            state.cmdOptions.insertBlockName = blockName;
+            state.cmdOptions.waitingForBlockName = false;
+            state.cmdOptions.waitingForScale = true;
+            UI.log(`INSERT: Specify scale factor <1>:`, 'prompt');
+            return true;
         }
 
         if (state.activeCmd === 'hatch') {

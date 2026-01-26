@@ -152,6 +152,21 @@ const Storage = {
         dxf += '0\nENDTAB\n';
         dxf += '0\nENDSEC\n';
 
+        // Blocks section (for block definitions)
+        dxf += '0\nSECTION\n';
+        dxf += '2\nBLOCKS\n';
+
+        // Add each block definition
+        const blockNames = CAD.getBlockList();
+        blockNames.forEach(name => {
+            const block = CAD.getBlock(name);
+            if (block) {
+                dxf += this.blockToDXF(block);
+            }
+        });
+
+        dxf += '0\nENDSEC\n';
+
         // Entities section
         dxf += '0\nSECTION\n';
         dxf += '2\nENTITIES\n';
@@ -162,6 +177,31 @@ const Storage = {
 
         dxf += '0\nENDSEC\n';
         dxf += '0\nEOF\n';
+
+        return dxf;
+    },
+
+    blockToDXF(block) {
+        let dxf = '';
+
+        // Block header
+        dxf += '0\nBLOCK\n';
+        dxf += '8\n0\n'; // Layer
+        dxf += '2\n' + block.name + '\n'; // Block name
+        dxf += '70\n0\n'; // Block flags
+        dxf += '10\n' + block.basePoint.x + '\n'; // Base point X
+        dxf += '20\n' + (-block.basePoint.y) + '\n'; // Base point Y
+        dxf += '30\n0.0\n'; // Base point Z
+        dxf += '3\n' + block.name + '\n'; // Block name again
+
+        // Block entities
+        block.entities.forEach(entity => {
+            dxf += this.entityToDXF(entity);
+        });
+
+        // End block
+        dxf += '0\nENDBLK\n';
+        dxf += '8\n0\n';
 
         return dxf;
     },
@@ -270,6 +310,20 @@ const Storage = {
                 dxf += '10\n' + entity.position.x + '\n';
                 dxf += '20\n' + (-entity.position.y) + '\n';
                 dxf += '30\n0.0\n';
+                break;
+
+            case 'block':
+                // Block reference (INSERT)
+                dxf += '0\nINSERT\n';
+                dxf += '8\n' + (entity.layer || '0') + '\n';
+                dxf += '2\n' + entity.blockName + '\n'; // Block name
+                dxf += '10\n' + entity.insertPoint.x + '\n'; // Insertion point X
+                dxf += '20\n' + (-entity.insertPoint.y) + '\n'; // Insertion point Y
+                dxf += '30\n0.0\n'; // Insertion point Z
+                dxf += '41\n' + (entity.scale?.x || 1) + '\n'; // X scale
+                dxf += '42\n' + (entity.scale?.y || 1) + '\n'; // Y scale
+                dxf += '43\n1.0\n'; // Z scale
+                dxf += '50\n' + (-Utils.radToDeg(entity.rotation || 0)) + '\n'; // Rotation angle
                 break;
         }
 
@@ -431,6 +485,16 @@ const Storage = {
 
             case 'text':
                 return `<text x="${entity.position.x}" y="${entity.position.y}" fill="${color}" font-size="${entity.height}" font-family="Arial">${entity.text}</text>\n`;
+
+            case 'block':
+                // Expand block and render each entity
+                const expandedEntities = CAD.getBlockEntities(entity);
+                let blockSvg = `<g class="block-${entity.blockName}">\n`;
+                expandedEntities.forEach(expanded => {
+                    blockSvg += this.entityToSVG(expanded);
+                });
+                blockSvg += '</g>\n';
+                return blockSvg;
 
             default:
                 return '';

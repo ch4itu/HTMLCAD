@@ -616,6 +616,17 @@ const Geometry = {
             case 'point':
                 return Utils.dist(point, entity.position) < tolerance;
 
+            case 'block':
+                // Hit test for block reference - check expanded entities
+                const expandedEntities = CAD.getBlockEntities(entity);
+                for (const expanded of expandedEntities) {
+                    if (this.hitTest(point, expanded, tolerance)) {
+                        return true;
+                    }
+                }
+                // Also check insertion point
+                return Utils.dist(point, entity.insertPoint) < tolerance;
+
             default:
                 return false;
         }
@@ -749,6 +760,15 @@ const Geometry = {
                     Utils.polarPoint(entity.center, entity.start, entity.r),
                     Utils.polarPoint(entity.center, entity.end, entity.r)
                 ];
+            case 'block':
+                // Get endpoints from all entities in the block
+                const endpoints = [entity.insertPoint]; // Include insertion point
+                const expandedEntities = CAD.getBlockEntities(entity);
+                expandedEntities.forEach(expanded => {
+                    const eps = this.getEndpoints(expanded);
+                    endpoints.push(...eps);
+                });
+                return endpoints;
             default:
                 return [];
         }
@@ -771,6 +791,15 @@ const Geometry = {
                     Utils.midpoint(entity.p2, { x: entity.p1.x, y: entity.p2.y }),
                     Utils.midpoint({ x: entity.p1.x, y: entity.p2.y }, entity.p1)
                 ];
+            case 'block':
+                // Get midpoints from all entities in the block
+                const blockMids = [];
+                const expandedEntities = CAD.getBlockEntities(entity);
+                expandedEntities.forEach(expanded => {
+                    const mps = this.getMidpoints(expanded);
+                    blockMids.push(...mps);
+                });
+                return blockMids;
             default:
                 return [];
         }
@@ -781,9 +810,19 @@ const Geometry = {
             case 'circle':
             case 'arc':
             case 'ellipse':
+            case 'donut':
                 return [entity.center];
             case 'rect':
                 return [Utils.midpoint(entity.p1, entity.p2)];
+            case 'block':
+                // Get centers from all entities in the block, plus the insertion point
+                const centers = [entity.insertPoint];
+                const expandedEntities = CAD.getBlockEntities(entity);
+                expandedEntities.forEach(expanded => {
+                    const ctrs = this.getCenters(expanded);
+                    centers.push(...ctrs);
+                });
+                return centers;
             default:
                 return [];
         }
@@ -911,6 +950,18 @@ const Geometry = {
                     y: moved.p1.y + (moved.height ?? Math.abs(moved.p2.y - moved.p1.y))
                 };
                 break;
+            case 'block':
+                moved.insertPoint.x += delta.x;
+                moved.insertPoint.y += delta.y;
+                break;
+            case 'point':
+                moved.position.x += delta.x;
+                moved.position.y += delta.y;
+                break;
+            case 'donut':
+                moved.center.x += delta.x;
+                moved.center.y += delta.y;
+                break;
         }
 
         return moved;
@@ -965,6 +1016,16 @@ const Geometry = {
                     y: rotated.p1.y + (rotated.height ?? Math.abs(rotated.p2.y - rotated.p1.y))
                 };
                 break;
+            case 'block':
+                rotated.insertPoint = Utils.rotatePoint(rotated.insertPoint, center, angle);
+                rotated.rotation = (rotated.rotation || 0) + angle;
+                break;
+            case 'point':
+                rotated.position = Utils.rotatePoint(rotated.position, center, angle);
+                break;
+            case 'donut':
+                rotated.center = Utils.rotatePoint(rotated.center, center, angle);
+                break;
         }
 
         return rotated;
@@ -1012,6 +1073,21 @@ const Geometry = {
                     y: scaled.p1.y + scaled.height
                 };
                 break;
+            case 'block':
+                scaled.insertPoint = Utils.scalePoint(scaled.insertPoint, center, scale);
+                scaled.scale = {
+                    x: (scaled.scale?.x || 1) * scale,
+                    y: (scaled.scale?.y || 1) * scale
+                };
+                break;
+            case 'point':
+                scaled.position = Utils.scalePoint(scaled.position, center, scale);
+                break;
+            case 'donut':
+                scaled.center = Utils.scalePoint(scaled.center, center, scale);
+                scaled.innerRadius *= scale;
+                scaled.outerRadius *= scale;
+                break;
         }
 
         return scaled;
@@ -1056,6 +1132,23 @@ const Geometry = {
                     x: mirrored.p1.x + (mirrored.width ?? Math.abs(mirrored.p2.x - mirrored.p1.x)),
                     y: mirrored.p1.y + (mirrored.height ?? Math.abs(mirrored.p2.y - mirrored.p1.y))
                 };
+                break;
+            case 'block':
+                mirrored.insertPoint = Utils.mirrorPoint(mirrored.insertPoint, lineP1, lineP2);
+                // Mirror the scale (flip X for vertical mirror, Y for horizontal)
+                const mirrorAngle = Math.atan2(lineP2.y - lineP1.y, lineP2.x - lineP1.x);
+                mirrored.rotation = -((mirrored.rotation || 0) - 2 * mirrorAngle);
+                // Flip one axis of the scale to achieve mirroring
+                mirrored.scale = {
+                    x: -(mirrored.scale?.x || 1),
+                    y: (mirrored.scale?.y || 1)
+                };
+                break;
+            case 'point':
+                mirrored.position = Utils.mirrorPoint(mirrored.position, lineP1, lineP2);
+                break;
+            case 'donut':
+                mirrored.center = Utils.mirrorPoint(mirrored.center, lineP1, lineP2);
                 break;
         }
 

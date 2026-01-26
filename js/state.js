@@ -113,6 +113,10 @@ class StateManager {
         // Clipboard for copy/paste
         this.clipboard = [];
 
+        // Block definitions (AutoCAD-like blocks)
+        // { blockName: { name, basePoint, entities: [...], description } }
+        this.blocks = {};
+
         // Grid display
         this.showGrid = true;
         this.gridSpacing = 100;
@@ -203,6 +207,177 @@ class StateManager {
     }
 
     // ==========================================
+    // BLOCK MANAGEMENT
+    // ==========================================
+
+    addBlock(name, basePoint, entities, description = '') {
+        if (this.blocks[name]) {
+            return null; // Block already exists
+        }
+
+        // Deep clone entities and remove IDs (they're stored as definitions)
+        const blockEntities = entities.map(e => {
+            const clone = JSON.parse(JSON.stringify(e));
+            delete clone.id;
+            return clone;
+        });
+
+        const block = {
+            name: name,
+            basePoint: { ...basePoint },
+            entities: blockEntities,
+            description: description,
+            createdAt: Date.now()
+        };
+
+        this.blocks[name] = block;
+        this.modified = true;
+        return block;
+    }
+
+    getBlock(name) {
+        return this.blocks[name] || null;
+    }
+
+    deleteBlock(name) {
+        if (this.blocks[name]) {
+            delete this.blocks[name];
+            this.modified = true;
+            return true;
+        }
+        return false;
+    }
+
+    getBlockList() {
+        return Object.keys(this.blocks);
+    }
+
+    renameBlock(oldName, newName) {
+        if (!this.blocks[oldName] || this.blocks[newName]) {
+            return false;
+        }
+
+        this.blocks[newName] = this.blocks[oldName];
+        this.blocks[newName].name = newName;
+        delete this.blocks[oldName];
+
+        // Update all block references
+        this.entities.forEach(entity => {
+            if (entity.type === 'block' && entity.blockName === oldName) {
+                entity.blockName = newName;
+            }
+        });
+
+        this.modified = true;
+        return true;
+    }
+
+    // Get expanded entities for a block reference (for rendering, hit testing, etc.)
+    getBlockEntities(blockRef) {
+        const block = this.getBlock(blockRef.blockName);
+        if (!block) return [];
+
+        const insertPoint = blockRef.insertPoint || { x: 0, y: 0 };
+        const scale = blockRef.scale || { x: 1, y: 1 };
+        const rotation = blockRef.rotation || 0;
+
+        // Transform each entity in the block definition
+        return block.entities.map(entity => {
+            let transformed = JSON.parse(JSON.stringify(entity));
+
+            // Apply transformations: scale, rotate, translate
+            transformed = this.transformBlockEntity(transformed, block.basePoint, insertPoint, scale, rotation);
+
+            // Inherit properties from block reference if not specified
+            if (!transformed.layer) transformed.layer = blockRef.layer;
+            if (!transformed.color && blockRef.color) transformed.color = blockRef.color;
+
+            return transformed;
+        });
+    }
+
+    transformBlockEntity(entity, basePoint, insertPoint, scale, rotation) {
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+
+        // Helper to transform a point relative to base point, then to insert point
+        const transformPoint = (p) => {
+            // Translate to origin (relative to base point)
+            let x = p.x - basePoint.x;
+            let y = p.y - basePoint.y;
+
+            // Scale
+            x *= scale.x;
+            y *= scale.y;
+
+            // Rotate
+            const rx = x * cos - y * sin;
+            const ry = x * sin + y * cos;
+
+            // Translate to insert point
+            return {
+                x: rx + insertPoint.x,
+                y: ry + insertPoint.y
+            };
+        };
+
+        switch (entity.type) {
+            case 'line':
+                entity.p1 = transformPoint(entity.p1);
+                entity.p2 = transformPoint(entity.p2);
+                break;
+            case 'circle':
+                entity.center = transformPoint(entity.center);
+                entity.r *= Math.abs(scale.x); // Uniform scale for circles
+                break;
+            case 'arc':
+                entity.center = transformPoint(entity.center);
+                entity.r *= Math.abs(scale.x);
+                entity.start += rotation;
+                entity.end += rotation;
+                break;
+            case 'rect':
+                entity.p1 = transformPoint(entity.p1);
+                entity.p2 = transformPoint(entity.p2);
+                break;
+            case 'polyline':
+                entity.points = entity.points.map(p => transformPoint(p));
+                break;
+            case 'ellipse':
+                entity.center = transformPoint(entity.center);
+                entity.rx *= Math.abs(scale.x);
+                entity.ry *= Math.abs(scale.y);
+                entity.rotation = (entity.rotation || 0) + rotation;
+                break;
+            case 'text':
+                entity.position = transformPoint(entity.position);
+                entity.height *= Math.abs(scale.y);
+                entity.rotation = (entity.rotation || 0) + Utils.radToDeg(rotation);
+                break;
+            case 'point':
+                entity.position = transformPoint(entity.position);
+                break;
+            case 'donut':
+                entity.center = transformPoint(entity.center);
+                entity.innerRadius *= Math.abs(scale.x);
+                entity.outerRadius *= Math.abs(scale.x);
+                break;
+            case 'image':
+                entity.p1 = transformPoint(entity.p1);
+                entity.width = (entity.width || 100) * Math.abs(scale.x);
+                entity.height = (entity.height || 100) * Math.abs(scale.y);
+                entity.rotation = (entity.rotation || 0) + Utils.radToDeg(rotation);
+                entity.p2 = {
+                    x: entity.p1.x + entity.width,
+                    y: entity.p1.y + entity.height
+                };
+                break;
+        }
+
+        return entity;
+    }
+
+    // ==========================================
     // LAYER MANAGEMENT
     // ==========================================
 
@@ -267,10 +442,11 @@ class StateManager {
         // Clear redo stack when new action is performed
         this.redoStack = [];
 
-        // Deep clone current entities
+        // Deep clone current entities and blocks
         const snapshot = {
             action: actionName,
             entities: JSON.parse(JSON.stringify(this.entities)),
+            blocks: JSON.parse(JSON.stringify(this.blocks)),
             layers: JSON.parse(JSON.stringify(this.layers)),
             currentLayer: this.currentLayer
         };
@@ -290,6 +466,7 @@ class StateManager {
         const currentSnapshot = {
             action: 'Redo',
             entities: JSON.parse(JSON.stringify(this.entities)),
+            blocks: JSON.parse(JSON.stringify(this.blocks)),
             layers: JSON.parse(JSON.stringify(this.layers)),
             currentLayer: this.currentLayer
         };
@@ -298,6 +475,7 @@ class StateManager {
         // Restore previous state
         const snapshot = this.undoStack.pop();
         this.entities = snapshot.entities;
+        this.blocks = snapshot.blocks || {};
         this.layers = snapshot.layers;
         this.currentLayer = snapshot.currentLayer;
         this.modified = true;
@@ -312,6 +490,7 @@ class StateManager {
         const currentSnapshot = {
             action: 'Undo',
             entities: JSON.parse(JSON.stringify(this.entities)),
+            blocks: JSON.parse(JSON.stringify(this.blocks)),
             layers: JSON.parse(JSON.stringify(this.layers)),
             currentLayer: this.currentLayer
         };
@@ -320,6 +499,7 @@ class StateManager {
         // Restore redo state
         const snapshot = this.redoStack.pop();
         this.entities = snapshot.entities;
+        this.blocks = snapshot.blocks || {};
         this.layers = snapshot.layers;
         this.currentLayer = snapshot.currentLayer;
         this.modified = true;
@@ -453,6 +633,26 @@ class StateManager {
             case 'text':
                 entity.position.x += offset.x;
                 entity.position.y += offset.y;
+                break;
+            case 'block':
+                entity.insertPoint.x += offset.x;
+                entity.insertPoint.y += offset.y;
+                break;
+            case 'point':
+                entity.position.x += offset.x;
+                entity.position.y += offset.y;
+                break;
+            case 'donut':
+                entity.center.x += offset.x;
+                entity.center.y += offset.y;
+                break;
+            case 'image':
+                entity.p1.x += offset.x;
+                entity.p1.y += offset.y;
+                if (entity.p2) {
+                    entity.p2.x += offset.x;
+                    entity.p2.y += offset.y;
+                }
                 break;
         }
     }
@@ -642,6 +842,30 @@ class StateManager {
                     };
                 }
                 return null;
+            case 'block':
+                // Get expanded entities and compute combined extents
+                const blockEntities = this.getBlockEntities(entity);
+                if (blockEntities.length === 0) {
+                    // Fallback: just use insert point
+                    return {
+                        minX: entity.insertPoint.x - 1,
+                        maxX: entity.insertPoint.x + 1,
+                        minY: entity.insertPoint.y - 1,
+                        maxY: entity.insertPoint.y + 1
+                    };
+                }
+                let bMinX = Infinity, bMinY = Infinity;
+                let bMaxX = -Infinity, bMaxY = -Infinity;
+                blockEntities.forEach(be => {
+                    const ext = this.getEntityExtents(be);
+                    if (ext) {
+                        bMinX = Math.min(bMinX, ext.minX);
+                        bMinY = Math.min(bMinY, ext.minY);
+                        bMaxX = Math.max(bMaxX, ext.maxX);
+                        bMaxY = Math.max(bMaxY, ext.maxY);
+                    }
+                });
+                return bMinX !== Infinity ? { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } : null;
             default:
                 return null;
         }
@@ -653,11 +877,12 @@ class StateManager {
 
     toJSON() {
         return {
-            version: '1.0',
+            version: '1.1',
             name: this.drawingName,
             layers: this.layers,
             currentLayer: this.currentLayer,
             entities: this.entities,
+            blocks: this.blocks,
             view: {
                 pan: this.pan,
                 zoom: this.zoom
@@ -678,6 +903,7 @@ class StateManager {
             this.layers = data.layers || this.layers;
             this.currentLayer = data.currentLayer || '0';
             this.entities = data.entities || [];
+            this.blocks = data.blocks || {};
 
             if (data.view) {
                 this.pan = data.view.pan || this.pan;
@@ -709,6 +935,7 @@ class StateManager {
     newDrawing() {
         this.entities = [];
         this.selectedIds = [];
+        this.blocks = {};
         this.layers = [
             { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }
         ];
