@@ -142,6 +142,8 @@ const Commands = {
         // Selection
         'all': 'selectall',
         'selectall': 'selectall',
+        'selectwindow': 'selectwindow',
+        'selectcrossing': 'selectcrossing',
 
         // File operations
         'new': 'new',
@@ -567,6 +569,14 @@ const Commands = {
                 CAD.selectAll();
                 UI.log(`${CAD.selectedIds.length} objects selected.`);
                 Renderer.draw();
+                this.finishCommand();
+                break;
+            case 'selectwindow':
+                UI.canvasSelectWindow();
+                this.finishCommand();
+                break;
+            case 'selectcrossing':
+                UI.canvasSelectCrossing();
                 this.finishCommand();
                 break;
 
