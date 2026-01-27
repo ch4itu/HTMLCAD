@@ -68,6 +68,7 @@ const Storage = {
                 gridSpacing: CAD.gridSpacing,
                 gridSubdivisions: CAD.gridSubdivisions,
                 gridSize: CAD.gridSize,
+                dimPrecision: CAD.dimPrecision,
                 lineType: CAD.lineType,
                 lineTypeScale: CAD.lineTypeScale
             };

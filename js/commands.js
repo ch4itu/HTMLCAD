@@ -178,6 +178,7 @@ const Commands = {
         'dimtxt': 'dimtxt',
         'dimasz': 'dimasz',
         'dimscale': 'dimscale',
+        'dimdec': 'dimdec',
         'linetype': 'linetype',
         'lt': 'linetype',
         'ltscale': 'ltscale',
@@ -732,6 +733,9 @@ const Commands = {
 
             case 'dimscale':
                 UI.log(`DIMSCALE: Enter new dimension scale factor <${CAD.dimScale}>:`, 'prompt');
+                break;
+            case 'dimdec':
+                UI.log(`DIMDEC: Enter new dimension precision <${CAD.dimPrecision}>:`, 'prompt');
                 break;
 
             case 'linetype':
@@ -2890,7 +2894,7 @@ const Commands = {
                 p2: { ...p2 },
                 dimLinePos: { ...dimLine },
                 value: distance,
-                text: distance.toFixed(2)
+                text: distance.toFixed(CAD.dimPrecision ?? 2)
             });
             CAD.lastLinearDim = entity;
 
@@ -2921,7 +2925,7 @@ const Commands = {
                     radius: entity.r,
                     dimLinePos: { ...point },
                     value: value,
-                    text: `${prefix}${value.toFixed(2)}`
+                    text: `${prefix}${value.toFixed(CAD.dimPrecision ?? 2)}`
                 });
 
                 UI.log(`${state.activeCmd === 'dimdiameter' ? 'Diameter' : 'Radius'}: ${value.toFixed(4)}`);
@@ -2957,7 +2961,7 @@ const Commands = {
                 p2: { ...p2 },
                 dimLinePos: { ...dimLine },
                 value: distance,
-                text: distance.toFixed(2)
+                text: distance.toFixed(CAD.dimPrecision ?? 2)
             });
             CAD.lastLinearDim = entity;
             UI.log(`Dimension: ${distance.toFixed(4)}`);
@@ -3343,6 +3347,14 @@ const Commands = {
             if (state.activeCmd === 'dimscale') {
                 CAD.dimScale = Math.abs(num) || 1;
                 UI.log(`DIMSCALE set to ${CAD.dimScale}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            if (state.activeCmd === 'dimdec') {
+                CAD.dimPrecision = Math.max(0, Math.round(num));
+                UI.log(`DIMDEC set to ${CAD.dimPrecision}`);
                 Renderer.draw();
                 this.finishCommand();
                 return true;

@@ -896,6 +896,7 @@ class StateManager {
                 snapEnabled: this.snapEnabled,
                 snapModes: this.snapModes,
                 orthoEnabled: this.orthoEnabled,
+                dimPrecision: this.dimPrecision,
                 lineType: this.lineType,
                 lineTypeScale: this.lineTypeScale
             }
@@ -921,6 +922,7 @@ class StateManager {
                 this.snapEnabled = data.settings.snapEnabled !== false;
                 this.snapModes = { ...this.snapModes, ...data.settings.snapModes };
                 this.orthoEnabled = data.settings.orthoEnabled || false;
+                this.dimPrecision = data.settings.dimPrecision ?? this.dimPrecision;
                 this.lineType = data.settings.lineType || this.lineType;
                 this.lineTypeScale = data.settings.lineTypeScale || this.lineTypeScale;
             }
