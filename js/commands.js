@@ -168,6 +168,7 @@ const Commands = {
         'snap': 'snap',
         'ortho': 'ortho',
         'osnap': 'osnap',
+        'polar': 'polar',
         'image': 'imageattach',
         'imageattach': 'imageattach',
         'attach': 'imageattach',
@@ -692,6 +693,9 @@ const Commands = {
                 break;
             case 'osnap':
                 UI.log('OSNAP: Enter option [On/Off/End/Mid/Cen/Int/Per/Tan/Nea/All/None/List]:', 'prompt');
+                break;
+            case 'polar':
+                UI.log(`POLAR: Enter option [On/Off/Angle] <${CAD.polarAngle}>:`, 'prompt');
                 break;
 
             case 'offsetgaptype':
@@ -3031,6 +3035,14 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'polar') {
+                CAD.polarEnabled = !CAD.polarEnabled;
+                UI.log(`POLAR: ${CAD.polarEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+
             if (state.activeCmd === 'offset' && state.step === 0) {
                 state.step = 1;
                 UI.log(`Offset distance: ${CAD.offsetDist.toFixed(4)}`);
@@ -3224,6 +3236,31 @@ const Commands = {
                 return true;
             }
             UI.log(`OSNAP: Unknown option "${input}".`, 'error');
+            return true;
+        }
+
+        if (state.activeCmd === 'polar') {
+            const value = input.toLowerCase();
+            if (value === 'on' || value === 'off') {
+                CAD.polarEnabled = value === 'on';
+                UI.log(`POLAR: ${CAD.polarEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'angle') {
+                UI.log(`POLAR: Enter new angle <${CAD.polarAngle}>:`, 'prompt');
+                return true;
+            }
+            const angle = parseFloat(input);
+            if (!Number.isNaN(angle)) {
+                CAD.polarAngle = Math.abs(angle) || 45;
+                UI.log(`POLAR: Angle set to ${CAD.polarAngle}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`POLAR: Unknown option "${input}".`, 'error');
             return true;
         }
 
