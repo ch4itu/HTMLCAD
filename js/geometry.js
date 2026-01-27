@@ -567,6 +567,25 @@ const Geometry = {
                 }
                 return false;
 
+            case 'leader':
+                if (entity.points) {
+                    for (let i = 0; i < entity.points.length - 1; i++) {
+                        if (Utils.distToSegment(point, entity.points[i], entity.points[i + 1]) < tolerance) {
+                            return true;
+                        }
+                    }
+                }
+                if (entity.text) {
+                    const height = entity.height || 10;
+                    const textWidth = entity.text.length * height * 0.6;
+                    const pos = entity.textPosition || entity.points[entity.points.length - 1];
+                    return point.x >= pos.x &&
+                           point.x <= pos.x + textWidth &&
+                           point.y >= pos.y - height &&
+                           point.y <= pos.y;
+                }
+                return false;
+
             case 'ellipse':
                 // Simplified ellipse hit test
                 const dx = (point.x - entity.center.x) / entity.rx;

@@ -27,6 +27,7 @@ BrowserCAD is a browser-based CAD experience inspired by AutoCAD workflows. It s
 | ELLIPSE | `EL` | Draw ellipses. |
 | TEXT | `T` | Add single-line text. |
 | MTEXT | `MT` | Add multi-line text. |
+| LEADER | `LE` | Add a leader with text. |
 | POLYGON | `POL` | Draw a regular polygon. |
 | DONUT | `DO` | Draw donuts. |
 | RAY | `RAY` | Draw rays. |

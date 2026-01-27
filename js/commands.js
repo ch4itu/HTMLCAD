@@ -80,6 +80,8 @@ const Commands = {
         'hatch': 'hatch',
         'bh': 'hatch',
         'bhatch': 'hatch',
+        'leader': 'leader',
+        'le': 'leader',
         'ar': 'array',
         'array': 'array',
         'arrayrect': 'arrayrect',
@@ -465,6 +467,9 @@ const Commands = {
             case 'hatch':
                 UI.log(`HATCH: Click inside a closed area or select a closed object.`, 'prompt');
                 UI.log(`HATCH: Pattern [${this.getHatchPatternOptions()}] <${CAD.hatchPattern}>:`, 'prompt');
+                break;
+            case 'leader':
+                UI.log('LEADER: Specify first point:', 'prompt');
                 break;
 
             case 'explode':
@@ -862,6 +867,10 @@ const Commands = {
                 this.handleTextClick(point);
                 break;
 
+            case 'leader':
+                this.handleLeaderClick(point);
+                break;
+
             case 'mtext':
                 this.handleMTextClick(point);
                 break;
@@ -1154,6 +1163,37 @@ const Commands = {
             });
             UI.log('Text created.');
         }
+        this.finishCommand();
+    },
+
+    handleLeaderClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('LEADER: Specify next point:', 'prompt');
+        } else if (state.step === 2) {
+            UI.log('LEADER: Enter text:', 'prompt');
+        }
+    },
+
+    completeLeaderCommand(text) {
+        const points = CAD.points;
+        if (!text || points.length < 2) {
+            UI.log('LEADER: Text required to finish leader.', 'error');
+            return;
+        }
+        const height = CAD.textHeight || 10;
+        const anchor = points[points.length - 1];
+        CAD.addEntity({
+            type: 'leader',
+            points: points.map(p => ({ ...p })),
+            text: text,
+            height: height,
+            textPosition: { x: anchor.x, y: anchor.y }
+        });
+        UI.log('Leader created.');
         this.finishCommand();
     },
 
@@ -2245,6 +2285,10 @@ const Commands = {
                     UI.log(`  Vertices: ${entity.points.length}`);
                     UI.log(`  Closed: ${Utils.isPolygonClosed(entity.points)}`);
                     break;
+                case 'leader':
+                    UI.log(`  Points: ${entity.points.length}`);
+                    UI.log(`  Text: ${entity.text}`);
+                    break;
                 case 'image':
                     UI.log(`  Insertion: ${Utils.formatPoint(entity.p1)}`);
                     UI.log(`  Width: ${(entity.width ?? Math.abs(entity.p2.x - entity.p1.x)).toFixed(4)}`);
@@ -3007,6 +3051,11 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'leader' && state.step === 2) {
+                UI.log('LEADER: Text required to finish leader.', 'error');
+                return true;
+            }
+
             if (state.activeCmd) {
                 this.finishCommand();
                 Renderer.draw();
@@ -3014,6 +3063,11 @@ const Commands = {
             }
 
             return false;
+        }
+
+        if (state.activeCmd === 'leader' && state.step === 2) {
+            this.completeLeaderCommand(input);
+            return true;
         }
 
         // Check for coordinate input

@@ -480,6 +480,23 @@ const Renderer = {
                 }
                 break;
 
+            case 'leader':
+                if (entity.points && entity.points.length > 0) {
+                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                    for (let i = 1; i < entity.points.length; i++) {
+                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    }
+                }
+                if (entity.text) {
+                    ctx.save();
+                    ctx.font = `${entity.height || 10}px Arial`;
+                    ctx.fillStyle = ctx.strokeStyle;
+                    const textPos = entity.textPosition || entity.points[entity.points.length - 1];
+                    ctx.fillText(entity.text, textPos.x, textPos.y);
+                    ctx.restore();
+                }
+                break;
+
             case 'ellipse':
                 ctx.save();
                 ctx.translate(entity.center.x, entity.center.y);
