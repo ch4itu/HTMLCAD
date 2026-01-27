@@ -142,6 +142,8 @@ const Commands = {
         // Selection
         'all': 'selectall',
         'selectall': 'selectall',
+        'selectwindow': 'selectwindow',
+        'selectcrossing': 'selectcrossing',
 
         // File operations
         'new': 'new',
@@ -218,6 +220,20 @@ const Commands = {
         const command = this.aliases[cmdName];
         if (!command) {
             UI.log(`Unknown command: ${cmdName}`, 'error');
+            return;
+        }
+
+        if (command === 'selectwindow' || command === 'selectcrossing') {
+            if (CAD.activeCmd) {
+                this.finishCommand(true);
+            }
+            UI.setActiveButton(null);
+            UI.updateCommandPrompt(null);
+            if (command === 'selectwindow') {
+                UI.canvasSelectWindow();
+            } else {
+                UI.canvasSelectCrossing();
+            }
             return;
         }
 
@@ -569,7 +585,6 @@ const Commands = {
                 Renderer.draw();
                 this.finishCommand();
                 break;
-
             case 'distance':
                 UI.log('DIST: Specify first point:', 'prompt');
                 break;
