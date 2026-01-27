@@ -132,7 +132,6 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | ZOOM | `Z` | Zoom (All/Extents/Window/Center). |
 | PAN | `P` | Pan view. |
 | REGEN | `RE` | Regenerate display. |
-| SELECTALL | `ALL` | Select all entities. |
 | UNDO | `U` | Undo last action. |
 | REDO | `Y` | Redo last action. |
 | APPLOAD | `LOAD` | Load AutoLISP scripts from file. |
@@ -145,6 +144,7 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | SNAP | Toggle snap. |
 | ORTHO | Toggle ortho mode. |
 | OSNAP | Toggle object snap. |
+| LAYER | Create, set, and toggle layer visibility (New/Set/On/Off/List). |
 | OFFSETGAPTYPE | Set gap type (0=Extend, 1=Fillet, 2=Chamfer). |
 | PDMODE | Set point display mode. |
 | PDSIZE | Set point display size. |

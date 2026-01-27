@@ -635,6 +635,9 @@ const Commands = {
                 this.listSelected();
                 this.finishCommand();
                 break;
+            case 'layer':
+                UI.log('LAYER: Enter option [New/Set/On/Off/List]:', 'prompt');
+                break;
             case 'selectsimilar':
                 this.selectSimilar();
                 this.finishCommand();
@@ -3422,6 +3425,78 @@ const Commands = {
             state.cmdOptions.waitingForQselectType = false;
             this.selectByType(query);
             this.finishCommand();
+            return true;
+        }
+
+        if (state.activeCmd === 'layer') {
+            const tokens = input.trim().split(/\s+/);
+            const action = tokens[0]?.toLowerCase();
+            const name = tokens.slice(1).join(' ');
+            if (!action) {
+                UI.log('LAYER: Enter option [New/Set/On/Off/List]:', 'prompt');
+                return true;
+            }
+            if (action === 'list') {
+                CAD.layers.forEach(layer => {
+                    UI.log(`  ${layer.name} (${layer.visible ? 'On' : 'Off'})`);
+                });
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'new') {
+                if (!name) {
+                    UI.log('LAYER: Enter new layer name.', 'error');
+                    return true;
+                }
+                const layer = CAD.addLayer(name);
+                if (!layer) {
+                    UI.log(`LAYER: Layer "${name}" already exists.`, 'error');
+                    return true;
+                }
+                CAD.setCurrentLayer(name);
+                UI.updateLayerUI();
+                UI.log(`LAYER: Layer "${name}" created and set current.`);
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'set') {
+                if (!name) {
+                    UI.log('LAYER: Enter layer name to set current.', 'error');
+                    return true;
+                }
+                if (!CAD.setCurrentLayer(name)) {
+                    UI.log(`LAYER: Layer "${name}" not found.`, 'error');
+                    return true;
+                }
+                UI.updateLayerUI();
+                UI.log(`LAYER: Current layer set to "${name}".`);
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'on' || action === 'off') {
+                if (!name) {
+                    UI.log(`LAYER: Enter layer name to turn ${action}.`, 'error');
+                    return true;
+                }
+                const layer = CAD.getLayer(name);
+                if (!layer) {
+                    UI.log(`LAYER: Layer "${name}" not found.`, 'error');
+                    return true;
+                }
+                layer.visible = action === 'on';
+                UI.updateLayerUI();
+                Renderer.draw();
+                UI.log(`LAYER: Layer "${name}" turned ${action}.`);
+                this.finishCommand();
+                return true;
+            }
+            if (CAD.setCurrentLayer(input.trim())) {
+                UI.updateLayerUI();
+                UI.log(`LAYER: Current layer set to "${input.trim()}".`);
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`LAYER: Unknown option "${input}".`, 'error');
             return true;
         }
 
