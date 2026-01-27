@@ -149,6 +149,8 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | DIMTXT | Set dimension text height. |
 | DIMASZ | Set dimension arrow size. |
 | DIMSCALE | Set overall dimension scale. |
+| LINETYPE | Set current or selected linetype (continuous/dashed/dotted/dashdot). |
+| LTSCALE | Set global linetype scale. |
 
 ## File Commands
 

@@ -67,7 +67,9 @@ const Storage = {
                 showGrid: CAD.showGrid,
                 gridSpacing: CAD.gridSpacing,
                 gridSubdivisions: CAD.gridSubdivisions,
-                gridSize: CAD.gridSize
+                gridSize: CAD.gridSize,
+                lineType: CAD.lineType,
+                lineTypeScale: CAD.lineTypeScale
             };
             localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(settings));
             return true;

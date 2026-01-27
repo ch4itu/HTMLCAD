@@ -236,8 +236,8 @@ const Renderer = {
             else if (isHovered) lineWidth = 2;
             ctx.lineWidth = lineWidth / state.zoom;
 
-            // Line dash: selected = dashed, others = solid
-            ctx.setLineDash(isSelected ? [5 / state.zoom, 3 / state.zoom] : []);
+            // Line dash: selected = dashed, others use linetype
+            ctx.setLineDash(isSelected ? [5 / state.zoom, 3 / state.zoom] : this.getLineDash(entity));
 
             this.drawEntity(entity, ctx);
 
@@ -258,6 +258,20 @@ const Renderer = {
         });
 
         ctx.setLineDash([]);
+    },
+
+    getLineDash(entity) {
+        const lineType = (entity.lineType || CAD.lineType || 'continuous').toLowerCase();
+        const scale = CAD.lineTypeScale || 1;
+        const basePatterns = {
+            continuous: [],
+            dashed: [10, 6],
+            dotted: [2, 6],
+            dashdot: [10, 4, 2, 4]
+        };
+        const pattern = basePatterns[lineType] || [];
+        if (pattern.length === 0) return [];
+        return pattern.map(value => (value * scale) / CAD.zoom);
     },
 
     getImage(src) {

@@ -168,6 +168,9 @@ const Commands = {
         'dimtxt': 'dimtxt',
         'dimasz': 'dimasz',
         'dimscale': 'dimscale',
+        'linetype': 'linetype',
+        'lt': 'linetype',
+        'ltscale': 'ltscale',
 
         // AutoLISP
         'lisp': 'lisp',
@@ -683,6 +686,14 @@ const Commands = {
 
             case 'dimscale':
                 UI.log(`DIMSCALE: Enter new dimension scale factor <${CAD.dimScale}>:`, 'prompt');
+                break;
+
+            case 'linetype':
+                UI.log(`LINETYPE: Enter name or [List] <${CAD.lineType}>:`, 'prompt');
+                break;
+
+            case 'ltscale':
+                UI.log(`LTSCALE: Enter new linetype scale <${CAD.lineTypeScale}>:`, 'prompt');
                 break;
 
             case 'new':
@@ -2285,6 +2296,10 @@ const Commands = {
         this.selectByType(selected[0].type);
     },
 
+    getLinetypeOptions() {
+        return ['continuous', 'dashed', 'dotted', 'dashdot'];
+    },
+
     undo() {
         const action = CAD.undo();
         if (action) {
@@ -3200,6 +3215,14 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'ltscale') {
+                CAD.lineTypeScale = Math.abs(num) || 1;
+                UI.log(`LTSCALE set to ${CAD.lineTypeScale}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
             // Polygon - number of sides
             if (state.activeCmd === 'polygon' && state.step === 0) {
                 state.cmdOptions.sides = Math.max(3, Math.round(num));
@@ -3284,6 +3307,32 @@ const Commands = {
             }
             state.cmdOptions.waitingForQselectType = false;
             this.selectByType(query);
+            this.finishCommand();
+            return true;
+        }
+
+        if (state.activeCmd === 'linetype') {
+            const value = input.toLowerCase();
+            const options = this.getLinetypeOptions();
+            if (value === 'list') {
+                UI.log(`LINETYPE options: ${options.join(', ')}`, 'prompt');
+                return true;
+            }
+            if (!options.includes(value)) {
+                UI.log(`LINETYPE: Unknown linetype "${input}". Use LIST to see options.`, 'error');
+                return true;
+            }
+            if (state.selectedIds.length > 0) {
+                CAD.saveUndoState('Set Linetype');
+                state.selectedIds.forEach(id => {
+                    CAD.updateEntity(id, { lineType: value }, true);
+                });
+                UI.log(`LINETYPE set to ${value} for ${state.selectedIds.length} object(s).`);
+                Renderer.draw();
+            } else {
+                CAD.lineType = value;
+                UI.log(`LINETYPE set to ${CAD.lineType}.`);
+            }
             this.finishCommand();
             return true;
         }
