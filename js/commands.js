@@ -690,6 +690,9 @@ const Commands = {
                 UI.updateStatusBar();
                 this.finishCommand();
                 break;
+            case 'osnap':
+                UI.log('OSNAP: Enter option [On/Off/End/Mid/Cen/Int/Per/Tan/Nea/All/None/List]:', 'prompt');
+                break;
 
             case 'offsetgaptype':
                 UI.log(`OFFSETGAPTYPE: Enter new value <${CAD.offsetGapType}> (0=Extend, 1=Fillet, 2=Chamfer):`, 'prompt');
@@ -3020,6 +3023,14 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'osnap') {
+                CAD.osnapEnabled = !CAD.osnapEnabled;
+                UI.log(`OSNAP: ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+
             if (state.activeCmd === 'offset' && state.step === 0) {
                 state.step = 1;
                 UI.log(`Offset distance: ${CAD.offsetDist.toFixed(4)}`);
@@ -3150,6 +3161,69 @@ const Commands = {
 
         if (state.activeCmd === 'leader' && state.step === 2) {
             this.completeLeaderCommand(input);
+            return true;
+        }
+
+        if (state.activeCmd === 'osnap') {
+            const value = input.toLowerCase();
+            const modes = {
+                end: 'endpoint',
+                endpoint: 'endpoint',
+                mid: 'midpoint',
+                midpoint: 'midpoint',
+                cen: 'center',
+                center: 'center',
+                int: 'intersection',
+                intersection: 'intersection',
+                per: 'perpendicular',
+                perpendicular: 'perpendicular',
+                tan: 'tangent',
+                tangent: 'tangent',
+                nea: 'nearest',
+                nearest: 'nearest'
+            };
+            if (value === 'on' || value === 'off') {
+                CAD.osnapEnabled = value === 'on';
+                UI.log(`OSNAP: ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'all') {
+                Object.keys(CAD.snapModes).forEach(mode => {
+                    CAD.snapModes[mode] = true;
+                });
+                UI.log('OSNAP: All modes enabled.');
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'none') {
+                Object.keys(CAD.snapModes).forEach(mode => {
+                    CAD.snapModes[mode] = false;
+                });
+                UI.log('OSNAP: All modes disabled.');
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'list') {
+                const enabled = Object.entries(CAD.snapModes)
+                    .filter(([, enabled]) => enabled)
+                    .map(([mode]) => mode);
+                UI.log(`OSNAP: Enabled modes: ${enabled.length ? enabled.join(', ') : 'None'}.`, 'prompt');
+                this.finishCommand();
+                return true;
+            }
+            const modeKey = modes[value];
+            if (modeKey) {
+                CAD.snapModes[modeKey] = !CAD.snapModes[modeKey];
+                UI.log(`OSNAP: ${modeKey} ${CAD.snapModes[modeKey] ? 'enabled' : 'disabled'}.`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`OSNAP: Unknown option "${input}".`, 'error');
             return true;
         }
 

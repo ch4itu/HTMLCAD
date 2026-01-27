@@ -143,7 +143,7 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | GRID | Toggle grid. |
 | SNAP | Toggle snap. |
 | ORTHO | Toggle ortho mode. |
-| OSNAP | Toggle object snap. |
+| OSNAP | Toggle object snap or enable specific modes (End/Mid/Cen/Int/Per/Tan/Nea). |
 | LAYER | Create, set, and toggle layer visibility (New/Set/On/Off/List). |
 | LAYFRZ | Freeze a layer (turn off visibility). |
 | LAYTHW | Thaw a layer (turn on visibility). |
