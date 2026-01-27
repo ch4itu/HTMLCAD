@@ -136,8 +136,8 @@ const Commands = {
         'properties': 'list',
         'props': 'list',
         'pr': 'list',
-        'qselect': 'selectall',
-        'selectsimilar': 'selectall',
+        'qselect': 'qselect',
+        'selectsimilar': 'selectsimilar',
 
         // Selection
         'all': 'selectall',
@@ -233,6 +233,11 @@ const Commands = {
             } else {
                 UI.canvasSelectCrossing();
             }
+            return;
+        }
+
+        if (command === 'qselect' && args.length > 0) {
+            this.selectByType(args[0]);
             return;
         }
 
@@ -599,6 +604,19 @@ const Commands = {
             case 'list':
                 this.listSelected();
                 this.finishCommand();
+                break;
+            case 'selectsimilar':
+                this.selectSimilar();
+                this.finishCommand();
+                break;
+            case 'qselect':
+                if (CAD.getVisibleEntities().length === 0) {
+                    UI.log('QSELECT: No entities to select.', 'error');
+                    this.finishCommand();
+                    break;
+                }
+                CAD.cmdOptions.waitingForQselectType = true;
+                UI.log(`QSELECT: Enter object type or [List]:`, 'prompt');
                 break;
 
             case 'grid':
@@ -2238,6 +2256,35 @@ const Commands = {
         });
     },
 
+    getSelectableTypes() {
+        const types = CAD.getVisibleEntities().map(entity => entity.type);
+        return Array.from(new Set(types)).sort();
+    },
+
+    selectByType(type) {
+        const normalizedType = type.toLowerCase();
+        const types = this.getSelectableTypes();
+        if (!types.includes(normalizedType)) {
+            UI.log(`QSELECT: Unknown type "${type}". Use LIST for options.`, 'error');
+            return;
+        }
+        CAD.selectedIds = CAD.getVisibleEntities()
+            .filter(entity => entity.type === normalizedType)
+            .map(entity => entity.id);
+        UI.log(`${CAD.selectedIds.length} ${normalizedType}(s) selected.`);
+        UI.updateCanvasSelectionInfo();
+        Renderer.draw();
+    },
+
+    selectSimilar() {
+        const selected = CAD.getSelectedEntities();
+        if (selected.length === 0) {
+            UI.log('SELECTSIMILAR: No objects selected.', 'error');
+            return;
+        }
+        this.selectByType(selected[0].type);
+    },
+
     undo() {
         const action = CAD.undo();
         if (action) {
@@ -3226,6 +3273,19 @@ const Commands = {
                 UI.log('INSERT: Specify insertion point:', 'prompt');
                 return true;
             }
+        }
+
+        if (state.activeCmd === 'qselect' && state.cmdOptions.waitingForQselectType) {
+            const query = input.toLowerCase();
+            if (query === 'list') {
+                const types = this.getSelectableTypes();
+                UI.log(`QSELECT types: ${types.length ? types.join(', ') : 'None'}`, 'prompt');
+                return true;
+            }
+            state.cmdOptions.waitingForQselectType = false;
+            this.selectByType(query);
+            this.finishCommand();
+            return true;
         }
 
         // BLOCK - name input

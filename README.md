@@ -112,6 +112,16 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | ID | `ID` | Read a coordinate. |
 | LIST | `LI` | List selected entity properties. |
 
+## Selection Commands
+
+| Command | Alias | Description |
+| --- | --- | --- |
+| SELECTALL | `ALL` | Select all entities. |
+| SELECTWINDOW |  | Window selection mode (left-to-right). |
+| SELECTCROSSING |  | Crossing selection mode (right-to-left). |
+| QSELECT |  | Select by object type (use `LIST` to see available types). |
+| SELECTSIMILAR |  | Select all objects matching the first selected object's type. |
+
 ## View & Utility Commands
 
 | Command | Alias | Description |
