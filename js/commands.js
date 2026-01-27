@@ -107,6 +107,10 @@ const Commands = {
         'dimradius': 'dimradius',
         'dimdia': 'dimdiameter',
         'dimdiameter': 'dimdiameter',
+        'dimbaseline': 'dimbaseline',
+        'dimbase': 'dimbaseline',
+        'dimcontinue': 'dimcontinue',
+        'dimcont': 'dimcontinue',
 
         // Utility commands
         'u': 'undo',
@@ -388,6 +392,24 @@ const Commands = {
 
             case 'dimdiameter':
                 UI.log('DIMDIAMETER: Select arc or circle:', 'prompt');
+                break;
+            case 'dimbaseline':
+                if (!CAD.lastLinearDim) {
+                    UI.log('DIMBASELINE: No previous linear dimension found.', 'error');
+                    this.finishCommand(true);
+                    break;
+                }
+                CAD.cmdOptions.dimBasePoint = { ...CAD.lastLinearDim.p1 };
+                UI.log('DIMBASELINE: Specify next extension line origin:', 'prompt');
+                break;
+            case 'dimcontinue':
+                if (!CAD.lastLinearDim) {
+                    UI.log('DIMCONTINUE: No previous linear dimension found.', 'error');
+                    this.finishCommand(true);
+                    break;
+                }
+                CAD.cmdOptions.dimBasePoint = { ...CAD.lastLinearDim.p2 };
+                UI.log('DIMCONTINUE: Specify next extension line origin:', 'prompt');
                 break;
 
             // Modify commands
@@ -980,6 +1002,10 @@ const Commands = {
             case 'dimlinear':
             case 'dimaligned':
                 this.handleDimLinearClick(point);
+                break;
+            case 'dimbaseline':
+            case 'dimcontinue':
+                this.handleDimContinueClick(point);
                 break;
 
             case 'dimradius':
@@ -2838,7 +2864,7 @@ const Commands = {
                     Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
 
             // Create dimension entity
-            CAD.addEntity({
+            const entity = CAD.addEntity({
                 type: 'dimension',
                 dimType: state.activeCmd === 'dimaligned' ? 'aligned' : 'linear',
                 p1: { ...p1 },
@@ -2847,6 +2873,7 @@ const Commands = {
                 value: distance,
                 text: distance.toFixed(2)
             });
+            CAD.lastLinearDim = entity;
 
             UI.log(`Dimension: ${distance.toFixed(4)}`);
             this.finishCommand();
@@ -2883,6 +2910,39 @@ const Commands = {
             this.finishCommand();
         } else {
             UI.log('Please select a circle or arc.', 'error');
+        }
+    },
+
+    handleDimContinueClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log(`${state.activeCmd === 'dimbaseline' ? 'DIMBASELINE' : 'DIMCONTINUE'}: Specify dimension line location:`, 'prompt');
+        } else if (state.step === 2) {
+            const p1 = state.cmdOptions.dimBasePoint;
+            const p2 = state.points[0];
+            const dimLine = state.points[1];
+            if (!p1) {
+                UI.log('Dimension base point missing.', 'error');
+                this.finishCommand(true);
+                return;
+            }
+            const distance = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y) ?
+                Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
+            const entity = CAD.addEntity({
+                type: 'dimension',
+                dimType: 'linear',
+                p1: { ...p1 },
+                p2: { ...p2 },
+                dimLinePos: { ...dimLine },
+                value: distance,
+                text: distance.toFixed(2)
+            });
+            CAD.lastLinearDim = entity;
+            UI.log(`Dimension: ${distance.toFixed(4)}`);
+            this.finishCommand();
         }
     },
 

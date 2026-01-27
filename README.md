@@ -103,6 +103,8 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | DIMANGULAR | `DAN` | Angular dimension. |
 | DIMRADIUS | `DRA` | Radius dimension. |
 | DIMDIAMETER | `DDI` | Diameter dimension. |
+| DIMBASELINE |  | Baseline dimension from last linear dimension. |
+| DIMCONTINUE |  | Continue dimension from last linear dimension. |
 
 ## Inquiry Commands
 

@@ -92,6 +92,7 @@ class StateManager {
         this.dimArrowSize = 2.5;        // Dimension arrow size (DIMASZ)
         this.dimScale = 1;              // Overall dimension scale (DIMSCALE)
         this.dimPrecision = 4;          // Decimal precision (DIMDEC)
+        this.lastLinearDim = null;
 
         // Layers
         this.layers = [
@@ -110,6 +111,7 @@ class StateManager {
         // Drawing info
         this.drawingName = 'Untitled';
         this.modified = false;
+        this.lastLinearDim = null;
 
         // Clipboard for copy/paste
         this.clipboard = [];
