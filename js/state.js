@@ -69,6 +69,7 @@ class StateManager {
         // Drawing settings
         this.lineWeight = 1;
         this.lineType = 'continuous';
+        this.lineTypeScale = 1;
         this.hatchPattern = 'solid';
 
         // Offset settings
@@ -91,6 +92,7 @@ class StateManager {
         this.dimArrowSize = 2.5;        // Dimension arrow size (DIMASZ)
         this.dimScale = 1;              // Overall dimension scale (DIMSCALE)
         this.dimPrecision = 4;          // Decimal precision (DIMDEC)
+        this.lastLinearDim = null;
 
         // Layers
         this.layers = [
@@ -109,6 +111,7 @@ class StateManager {
         // Drawing info
         this.drawingName = 'Untitled';
         this.modified = false;
+        this.lastLinearDim = null;
 
         // Clipboard for copy/paste
         this.clipboard = [];
@@ -892,7 +895,9 @@ class StateManager {
                 gridSpacing: this.gridSpacing,
                 snapEnabled: this.snapEnabled,
                 snapModes: this.snapModes,
-                orthoEnabled: this.orthoEnabled
+                orthoEnabled: this.orthoEnabled,
+                lineType: this.lineType,
+                lineTypeScale: this.lineTypeScale
             }
         };
     }
@@ -916,6 +921,8 @@ class StateManager {
                 this.snapEnabled = data.settings.snapEnabled !== false;
                 this.snapModes = { ...this.snapModes, ...data.settings.snapModes };
                 this.orthoEnabled = data.settings.orthoEnabled || false;
+                this.lineType = data.settings.lineType || this.lineType;
+                this.lineTypeScale = data.settings.lineTypeScale || this.lineTypeScale;
             }
 
             // Reset undo stack on load

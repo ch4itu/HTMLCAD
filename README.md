@@ -27,6 +27,7 @@ BrowserCAD is a browser-based CAD experience inspired by AutoCAD workflows. It s
 | ELLIPSE | `EL` | Draw ellipses. |
 | TEXT | `T` | Add single-line text. |
 | MTEXT | `MT` | Add multi-line text. |
+| LEADER | `LE` | Add a leader with text. |
 | POLYGON | `POL` | Draw a regular polygon. |
 | DONUT | `DO` | Draw donuts. |
 | RAY | `RAY` | Draw rays. |
@@ -102,6 +103,8 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | DIMANGULAR | `DAN` | Angular dimension. |
 | DIMRADIUS | `DRA` | Radius dimension. |
 | DIMDIAMETER | `DDI` | Diameter dimension. |
+| DIMBASELINE |  | Baseline dimension from last linear dimension. |
+| DIMCONTINUE |  | Continue dimension from last linear dimension. |
 
 ## Inquiry Commands
 
@@ -112,6 +115,16 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | ID | `ID` | Read a coordinate. |
 | LIST | `LI` | List selected entity properties. |
 
+## Selection Commands
+
+| Command | Alias | Description |
+| --- | --- | --- |
+| SELECTALL | `ALL` | Select all entities. |
+| SELECTWINDOW |  | Window selection mode (left-to-right). |
+| SELECTCROSSING |  | Crossing selection mode (right-to-left). |
+| QSELECT |  | Select by object type (use `LIST` to see available types). |
+| SELECTSIMILAR |  | Select all objects matching the first selected object's type. |
+
 ## View & Utility Commands
 
 | Command | Alias | Description |
@@ -119,7 +132,6 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | ZOOM | `Z` | Zoom (All/Extents/Window/Center). |
 | PAN | `P` | Pan view. |
 | REGEN | `RE` | Regenerate display. |
-| SELECTALL | `ALL` | Select all entities. |
 | UNDO | `U` | Undo last action. |
 | REDO | `Y` | Redo last action. |
 | APPLOAD | `LOAD` | Load AutoLISP scripts from file. |
@@ -132,6 +144,7 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | SNAP | Toggle snap. |
 | ORTHO | Toggle ortho mode. |
 | OSNAP | Toggle object snap. |
+| LAYER | Create, set, and toggle layer visibility (New/Set/On/Off/List). |
 | OFFSETGAPTYPE | Set gap type (0=Extend, 1=Fillet, 2=Chamfer). |
 | PDMODE | Set point display mode. |
 | PDSIZE | Set point display size. |
@@ -139,6 +152,8 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | DIMTXT | Set dimension text height. |
 | DIMASZ | Set dimension arrow size. |
 | DIMSCALE | Set overall dimension scale. |
+| LINETYPE | Set current or selected linetype (continuous/dashed/dotted/dashdot). |
+| LTSCALE | Set global linetype scale. |
 
 ## File Commands
 
