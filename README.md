@@ -145,6 +145,10 @@ Block references can be moved, rotated, scaled, mirrored, and copied like any ot
 | ORTHO | Toggle ortho mode. |
 | OSNAP | Toggle object snap. |
 | LAYER | Create, set, and toggle layer visibility (New/Set/On/Off/List). |
+| LAYFRZ | Freeze a layer (turn off visibility). |
+| LAYTHW | Thaw a layer (turn on visibility). |
+| LAYON | Turn layer visibility on. |
+| LAYOFF | Turn layer visibility off. |
 | OFFSETGAPTYPE | Set gap type (0=Extend, 1=Fillet, 2=Chamfer). |
 | PDMODE | Set point display mode. |
 | PDSIZE | Set point display size. |

@@ -130,6 +130,10 @@ const Commands = {
         'la': 'layer',
         '-la': 'layer',
         'layer': 'layer',
+        'layfrz': 'layfrz',
+        'laythw': 'laythw',
+        'layon': 'layon',
+        'layoff': 'layoff',
         'id': 'id',
         'dist': 'distance',
         'di': 'distance',
@@ -637,6 +641,18 @@ const Commands = {
                 break;
             case 'layer':
                 UI.log('LAYER: Enter option [New/Set/On/Off/List]:', 'prompt');
+                break;
+            case 'layfrz':
+                UI.log('LAYFRZ: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'laythw':
+                UI.log('LAYTHW: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'layon':
+                UI.log('LAYON: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'layoff':
+                UI.log('LAYOFF: Enter layer name or [Current]:', 'prompt');
                 break;
             case 'selectsimilar':
                 this.selectSimilar();
@@ -3497,6 +3513,26 @@ const Commands = {
                 return true;
             }
             UI.log(`LAYER: Unknown option "${input}".`, 'error');
+            return true;
+        }
+
+        if (['layfrz', 'laythw', 'layon', 'layoff'].includes(state.activeCmd)) {
+            const value = input.trim();
+            const targetName = value ? value : CAD.currentLayer;
+            const layer = CAD.getLayer(targetName);
+            if (!layer) {
+                UI.log(`LAYER: Layer "${targetName}" not found.`, 'error');
+                return true;
+            }
+            if (state.activeCmd === 'layfrz' || state.activeCmd === 'layoff') {
+                layer.visible = false;
+            } else {
+                layer.visible = true;
+            }
+            UI.updateLayerUI();
+            Renderer.draw();
+            UI.log(`LAYER: Layer "${targetName}" ${layer.visible ? 'On' : 'Off'}.`);
+            this.finishCommand();
             return true;
         }
 
