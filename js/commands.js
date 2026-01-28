@@ -80,6 +80,8 @@ const Commands = {
         'hatch': 'hatch',
         'bh': 'hatch',
         'bhatch': 'hatch',
+        'leader': 'leader',
+        'le': 'leader',
         'ar': 'array',
         'array': 'array',
         'arrayrect': 'arrayrect',
@@ -105,6 +107,10 @@ const Commands = {
         'dimradius': 'dimradius',
         'dimdia': 'dimdiameter',
         'dimdiameter': 'dimdiameter',
+        'dimbaseline': 'dimbaseline',
+        'dimbase': 'dimbaseline',
+        'dimcontinue': 'dimcontinue',
+        'dimcont': 'dimcontinue',
 
         // Utility commands
         'u': 'undo',
@@ -124,6 +130,10 @@ const Commands = {
         'la': 'layer',
         '-la': 'layer',
         'layer': 'layer',
+        'layfrz': 'layfrz',
+        'laythw': 'laythw',
+        'layon': 'layon',
+        'layoff': 'layoff',
         'id': 'id',
         'dist': 'distance',
         'di': 'distance',
@@ -136,8 +146,8 @@ const Commands = {
         'properties': 'list',
         'props': 'list',
         'pr': 'list',
-        'qselect': 'selectall',
-        'selectsimilar': 'selectall',
+        'qselect': 'qselect',
+        'selectsimilar': 'selectsimilar',
 
         // Selection
         'all': 'selectall',
@@ -158,6 +168,7 @@ const Commands = {
         'snap': 'snap',
         'ortho': 'ortho',
         'osnap': 'osnap',
+        'polar': 'polar',
         'image': 'imageattach',
         'imageattach': 'imageattach',
         'attach': 'imageattach',
@@ -168,6 +179,10 @@ const Commands = {
         'dimtxt': 'dimtxt',
         'dimasz': 'dimasz',
         'dimscale': 'dimscale',
+        'dimdec': 'dimdec',
+        'linetype': 'linetype',
+        'lt': 'linetype',
+        'ltscale': 'ltscale',
 
         // AutoLISP
         'lisp': 'lisp',
@@ -220,6 +235,24 @@ const Commands = {
         const command = this.aliases[cmdName];
         if (!command) {
             UI.log(`Unknown command: ${cmdName}`, 'error');
+            return;
+        }
+
+        if (command === 'selectwindow' || command === 'selectcrossing') {
+            if (!CAD.activeCmd) {
+                UI.setActiveButton(null);
+                UI.updateCommandPrompt(null);
+            }
+            if (command === 'selectwindow') {
+                UI.canvasSelectWindow();
+            } else {
+                UI.canvasSelectCrossing();
+            }
+            return;
+        }
+
+        if (command === 'qselect' && args.length > 0) {
+            this.selectByType(args[0]);
             return;
         }
 
@@ -366,6 +399,24 @@ const Commands = {
             case 'dimdiameter':
                 UI.log('DIMDIAMETER: Select arc or circle:', 'prompt');
                 break;
+            case 'dimbaseline':
+                if (!CAD.lastLinearDim) {
+                    UI.log('DIMBASELINE: No previous linear dimension found.', 'error');
+                    this.finishCommand(true);
+                    break;
+                }
+                CAD.cmdOptions.dimBasePoint = { ...CAD.lastLinearDim.p1 };
+                UI.log('DIMBASELINE: Specify next extension line origin:', 'prompt');
+                break;
+            case 'dimcontinue':
+                if (!CAD.lastLinearDim) {
+                    UI.log('DIMCONTINUE: No previous linear dimension found.', 'error');
+                    this.finishCommand(true);
+                    break;
+                }
+                CAD.cmdOptions.dimBasePoint = { ...CAD.lastLinearDim.p2 };
+                UI.log('DIMCONTINUE: Specify next extension line origin:', 'prompt');
+                break;
 
             // Modify commands
             case 'erase':
@@ -444,6 +495,9 @@ const Commands = {
             case 'hatch':
                 UI.log(`HATCH: Click inside a closed area or select a closed object.`, 'prompt');
                 UI.log(`HATCH: Pattern [${this.getHatchPatternOptions()}] <${CAD.hatchPattern}>:`, 'prompt');
+                break;
+            case 'leader':
+                UI.log('LEADER: Specify first point:', 'prompt');
                 break;
 
             case 'explode':
@@ -571,15 +625,6 @@ const Commands = {
                 Renderer.draw();
                 this.finishCommand();
                 break;
-            case 'selectwindow':
-                UI.canvasSelectWindow();
-                this.finishCommand();
-                break;
-            case 'selectcrossing':
-                UI.canvasSelectCrossing();
-                this.finishCommand();
-                break;
-
             case 'distance':
                 UI.log('DIST: Specify first point:', 'prompt');
                 break;
@@ -595,6 +640,34 @@ const Commands = {
             case 'list':
                 this.listSelected();
                 this.finishCommand();
+                break;
+            case 'layer':
+                UI.log('LAYER: Enter option [New/Set/On/Off/List]:', 'prompt');
+                break;
+            case 'layfrz':
+                UI.log('LAYFRZ: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'laythw':
+                UI.log('LAYTHW: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'layon':
+                UI.log('LAYON: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'layoff':
+                UI.log('LAYOFF: Enter layer name or [Current]:', 'prompt');
+                break;
+            case 'selectsimilar':
+                this.selectSimilar();
+                this.finishCommand();
+                break;
+            case 'qselect':
+                if (CAD.getVisibleEntities().length === 0) {
+                    UI.log('QSELECT: No entities to select.', 'error');
+                    this.finishCommand();
+                    break;
+                }
+                CAD.cmdOptions.waitingForQselectType = true;
+                UI.log(`QSELECT: Enter object type or [List]:`, 'prompt');
                 break;
 
             case 'grid':
@@ -617,6 +690,12 @@ const Commands = {
                 UI.log(`Ortho: ${CAD.orthoEnabled ? 'ON' : 'OFF'}`);
                 UI.updateStatusBar();
                 this.finishCommand();
+                break;
+            case 'osnap':
+                UI.log('OSNAP: Enter option [On/Off/End/Mid/Cen/Int/Per/Tan/Nea/All/None/List]:', 'prompt');
+                break;
+            case 'polar':
+                UI.log(`POLAR: Enter option [On/Off/Angle] <${CAD.polarAngle}>:`, 'prompt');
                 break;
 
             case 'offsetgaptype':
@@ -661,6 +740,17 @@ const Commands = {
 
             case 'dimscale':
                 UI.log(`DIMSCALE: Enter new dimension scale factor <${CAD.dimScale}>:`, 'prompt');
+                break;
+            case 'dimdec':
+                UI.log(`DIMDEC: Enter new dimension precision <${CAD.dimPrecision}>:`, 'prompt');
+                break;
+
+            case 'linetype':
+                UI.log(`LINETYPE: Enter name or [List] <${CAD.lineType}>:`, 'prompt');
+                break;
+
+            case 'ltscale':
+                UI.log(`LTSCALE: Enter new linetype scale <${CAD.lineTypeScale}>:`, 'prompt');
                 break;
 
             case 'new':
@@ -829,6 +919,10 @@ const Commands = {
                 this.handleTextClick(point);
                 break;
 
+            case 'leader':
+                this.handleLeaderClick(point);
+                break;
+
             case 'mtext':
                 this.handleMTextClick(point);
                 break;
@@ -938,6 +1032,10 @@ const Commands = {
             case 'dimlinear':
             case 'dimaligned':
                 this.handleDimLinearClick(point);
+                break;
+            case 'dimbaseline':
+            case 'dimcontinue':
+                this.handleDimContinueClick(point);
                 break;
 
             case 'dimradius':
@@ -1121,6 +1219,37 @@ const Commands = {
             });
             UI.log('Text created.');
         }
+        this.finishCommand();
+    },
+
+    handleLeaderClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log('LEADER: Specify next point:', 'prompt');
+        } else if (state.step === 2) {
+            UI.log('LEADER: Enter text:', 'prompt');
+        }
+    },
+
+    completeLeaderCommand(text) {
+        const points = CAD.points;
+        if (!text || points.length < 2) {
+            UI.log('LEADER: Text required to finish leader.', 'error');
+            return;
+        }
+        const height = CAD.textHeight || 10;
+        const anchor = points[points.length - 1];
+        CAD.addEntity({
+            type: 'leader',
+            points: points.map(p => ({ ...p })),
+            text: text,
+            height: height,
+            textPosition: { x: anchor.x, y: anchor.y }
+        });
+        UI.log('Leader created.');
         this.finishCommand();
     },
 
@@ -2212,6 +2341,10 @@ const Commands = {
                     UI.log(`  Vertices: ${entity.points.length}`);
                     UI.log(`  Closed: ${Utils.isPolygonClosed(entity.points)}`);
                     break;
+                case 'leader':
+                    UI.log(`  Points: ${entity.points.length}`);
+                    UI.log(`  Text: ${entity.text}`);
+                    break;
                 case 'image':
                     UI.log(`  Insertion: ${Utils.formatPoint(entity.p1)}`);
                     UI.log(`  Width: ${(entity.width ?? Math.abs(entity.p2.x - entity.p1.x)).toFixed(4)}`);
@@ -2232,6 +2365,39 @@ const Commands = {
                     break;
             }
         });
+    },
+
+    getSelectableTypes() {
+        const types = CAD.getVisibleEntities().map(entity => entity.type);
+        return Array.from(new Set(types)).sort();
+    },
+
+    selectByType(type) {
+        const normalizedType = type.toLowerCase();
+        const types = this.getSelectableTypes();
+        if (!types.includes(normalizedType)) {
+            UI.log(`QSELECT: Unknown type "${type}". Use LIST for options.`, 'error');
+            return;
+        }
+        CAD.selectedIds = CAD.getVisibleEntities()
+            .filter(entity => entity.type === normalizedType)
+            .map(entity => entity.id);
+        UI.log(`${CAD.selectedIds.length} ${normalizedType}(s) selected.`);
+        UI.updateCanvasSelectionInfo();
+        Renderer.draw();
+    },
+
+    selectSimilar() {
+        const selected = CAD.getSelectedEntities();
+        if (selected.length === 0) {
+            UI.log('SELECTSIMILAR: No objects selected.', 'error');
+            return;
+        }
+        this.selectByType(selected[0].type);
+    },
+
+    getLinetypeOptions() {
+        return ['continuous', 'dashed', 'dotted', 'dashdot'];
     },
 
     undo() {
@@ -2728,15 +2894,16 @@ const Commands = {
                     Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
 
             // Create dimension entity
-            CAD.addEntity({
+            const entity = CAD.addEntity({
                 type: 'dimension',
                 dimType: state.activeCmd === 'dimaligned' ? 'aligned' : 'linear',
                 p1: { ...p1 },
                 p2: { ...p2 },
                 dimLinePos: { ...dimLine },
                 value: distance,
-                text: distance.toFixed(2)
+                text: distance.toFixed(CAD.dimPrecision ?? 2)
             });
+            CAD.lastLinearDim = entity;
 
             UI.log(`Dimension: ${distance.toFixed(4)}`);
             this.finishCommand();
@@ -2765,7 +2932,7 @@ const Commands = {
                     radius: entity.r,
                     dimLinePos: { ...point },
                     value: value,
-                    text: `${prefix}${value.toFixed(2)}`
+                    text: `${prefix}${value.toFixed(CAD.dimPrecision ?? 2)}`
                 });
 
                 UI.log(`${state.activeCmd === 'dimdiameter' ? 'Diameter' : 'Radius'}: ${value.toFixed(4)}`);
@@ -2773,6 +2940,39 @@ const Commands = {
             this.finishCommand();
         } else {
             UI.log('Please select a circle or arc.', 'error');
+        }
+    },
+
+    handleDimContinueClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.step === 1) {
+            UI.log(`${state.activeCmd === 'dimbaseline' ? 'DIMBASELINE' : 'DIMCONTINUE'}: Specify dimension line location:`, 'prompt');
+        } else if (state.step === 2) {
+            const p1 = state.cmdOptions.dimBasePoint;
+            const p2 = state.points[0];
+            const dimLine = state.points[1];
+            if (!p1) {
+                UI.log('Dimension base point missing.', 'error');
+                this.finishCommand(true);
+                return;
+            }
+            const distance = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y) ?
+                Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
+            const entity = CAD.addEntity({
+                type: 'dimension',
+                dimType: 'linear',
+                p1: { ...p1 },
+                p2: { ...p2 },
+                dimLinePos: { ...dimLine },
+                value: distance,
+                text: distance.toFixed(CAD.dimPrecision ?? 2)
+            });
+            CAD.lastLinearDim = entity;
+            UI.log(`Dimension: ${distance.toFixed(4)}`);
+            this.finishCommand();
         }
     },
 
@@ -2824,6 +3024,22 @@ const Commands = {
             if (state.cmdOptions.needSelection && state.selectedIds.length === 0) {
                 UI.log('No objects selected.');
                 this.finishCommand(true);
+                return true;
+            }
+
+            if (state.activeCmd === 'osnap') {
+                CAD.osnapEnabled = !CAD.osnapEnabled;
+                UI.log(`OSNAP: ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+
+            if (state.activeCmd === 'polar') {
+                CAD.polarEnabled = !CAD.polarEnabled;
+                UI.log(`POLAR: ${CAD.polarEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
                 return true;
             }
 
@@ -2941,6 +3157,11 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'leader' && state.step === 2) {
+                UI.log('LEADER: Text required to finish leader.', 'error');
+                return true;
+            }
+
             if (state.activeCmd) {
                 this.finishCommand();
                 Renderer.draw();
@@ -2948,6 +3169,99 @@ const Commands = {
             }
 
             return false;
+        }
+
+        if (state.activeCmd === 'leader' && state.step === 2) {
+            this.completeLeaderCommand(input);
+            return true;
+        }
+
+        if (state.activeCmd === 'osnap') {
+            const value = input.toLowerCase();
+            const modes = {
+                end: 'endpoint',
+                endpoint: 'endpoint',
+                mid: 'midpoint',
+                midpoint: 'midpoint',
+                cen: 'center',
+                center: 'center',
+                int: 'intersection',
+                intersection: 'intersection',
+                per: 'perpendicular',
+                perpendicular: 'perpendicular',
+                tan: 'tangent',
+                tangent: 'tangent',
+                nea: 'nearest',
+                nearest: 'nearest'
+            };
+            if (value === 'on' || value === 'off') {
+                CAD.osnapEnabled = value === 'on';
+                UI.log(`OSNAP: ${CAD.osnapEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'all') {
+                Object.keys(CAD.snapModes).forEach(mode => {
+                    CAD.snapModes[mode] = true;
+                });
+                UI.log('OSNAP: All modes enabled.');
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'none') {
+                Object.keys(CAD.snapModes).forEach(mode => {
+                    CAD.snapModes[mode] = false;
+                });
+                UI.log('OSNAP: All modes disabled.');
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'list') {
+                const enabled = Object.entries(CAD.snapModes)
+                    .filter(([, enabled]) => enabled)
+                    .map(([mode]) => mode);
+                UI.log(`OSNAP: Enabled modes: ${enabled.length ? enabled.join(', ') : 'None'}.`, 'prompt');
+                this.finishCommand();
+                return true;
+            }
+            const modeKey = modes[value];
+            if (modeKey) {
+                CAD.snapModes[modeKey] = !CAD.snapModes[modeKey];
+                UI.log(`OSNAP: ${modeKey} ${CAD.snapModes[modeKey] ? 'enabled' : 'disabled'}.`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`OSNAP: Unknown option "${input}".`, 'error');
+            return true;
+        }
+
+        if (state.activeCmd === 'polar') {
+            const value = input.toLowerCase();
+            if (value === 'on' || value === 'off') {
+                CAD.polarEnabled = value === 'on';
+                UI.log(`POLAR: ${CAD.polarEnabled ? 'ON' : 'OFF'}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            if (value === 'angle') {
+                UI.log(`POLAR: Enter new angle <${CAD.polarAngle}>:`, 'prompt');
+                return true;
+            }
+            const angle = parseFloat(input);
+            if (!Number.isNaN(angle)) {
+                CAD.polarAngle = Math.abs(angle) || 45;
+                UI.log(`POLAR: Angle set to ${CAD.polarAngle}`);
+                UI.updateStatusBar();
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`POLAR: Unknown option "${input}".`, 'error');
+            return true;
         }
 
         // Check for coordinate input
@@ -3149,6 +3463,22 @@ const Commands = {
                 return true;
             }
 
+            if (state.activeCmd === 'dimdec') {
+                CAD.dimPrecision = Math.max(0, Math.round(num));
+                UI.log(`DIMDEC set to ${CAD.dimPrecision}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
+            if (state.activeCmd === 'ltscale') {
+                CAD.lineTypeScale = Math.abs(num) || 1;
+                UI.log(`LTSCALE set to ${CAD.lineTypeScale}`);
+                Renderer.draw();
+                this.finishCommand();
+                return true;
+            }
+
             // Polygon - number of sides
             if (state.activeCmd === 'polygon' && state.step === 0) {
                 state.cmdOptions.sides = Math.max(3, Math.round(num));
@@ -3222,6 +3552,137 @@ const Commands = {
                 UI.log('INSERT: Specify insertion point:', 'prompt');
                 return true;
             }
+        }
+
+        if (state.activeCmd === 'qselect' && state.cmdOptions.waitingForQselectType) {
+            const query = input.toLowerCase();
+            if (query === 'list') {
+                const types = this.getSelectableTypes();
+                UI.log(`QSELECT types: ${types.length ? types.join(', ') : 'None'}`, 'prompt');
+                return true;
+            }
+            state.cmdOptions.waitingForQselectType = false;
+            this.selectByType(query);
+            this.finishCommand();
+            return true;
+        }
+
+        if (state.activeCmd === 'layer') {
+            const tokens = input.trim().split(/\s+/);
+            const action = tokens[0]?.toLowerCase();
+            const name = tokens.slice(1).join(' ');
+            if (!action) {
+                UI.log('LAYER: Enter option [New/Set/On/Off/List]:', 'prompt');
+                return true;
+            }
+            if (action === 'list') {
+                CAD.layers.forEach(layer => {
+                    UI.log(`  ${layer.name} (${layer.visible ? 'On' : 'Off'})`);
+                });
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'new') {
+                if (!name) {
+                    UI.log('LAYER: Enter new layer name.', 'error');
+                    return true;
+                }
+                const layer = CAD.addLayer(name);
+                if (!layer) {
+                    UI.log(`LAYER: Layer "${name}" already exists.`, 'error');
+                    return true;
+                }
+                CAD.setCurrentLayer(name);
+                UI.updateLayerUI();
+                UI.log(`LAYER: Layer "${name}" created and set current.`);
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'set') {
+                if (!name) {
+                    UI.log('LAYER: Enter layer name to set current.', 'error');
+                    return true;
+                }
+                if (!CAD.setCurrentLayer(name)) {
+                    UI.log(`LAYER: Layer "${name}" not found.`, 'error');
+                    return true;
+                }
+                UI.updateLayerUI();
+                UI.log(`LAYER: Current layer set to "${name}".`);
+                this.finishCommand();
+                return true;
+            }
+            if (action === 'on' || action === 'off') {
+                if (!name) {
+                    UI.log(`LAYER: Enter layer name to turn ${action}.`, 'error');
+                    return true;
+                }
+                const layer = CAD.getLayer(name);
+                if (!layer) {
+                    UI.log(`LAYER: Layer "${name}" not found.`, 'error');
+                    return true;
+                }
+                layer.visible = action === 'on';
+                UI.updateLayerUI();
+                Renderer.draw();
+                UI.log(`LAYER: Layer "${name}" turned ${action}.`);
+                this.finishCommand();
+                return true;
+            }
+            if (CAD.setCurrentLayer(input.trim())) {
+                UI.updateLayerUI();
+                UI.log(`LAYER: Current layer set to "${input.trim()}".`);
+                this.finishCommand();
+                return true;
+            }
+            UI.log(`LAYER: Unknown option "${input}".`, 'error');
+            return true;
+        }
+
+        if (['layfrz', 'laythw', 'layon', 'layoff'].includes(state.activeCmd)) {
+            const value = input.trim();
+            const targetName = value ? value : CAD.currentLayer;
+            const layer = CAD.getLayer(targetName);
+            if (!layer) {
+                UI.log(`LAYER: Layer "${targetName}" not found.`, 'error');
+                return true;
+            }
+            if (state.activeCmd === 'layfrz' || state.activeCmd === 'layoff') {
+                layer.visible = false;
+            } else {
+                layer.visible = true;
+            }
+            UI.updateLayerUI();
+            Renderer.draw();
+            UI.log(`LAYER: Layer "${targetName}" ${layer.visible ? 'On' : 'Off'}.`);
+            this.finishCommand();
+            return true;
+        }
+
+        if (state.activeCmd === 'linetype') {
+            const value = input.toLowerCase();
+            const options = this.getLinetypeOptions();
+            if (value === 'list') {
+                UI.log(`LINETYPE options: ${options.join(', ')}`, 'prompt');
+                return true;
+            }
+            if (!options.includes(value)) {
+                UI.log(`LINETYPE: Unknown linetype "${input}". Use LIST to see options.`, 'error');
+                return true;
+            }
+            if (state.selectedIds.length > 0) {
+                CAD.saveUndoState('Set Linetype');
+                state.selectedIds.forEach(id => {
+                    CAD.updateEntity(id, { lineType: value }, true);
+                });
+                UI.log(`LINETYPE set to ${value} for ${state.selectedIds.length} object(s).`);
+                Renderer.draw();
+            } else {
+                CAD.lineType = value;
+                UI.log(`LINETYPE set to ${CAD.lineType}.`);
+            }
+            this.finishCommand();
+            return true;
         }
 
         // BLOCK - name input
