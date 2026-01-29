@@ -746,11 +746,31 @@ const Geometry = {
             // Perpendicular snap - requires a "from point" in the current drawing operation
             if (snapModes.perpendicular && CAD.points && CAD.points.length > 0) {
                 const fromPoint = CAD.points[CAD.points.length - 1];
-                const perpPoint = this.getPerpendicularPoint(fromPoint, entity);
-                if (perpPoint) {
-                    const d = Utils.dist(point, perpPoint);
-                    if (d < tolerance) {
-                        snaps.push({ point: perpPoint, type: 'perpendicular', distance: d });
+                // Check if cursor is near the entity first (like nearest snap)
+                const nearestPt = this.getNearestPoint(point, entity);
+                if (nearestPt) {
+                    const distToEntity = Utils.dist(point, nearestPt);
+                    if (distToEntity < tolerance) {
+                        // Cursor is near entity — calculate perpendicular foot from fromPoint
+                        const perpPoint = this.getPerpendicularPoint(fromPoint, entity);
+                        if (perpPoint) {
+                            snaps.push({ point: perpPoint, type: 'perpendicular', distance: distToEntity });
+                        }
+                    }
+                }
+            }
+
+            // Tangent snap - requires a "from point"
+            if (snapModes.tangent && CAD.points && CAD.points.length > 0) {
+                const fromPoint = CAD.points[CAD.points.length - 1];
+                const nearestPt = this.getNearestPoint(point, entity);
+                if (nearestPt) {
+                    const distToEntity = Utils.dist(point, nearestPt);
+                    if (distToEntity < tolerance) {
+                        const tangentPt = this.getTangentPoint(fromPoint, entity);
+                        if (tangentPt) {
+                            snaps.push({ point: tangentPt, type: 'tangent', distance: distToEntity });
+                        }
                     }
                 }
             }
@@ -778,8 +798,9 @@ const Geometry = {
             midpoint: 2,
             center: 3,
             perpendicular: 4,
-            nearest: 5,
-            grid: 6
+            tangent: 5,
+            nearest: 6,
+            grid: 7
         };
 
         snaps.sort((a, b) => {
@@ -884,7 +905,7 @@ const Geometry = {
             case 'circle':
                 const angle = Math.atan2(point.y - entity.center.y, point.x - entity.center.x);
                 return Utils.polarPoint(entity.center, angle, entity.r);
-            case 'polyline':
+            case 'polyline': {
                 let minDist = Infinity;
                 let nearest = null;
                 for (let i = 0; i < entity.points.length - 1; i++) {
@@ -896,6 +917,44 @@ const Geometry = {
                     }
                 }
                 return nearest;
+            }
+            case 'arc': {
+                const arcAngle = Math.atan2(point.y - entity.center.y, point.x - entity.center.x);
+                if (this.isAngleOnArc(arcAngle, entity)) {
+                    return Utils.polarPoint(entity.center, arcAngle, entity.r);
+                }
+                // If not on arc, return nearest arc endpoint
+                const ep1 = Utils.polarPoint(entity.center, entity.start, entity.r);
+                const ep2 = Utils.polarPoint(entity.center, entity.end, entity.r);
+                return Utils.dist(point, ep1) < Utils.dist(point, ep2) ? ep1 : ep2;
+            }
+            case 'rect': {
+                const corners = [
+                    entity.p1,
+                    { x: entity.p2.x, y: entity.p1.y },
+                    entity.p2,
+                    { x: entity.p1.x, y: entity.p2.y }
+                ];
+                let minDistR = Infinity;
+                let nearestR = null;
+                for (let i = 0; i < 4; i++) {
+                    const p = Utils.closestPointOnSegment(point, corners[i], corners[(i + 1) % 4]);
+                    const d = Utils.dist(point, p);
+                    if (d < minDistR) {
+                        minDistR = d;
+                        nearestR = p;
+                    }
+                }
+                return nearestR;
+            }
+            case 'ellipse': {
+                // Approximate nearest point on ellipse
+                const ea = Math.atan2(point.y - entity.center.y, point.x - entity.center.x);
+                return {
+                    x: entity.center.x + (entity.rx || entity.r) * Math.cos(ea),
+                    y: entity.center.y + (entity.ry || entity.r) * Math.sin(ea)
+                };
+            }
             default:
                 return null;
         }
@@ -925,13 +984,96 @@ const Geometry = {
                 // Perpendicular to circle is from center through the from point
                 const angle = Math.atan2(fromPoint.y - entity.center.y, fromPoint.x - entity.center.x);
                 return Utils.polarPoint(entity.center, angle, entity.r);
-            case 'arc':
-                // Similar to circle but check if point is within arc range
+            case 'arc': {
+                // Perpendicular to arc is from center through the from point, if on arc
                 const arcAngle = Math.atan2(fromPoint.y - entity.center.y, fromPoint.x - entity.center.x);
-                // Simplified - just return the nearest point on arc
-                return Utils.polarPoint(entity.center, arcAngle, entity.r);
+                if (this.isAngleOnArc(arcAngle, entity)) {
+                    return Utils.polarPoint(entity.center, arcAngle, entity.r);
+                }
+                return null;
+            }
+            case 'rect': {
+                // Treat rect as 4 line segments
+                const corners = [
+                    entity.p1,
+                    { x: entity.p2.x, y: entity.p1.y },
+                    entity.p2,
+                    { x: entity.p1.x, y: entity.p2.y }
+                ];
+                let minDist2 = Infinity;
+                let perpPoint2 = null;
+                for (let i = 0; i < 4; i++) {
+                    const pp = this.perpendicularToLine(fromPoint, corners[i], corners[(i + 1) % 4]);
+                    if (pp) {
+                        const d = Utils.dist(fromPoint, pp);
+                        if (d < minDist2) {
+                            minDist2 = d;
+                            perpPoint2 = pp;
+                        }
+                    }
+                }
+                return perpPoint2;
+            }
             default:
                 return null;
+        }
+    },
+
+    // Get tangent point from an external point to a circle/arc entity
+    getTangentPoint(fromPoint, entity) {
+        if (entity.type !== 'circle' && entity.type !== 'arc') return null;
+
+        const cx = entity.center.x;
+        const cy = entity.center.y;
+        const r = entity.r;
+        const dx = fromPoint.x - cx;
+        const dy = fromPoint.y - cy;
+        const distSq = dx * dx + dy * dy;
+
+        // Point must be outside the circle for an external tangent
+        if (distSq <= r * r) return null;
+
+        const dist = Math.sqrt(distSq);
+        // Angle from center to fromPoint
+        const angleToFrom = Math.atan2(dy, dx);
+        // Half-angle of the tangent lines
+        const halfAngle = Math.acos(r / dist);
+
+        // Two tangent points
+        const tp1 = Utils.polarPoint(entity.center, angleToFrom + halfAngle, r);
+        const tp2 = Utils.polarPoint(entity.center, angleToFrom - halfAngle, r);
+
+        // For arcs, check that the tangent point lies on the arc
+        if (entity.type === 'arc') {
+            const onArc1 = this.isAngleOnArc(Math.atan2(tp1.y - cy, tp1.x - cx), entity);
+            const onArc2 = this.isAngleOnArc(Math.atan2(tp2.y - cy, tp2.x - cx), entity);
+            if (onArc1 && onArc2) {
+                // Both on arc — return the closer one to the cursor
+                return Utils.dist(fromPoint, tp1) < Utils.dist(fromPoint, tp2) ? tp1 : tp2;
+            }
+            if (onArc1) return tp1;
+            if (onArc2) return tp2;
+            return null;
+        }
+
+        // Return the tangent point closer to the cursor (fromPoint)
+        return Utils.dist(fromPoint, tp1) < Utils.dist(fromPoint, tp2) ? tp1 : tp2;
+    },
+
+    // Check if an angle falls on an arc's angular range
+    isAngleOnArc(angle, arc) {
+        let start = arc.start;
+        let end = arc.end;
+        // Normalize to [0, 2π)
+        const TWO_PI = Math.PI * 2;
+        start = ((start % TWO_PI) + TWO_PI) % TWO_PI;
+        end = ((end % TWO_PI) + TWO_PI) % TWO_PI;
+        angle = ((angle % TWO_PI) + TWO_PI) % TWO_PI;
+
+        if (start <= end) {
+            return angle >= start && angle <= end;
+        } else {
+            return angle >= start || angle <= end;
         }
     },
 

@@ -275,6 +275,10 @@ const Commands = {
         'dimbreak': 'dimbreak',
         'dimspace': 'dimspace',
 
+        // Help
+        'help': 'help',
+        '?': 'help',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -330,6 +334,12 @@ const Commands = {
 
         if (command === 'qselect' && args.length > 0) {
             this.selectByType(args[0]);
+            return;
+        }
+
+        // Handle HELP with a topic argument
+        if (command === 'help' && args.length > 0) {
+            this.showCommandHelp(args[0]);
             return;
         }
 
@@ -1044,9 +1054,233 @@ const Commands = {
                 UI.log('DIMSPACE: Select base dimension:', 'prompt');
                 break;
 
+            // Help command
+            case 'help':
+                this.showHelp();
+                break;
+
             default:
                 UI.log(`Command "${name}" not yet implemented.`, 'error');
                 this.finishCommand();
+        }
+    },
+
+    // ==========================================
+    // HELP COMMAND
+    // ==========================================
+
+    showHelp(topic) {
+        if (topic) {
+            this.showCommandHelp(topic);
+            this.finishCommand();
+            return;
+        }
+
+        UI.log('=== BrowserCAD Help ===', 'info');
+        UI.log('');
+
+        UI.log('--- Drawing Commands ---', 'info');
+        UI.log('  LINE (L)        Draw lines');
+        UI.log('  PLINE (PL)      Draw polylines');
+        UI.log('  CIRCLE (C)      Draw circles');
+        UI.log('  ARC (A)         Draw arcs');
+        UI.log('  RECT (REC)      Draw rectangles');
+        UI.log('  ELLIPSE (EL)    Draw ellipses');
+        UI.log('  TEXT (T)        Single-line text');
+        UI.log('  MTEXT (MT)      Multi-line text');
+        UI.log('  POLYGON (POL)   Regular polygon');
+        UI.log('  DONUT (DO)      Draw donuts');
+        UI.log('  RAY             Draw rays');
+        UI.log('  XLINE (XL)      Construction lines');
+        UI.log('  SPLINE (SPL)    Draw splines');
+        UI.log('  HATCH (H)       Hatch closed areas');
+        UI.log('  LEADER (LE)     Leader with text');
+        UI.log('  IMAGEATTACH     Attach image for tracing');
+        UI.log('  REVCLOUD (RC)   Revision cloud');
+        UI.log('  WIPEOUT         Masking polygon');
+        UI.log('  SOLID (SO)      Filled triangle/quad');
+        UI.log('  REGION (REG)    Create region from boundary');
+        UI.log('  BOUNDARY (BO)   Create polyline from boundary');
+        UI.log('');
+
+        UI.log('--- Modify Commands ---', 'info');
+        UI.log('  MOVE (M)        Move objects');
+        UI.log('  COPY (CO)       Copy objects');
+        UI.log('  ROTATE (RO)     Rotate objects');
+        UI.log('  SCALE (SC)      Scale objects');
+        UI.log('  MIRROR (MI)     Mirror objects');
+        UI.log('  OFFSET (O)      Offset entities');
+        UI.log('  TRIM (TR)       Trim objects');
+        UI.log('  EXTEND (EX)     Extend objects');
+        UI.log('  FILLET (F)      Fillet between lines');
+        UI.log('  CHAMFER (CHA)   Chamfer between lines');
+        UI.log('  BREAK (BR)      Break an object');
+        UI.log('  STRETCH (S)     Stretch via window');
+        UI.log('  JOIN (J)        Join segments');
+        UI.log('  PEDIT (PE)      Edit polylines');
+        UI.log('  ERASE (E)       Erase objects');
+        UI.log('  EXPLODE (X)     Explode compound objects');
+        UI.log('  ARRAY (AR)      Rectangular array');
+        UI.log('  ARRAYPOLAR      Polar array');
+        UI.log('  MATCHPROP (MA)  Copy properties');
+        UI.log('  ALIGN (AL)      Align objects');
+        UI.log('  SCALETEXT (ST)  Scale text height');
+        UI.log('  JUSTIFYTEXT (JT) Set text justification');
+        UI.log('  DIVIDE (DIV)    Divide into segments');
+        UI.log('  MEASURE (ME)    Measure intervals');
+        UI.log('  OVERKILL        Remove duplicates');
+        UI.log('');
+
+        UI.log('--- Block Commands ---', 'info');
+        UI.log('  BLOCK (B)       Create block');
+        UI.log('  INSERT (I)      Insert block');
+        UI.log('');
+
+        UI.log('--- Dimension Commands ---', 'info');
+        UI.log('  DIMLINEAR (DIM) Linear dimension');
+        UI.log('  DIMALIGNED (DAL) Aligned dimension');
+        UI.log('  DIMANGULAR (DAN) Angular dimension');
+        UI.log('  DIMRADIUS (DRA) Radius dimension');
+        UI.log('  DIMDIAMETER (DDI) Diameter dimension');
+        UI.log('  DIMBASELINE     Baseline dimension');
+        UI.log('  DIMCONTINUE     Continue dimension');
+        UI.log('  DIMORDINATE (DOR) Ordinate dimension');
+        UI.log('  QDIM            Quick dimension');
+        UI.log('  DIMARC          Arc length dimension');
+        UI.log('  DIMBREAK        Toggle dimension break');
+        UI.log('  DIMSPACE        Space dimensions evenly');
+        UI.log('');
+
+        UI.log('--- Inquiry Commands ---', 'info');
+        UI.log('  DISTANCE (DI)   Measure distance');
+        UI.log('  AREA (AA)       Measure area');
+        UI.log('  ID              Read coordinate');
+        UI.log('  LIST (LI)       List entity properties');
+        UI.log('');
+
+        UI.log('--- Selection Commands ---', 'info');
+        UI.log('  SELECTALL (ALL) Select all');
+        UI.log('  QSELECT         Select by type');
+        UI.log('  SELECTSIMILAR   Select similar objects');
+        UI.log('  FILTER (FI)     Filter by type/layer/color');
+        UI.log('');
+
+        UI.log('--- Layer Commands ---', 'info');
+        UI.log('  LAYER (LA)      Layer management');
+        UI.log('  LAYFRZ           Freeze layer');
+        UI.log('  LAYTHW           Thaw layer');
+        UI.log('  LAYON            Turn layer on');
+        UI.log('  LAYOFF           Turn layer off');
+        UI.log('  LAYLCK           Lock layer');
+        UI.log('  LAYULK           Unlock layer');
+        UI.log('  LAYDEL           Delete layer');
+        UI.log('  LAYISO           Isolate layer');
+        UI.log('  LAYUNISO         Restore layers');
+        UI.log('  LAYMERGE         Merge layers');
+        UI.log('');
+
+        UI.log('--- View & Utility ---', 'info');
+        UI.log('  ZOOM (Z)        Zoom (All/Extents/Window)');
+        UI.log('  PAN (P)         Pan view');
+        UI.log('  REGEN (RE)      Regenerate display');
+        UI.log('  UNDO (U)        Undo');
+        UI.log('  REDO (Y)        Redo');
+        UI.log('  VIEW            Named views');
+        UI.log('  FIND            Search and replace text');
+        UI.log('  PURGE (PU)      Remove unused items');
+        UI.log('  APPLOAD         Load AutoLISP scripts');
+        UI.log('');
+
+        UI.log('--- Settings ---', 'info');
+        UI.log('  GRID            Toggle grid');
+        UI.log('  SNAP            Toggle snap');
+        UI.log('  ORTHO           Toggle ortho');
+        UI.log('  OSNAP           Object snap modes');
+        UI.log('  POLAR           Polar tracking');
+        UI.log('  LINETYPE (LT)   Set linetype');
+        UI.log('  LTSCALE         Linetype scale');
+        UI.log('');
+
+        UI.log('--- File Commands ---', 'info');
+        UI.log('  NEW             New drawing');
+        UI.log('  SAVE            Save to local storage');
+        UI.log('  OPEN            Open from local storage');
+        UI.log('  EXPORT (DXFOUT) Export DXF');
+        UI.log('');
+
+        UI.log('--- Keyboard Shortcuts ---', 'info');
+        UI.log('  Ctrl+Z    Undo');
+        UI.log('  Ctrl+Y    Redo');
+        UI.log('  F2        Toggle grid');
+        UI.log('  F3        Toggle OSNAP');
+        UI.log('  F8        Toggle ortho');
+        UI.log('  F10       Toggle polar');
+        UI.log('  Esc       Cancel command');
+        UI.log('  Enter/Space  Confirm / repeat last');
+        UI.log('');
+
+        UI.log('Type HELP <command> for detailed help on a specific command.', 'info');
+        this.finishCommand();
+    },
+
+    showCommandHelp(cmdName) {
+        const lc = cmdName.toLowerCase();
+        const resolved = this.aliases[lc] || lc;
+
+        const helpTexts = {
+            'line': 'LINE (L): Draw line segments. Click start point, then next points. Press Enter to finish. Type "U" to undo last segment. Type "C" to close.',
+            'polyline': 'PLINE (PL): Draw polylines. Click points sequentially. Press Enter to finish. Type "C" to close.',
+            'circle': 'CIRCLE (C): Draw circles. Specify center point then radius. Options: 3P (three-point), 2P (two-point), Ttr (tangent-tangent-radius).',
+            'arc': 'ARC (A): Draw arcs. Specify center point, then start point, then end point.',
+            'rect': 'RECT (REC): Draw rectangles. Click first corner, then opposite corner.',
+            'ellipse': 'ELLIPSE (EL): Draw ellipses. Specify axis endpoints, then other axis distance.',
+            'text': 'TEXT (T): Add single-line text. Click insertion point, enter height, rotation, then text content.',
+            'mtext': 'MTEXT (MT): Add multi-line text. Click two corners for text box, then enter text.',
+            'polygon': 'POLYGON (POL): Draw regular polygon. Enter sides, specify center, then inscribed/circumscribed radius.',
+            'donut': 'DONUT (DO): Draw donuts. Enter inner/outer diameters, then click center points.',
+            'move': 'MOVE (M): Move objects. Select objects, specify base point, then destination point.',
+            'copy': 'COPY (CO): Copy objects. Select objects, specify base point, then destination(s). Press Enter to finish.',
+            'rotate': 'ROTATE (RO): Rotate objects. Select objects, specify base point, then rotation angle.',
+            'scale': 'SCALE (SC): Scale objects. Select objects, specify base point, enter scale factor. Options: Copy, Reference.',
+            'mirror': 'MIRROR (MI): Mirror objects. Select objects, specify two mirror line points.',
+            'offset': 'OFFSET (O): Offset entities. Enter distance, select object, click side to offset.',
+            'trim': 'TRIM (TR): Trim objects at cutting edges. Select cutting edges (Enter for all), then click portions to trim.',
+            'extend': 'EXTEND (EX): Extend objects to boundary edges. Select boundaries (Enter for all), then click objects to extend.',
+            'fillet': 'FILLET (F): Round corner between two lines. Enter radius, select two lines.',
+            'chamfer': 'CHAMFER (CHA): Bevel corner between two lines. Enter distances, select two lines.',
+            'erase': 'ERASE (E): Delete selected objects.',
+            'explode': 'EXPLODE (X): Break compound objects (blocks, polylines, rects) into individual entities.',
+            'block': 'BLOCK (B): Create a named block. Select objects, enter name, specify base point.',
+            'insert': 'INSERT (I): Insert a block reference. Enter name, scale, rotation, click placement.',
+            'array': 'ARRAY (AR): Create rectangular array. Select objects, enter rows, columns, spacing.',
+            'hatch': 'HATCH (H): Fill closed areas. Click inside a closed boundary.',
+            'matchprop': 'MATCHPROP (MA): Copy properties (layer, color, linetype) from source to destination objects.',
+            'align': 'ALIGN (AL): Align objects using point pairs. Select objects, specify source/dest point pairs.',
+            'divide': 'DIVIDE (DIV): Place point markers at equal intervals along an object.',
+            'measure': 'MEASURE (ME): Place point markers at specified distance intervals along an object.',
+            'overkill': 'OVERKILL: Remove duplicate/overlapping entities automatically.',
+            'dimlinear': 'DIMLINEAR (DIM): Create horizontal/vertical dimension. Click two points, then place dimension line.',
+            'dimaligned': 'DIMALIGNED (DAL): Create aligned dimension. Click two points, then place dimension line.',
+            'dimangular': 'DIMANGULAR (DAN): Measure angle between two lines. Select two lines, then place dimension.',
+            'dimradius': 'DIMRADIUS (DRA): Dimension radius. Select arc/circle, then place dimension.',
+            'dimdiameter': 'DIMDIAMETER (DDI): Dimension diameter. Select arc/circle, then place dimension.',
+            'dimordinate': 'DIMORDINATE (DOR): Ordinate dimension. Click feature point, then leader endpoint. Type X/Y to force axis.',
+            'qdim': 'QDIM: Quick dimension. Select objects, then click to place. Auto-generates dimensions.',
+            'osnap': 'OSNAP: Object snap settings. Options: On/Off/End/Mid/Cen/Int/Per/Tan/Nea/All/None/List.',
+            'layer': 'LAYER (LA): Layer management. Options: New (create), Set (current), On/Off (visibility), List.',
+            'zoom': 'ZOOM (Z): Zoom view. Options: All/Extents/Window/Center. Scroll wheel also zooms.',
+            'find': 'FIND: Search and replace text in all text/mtext entities.',
+            'filter': 'FILTER (FI): Select entities by Type, Layer, or Color filter.',
+            'view': 'VIEW: Named views. Options: Save/Restore/Delete/List.',
+            'purge': 'PURGE (PU): Remove unused layers and unreferenced block definitions.',
+            'help': 'HELP (?): Display available commands and keyboard shortcuts. Type HELP <command> for details.'
+        };
+
+        const helpText = helpTexts[resolved];
+        if (helpText) {
+            UI.log(helpText, 'info');
+        } else {
+            UI.log(`No detailed help available for "${cmdName}". Try HELP for the full command list.`, 'info');
         }
     },
 
