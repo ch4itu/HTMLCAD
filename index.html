@@ -212,6 +212,14 @@
                             <i class="icon">&#9678;</i>
                             <span class="label">Donut</span>
                         </button>
+                        <button class="tool-btn" data-cmd="revcloud" onclick="App.executeCommand('revcloud')" title="Revision Cloud (RC)">
+                            <i class="icon">&#9729;</i>
+                            <span class="label">RevCloud</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="wipeout" onclick="App.executeCommand('wipeout')" title="Wipeout">
+                            <i class="icon">&#9634;</i>
+                            <span class="label">Wipeout</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
                 </div>
@@ -228,6 +236,10 @@
                         <button class="tool-btn" data-cmd="dimdiameter" onclick="App.executeCommand('dimdiameter')" title="Diameter Dimension">
                             <i class="icon">&#8960;</i>
                             <span class="label">DimDia</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="dimordinate" onclick="App.executeCommand('dimordinate')" title="Ordinate Dimension (DOR)">
+                            <i class="icon">&#8614;</i>
+                            <span class="label">DimOrd</span>
                         </button>
                     </div>
                     <div class="ribbon-panel-title">Dimension</div>
@@ -316,6 +328,27 @@
                     </div>
                     <div class="ribbon-panel-title">Advanced</div>
                 </div>
+                <div class="ribbon-panel">
+                    <div class="ribbon-panel-content">
+                        <button class="tool-btn" data-cmd="matchprop" onclick="App.executeCommand('matchprop')" title="Match Properties (MA)">
+                            <i class="icon">&#9898;</i>
+                            <span class="label">MatchProp</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="divide" onclick="App.executeCommand('divide')" title="Divide (DIV)">
+                            <i class="icon">&#8942;</i>
+                            <span class="label">Divide</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="measure" onclick="App.executeCommand('measure')" title="Measure (ME)">
+                            <i class="icon">&#8943;</i>
+                            <span class="label">Measure</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="overkill" onclick="App.executeCommand('overkill')" title="Overkill - Remove Duplicates">
+                            <i class="icon">&#10060;</i>
+                            <span class="label">Overkill</span>
+                        </button>
+                    </div>
+                    <div class="ribbon-panel-title">Utilities</div>
+                </div>
             </div>
 
             <!-- View Tab Content -->
@@ -337,6 +370,10 @@
                         <button class="tool-btn" onclick="App.centerView()" title="Center View">
                             <i class="icon">&#9678;</i>
                             <span class="label">Center</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="view" onclick="App.executeCommand('view')" title="Named Views (VIEW)">
+                            <i class="icon">&#9673;</i>
+                            <span class="label">Views</span>
                         </button>
                     </div>
                     <div class="ribbon-panel-title">Zoom</div>

@@ -198,6 +198,42 @@ const Commands = {
         'insert': 'insert',
         'ddinsert': 'insert',
 
+        // Divide/Measure commands
+        'div': 'divide',
+        'divide': 'divide',
+        'me': 'measure',
+        'measure': 'measure',
+
+        // Revision cloud
+        'revcloud': 'revcloud',
+        'rc': 'revcloud',
+
+        // Match properties
+        'ma': 'matchprop',
+        'matchprop': 'matchprop',
+        'painter': 'matchprop',
+
+        // Wipeout
+        'wipeout': 'wipeout',
+
+        // Layer lock/unlock
+        'laylck': 'laylck',
+        'laylock': 'laylck',
+        'layulk': 'layulk',
+        'layunlock': 'layulk',
+
+        // Named views
+        'view': 'view',
+        '-view': 'view',
+
+        // Ordinate dimension
+        'dimord': 'dimordinate',
+        'dimordinate': 'dimordinate',
+        'dor': 'dimordinate',
+
+        // Overkill
+        'overkill': 'overkill',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -824,6 +860,51 @@ const Commands = {
                 }
                 break;
 
+            // ==========================================
+            // NEW QUICK-WIN COMMANDS
+            // ==========================================
+
+            case 'divide':
+                UI.log('DIVIDE: Select object to divide:', 'prompt');
+                break;
+
+            case 'measure':
+                UI.log('MEASURE: Select object to measure:', 'prompt');
+                break;
+
+            case 'revcloud':
+                UI.log(`REVCLOUD: Specify arc length <${CAD.cmdOptions.revcloudArcLen || 15}>:`, 'prompt');
+                CAD.cmdOptions.revcloudArcLen = CAD.cmdOptions.revcloudArcLen || 15;
+                break;
+
+            case 'matchprop':
+                UI.log('MATCHPROP: Select source object:', 'prompt');
+                break;
+
+            case 'wipeout':
+                UI.log('WIPEOUT: Specify first point:', 'prompt');
+                break;
+
+            case 'laylck':
+                UI.log('LAYLCK: Enter layer name to lock:', 'prompt');
+                break;
+
+            case 'layulk':
+                UI.log('LAYULK: Enter layer name to unlock:', 'prompt');
+                break;
+
+            case 'view':
+                UI.log('VIEW: Enter option [Save/Restore/Delete/List]:', 'prompt');
+                break;
+
+            case 'dimordinate':
+                UI.log('DIMORDINATE: Specify feature location:', 'prompt');
+                break;
+
+            case 'overkill':
+                this.executeOverkill();
+                break;
+
             default:
                 UI.log(`Command "${name}" not yet implemented.`, 'error');
                 this.finishCommand();
@@ -1049,6 +1130,31 @@ const Commands = {
 
             case 'insert':
                 this.handleInsertClick(point);
+                break;
+
+            // New quick-win commands
+            case 'divide':
+                this.handleDivideClick(point);
+                break;
+
+            case 'measure':
+                this.handleMeasureClick(point);
+                break;
+
+            case 'revcloud':
+                this.handleRevcloudClick(point);
+                break;
+
+            case 'matchprop':
+                this.handleMatchpropClick(point);
+                break;
+
+            case 'wipeout':
+                this.handleWipeoutClick(point);
+                break;
+
+            case 'dimordinate':
+                this.handleDimOrdinateClick(point);
                 break;
 
             default:
@@ -1993,19 +2099,10 @@ const Commands = {
     // SELECTION HANDLING
     // ==========================================
 
-    handleSelectionClick(point) {
-        const state = CAD;
-        const hit = this.hitTest(point);
-
-        if (hit) {
-            state.selectedIds = [hit.id];
-            UI.log('1 found.');
-        } else {
-            // Start window selection
-            state.selectionMode = true;
-            state.selectStart = point;
-            UI.log('Specify opposite corner:');
-        }
+    // Selection click with cycling is defined in QUICK-WIN section
+    _oldHandleSelectionClick(point) {
+        // Replaced by handleSelectionClick with selection cycling support
+        this.handleSelectionClick(point);
     },
 
     finishSelection(endPoint) {
@@ -2977,6 +3074,522 @@ const Commands = {
     },
 
     // ==========================================
+    // QUICK-WIN COMMAND HANDLERS
+    // ==========================================
+
+    // --- Entity length/point helpers ---
+    getEntityLength(entity) {
+        switch (entity.type) {
+            case 'line':
+                return Utils.dist(entity.p1, entity.p2);
+            case 'circle':
+                return 2 * Math.PI * entity.r;
+            case 'arc': {
+                let sweep = entity.end - entity.start;
+                if (sweep < 0) sweep += 2 * Math.PI;
+                return entity.r * sweep;
+            }
+            case 'polyline': {
+                let len = 0;
+                for (let i = 1; i < entity.points.length; i++) {
+                    len += Utils.dist(entity.points[i - 1], entity.points[i]);
+                }
+                return len;
+            }
+            case 'ellipse': {
+                // Approximate ellipse perimeter (Ramanujan)
+                const a = entity.rx, b = entity.ry;
+                return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+            }
+            case 'rect': {
+                const w = Math.abs(entity.p2.x - entity.p1.x);
+                const h = Math.abs(entity.p2.y - entity.p1.y);
+                return 2 * (w + h);
+            }
+            default:
+                return 0;
+        }
+    },
+
+    getPointAtDistance(entity, distance) {
+        switch (entity.type) {
+            case 'line': {
+                const len = Utils.dist(entity.p1, entity.p2);
+                if (len === 0) return { ...entity.p1 };
+                const t = distance / len;
+                return Utils.lerp(entity.p1, entity.p2, t);
+            }
+            case 'circle': {
+                const angle = (distance / entity.r); // in radians
+                return {
+                    x: entity.center.x + entity.r * Math.cos(angle),
+                    y: entity.center.y + entity.r * Math.sin(angle)
+                };
+            }
+            case 'arc': {
+                const angle = entity.start + (distance / entity.r);
+                return {
+                    x: entity.center.x + entity.r * Math.cos(angle),
+                    y: entity.center.y + entity.r * Math.sin(angle)
+                };
+            }
+            case 'polyline': {
+                let remaining = distance;
+                for (let i = 1; i < entity.points.length; i++) {
+                    const segLen = Utils.dist(entity.points[i - 1], entity.points[i]);
+                    if (remaining <= segLen) {
+                        const t = segLen > 0 ? remaining / segLen : 0;
+                        return Utils.lerp(entity.points[i - 1], entity.points[i], t);
+                    }
+                    remaining -= segLen;
+                }
+                return { ...entity.points[entity.points.length - 1] };
+            }
+            case 'rect': {
+                // Trace around rectangle perimeter
+                const corners = [
+                    { ...entity.p1 },
+                    { x: entity.p2.x, y: entity.p1.y },
+                    { ...entity.p2 },
+                    { x: entity.p1.x, y: entity.p2.y },
+                    { ...entity.p1 }
+                ];
+                let remaining = distance;
+                for (let i = 1; i < corners.length; i++) {
+                    const segLen = Utils.dist(corners[i - 1], corners[i]);
+                    if (remaining <= segLen) {
+                        const t = segLen > 0 ? remaining / segLen : 0;
+                        return Utils.lerp(corners[i - 1], corners[i], t);
+                    }
+                    remaining -= segLen;
+                }
+                return { ...corners[corners.length - 1] };
+            }
+            default:
+                return null;
+        }
+    },
+
+    // --- DIVIDE ---
+    handleDivideClick(point) {
+        const hit = this.hitTest(point);
+        if (!hit) {
+            UI.log('DIVIDE: No object found. Select an object:', 'prompt');
+            return;
+        }
+        const length = this.getEntityLength(hit);
+        if (length <= 0) {
+            UI.log('DIVIDE: Cannot divide this object type.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.cmdOptions.divideTarget = hit;
+        UI.log('DIVIDE: Enter number of segments <2>:', 'prompt');
+    },
+
+    executeDivide(entity, segments) {
+        const length = this.getEntityLength(entity);
+        const segLen = length / segments;
+        CAD.saveUndoState('Divide');
+
+        for (let i = 1; i < segments; i++) {
+            const pt = this.getPointAtDistance(entity, segLen * i);
+            if (pt) {
+                CAD.addEntity({ type: 'point', position: pt }, true);
+            }
+        }
+        UI.log(`DIVIDE: ${segments - 1} point(s) placed.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- MEASURE ---
+    handleMeasureClick(point) {
+        const hit = this.hitTest(point);
+        if (!hit) {
+            UI.log('MEASURE: No object found. Select an object:', 'prompt');
+            return;
+        }
+        const length = this.getEntityLength(hit);
+        if (length <= 0) {
+            UI.log('MEASURE: Cannot measure this object type.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.cmdOptions.measureTarget = hit;
+        UI.log('MEASURE: Specify length of interval:', 'prompt');
+    },
+
+    executeMeasure(entity, interval) {
+        const length = this.getEntityLength(entity);
+        const count = Math.floor(length / interval);
+        if (count < 1) {
+            UI.log('MEASURE: Interval is larger than entity length.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Measure');
+
+        for (let i = 1; i <= count; i++) {
+            const pt = this.getPointAtDistance(entity, interval * i);
+            if (pt) {
+                CAD.addEntity({ type: 'point', position: pt }, true);
+            }
+        }
+        UI.log(`MEASURE: ${count} point(s) placed at ${interval} intervals.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- REVCLOUD ---
+    handleRevcloudClick(point) {
+        const state = CAD;
+        if (state.step === 0) {
+            // Still waiting for arc length input, accept default
+            state.step = 1;
+            UI.log('REVCLOUD: Specify first point:', 'prompt');
+            return;
+        }
+        state.points.push(point);
+        if (state.points.length === 1) {
+            UI.log('REVCLOUD: Specify next point or [Close]:', 'prompt');
+        } else {
+            const first = state.points[0];
+            const last = state.points[state.points.length - 1];
+            if (Utils.dist(first, last) < 15 / CAD.zoom && state.points.length >= 3) {
+                // Close the revcloud
+                this.createRevcloud(state.points);
+                return;
+            }
+            UI.log('REVCLOUD: Specify next point or [Close]:', 'prompt');
+        }
+        Renderer.draw();
+    },
+
+    createRevcloud(points) {
+        const arcLen = CAD.cmdOptions.revcloudArcLen || 15;
+        // Generate arc bumps along the polyline path
+        const revcloudPoints = [];
+        for (let i = 0; i < points.length; i++) {
+            const p1 = points[i];
+            const p2 = points[(i + 1) % points.length];
+            const segLen = Utils.dist(p1, p2);
+            const numArcs = Math.max(1, Math.round(segLen / arcLen));
+            const angle = Utils.angle(p1, p2);
+            const perpAngle = angle + Math.PI / 2;
+            const bumpHeight = arcLen * 0.4;
+
+            for (let j = 0; j < numArcs; j++) {
+                const t0 = j / numArcs;
+                const t1 = (j + 1) / numArcs;
+                const tMid = (t0 + t1) / 2;
+
+                revcloudPoints.push(Utils.lerp(p1, p2, t0));
+                // Add arc bump point
+                const midPt = Utils.lerp(p1, p2, tMid);
+                revcloudPoints.push({
+                    x: midPt.x + bumpHeight * Math.cos(perpAngle),
+                    y: midPt.y + bumpHeight * Math.sin(perpAngle)
+                });
+            }
+        }
+        // Close the shape
+        if (revcloudPoints.length > 0) {
+            revcloudPoints.push({ ...revcloudPoints[0] });
+        }
+
+        CAD.saveUndoState('Revision Cloud');
+        CAD.addEntity({
+            type: 'polyline',
+            points: revcloudPoints,
+            isRevcloud: true
+        }, true);
+        UI.log('REVCLOUD: Revision cloud created.');
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- MATCHPROP ---
+    handleMatchpropClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+        if (!hit) {
+            UI.log('MATCHPROP: No object found. Try again.', 'prompt');
+            return;
+        }
+
+        if (!state.cmdOptions.matchSource) {
+            // First click: select source
+            state.cmdOptions.matchSource = hit;
+            UI.log(`MATCHPROP: Source: ${hit.type} on layer "${hit.layer}". Select destination objects:`, 'prompt');
+        } else {
+            // Subsequent clicks: apply properties to destination
+            const src = state.cmdOptions.matchSource;
+            CAD.saveUndoState('Match Properties');
+            CAD.updateEntity(hit.id, {
+                layer: src.layer,
+                lineWeight: src.lineWeight,
+                lineType: src.lineType,
+                color: src.color || undefined
+            });
+            UI.log(`MATCHPROP: Properties applied to ${hit.type}. Select next or press Enter to finish.`, 'prompt');
+            Renderer.draw();
+        }
+    },
+
+    // --- WIPEOUT ---
+    handleWipeoutClick(point) {
+        const state = CAD;
+        state.points.push(point);
+
+        if (state.points.length === 1) {
+            UI.log('WIPEOUT: Specify next point:', 'prompt');
+        } else {
+            UI.log(`WIPEOUT: Specify next point or press Enter to finish (${state.points.length} points):`, 'prompt');
+        }
+        Renderer.draw();
+    },
+
+    createWipeout() {
+        const state = CAD;
+        if (state.points.length < 3) {
+            UI.log('WIPEOUT: Need at least 3 points.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Wipeout');
+        // Close the polygon
+        const pts = [...state.points, { ...state.points[0] }];
+        CAD.addEntity({
+            type: 'wipeout',
+            points: pts
+        }, true);
+        UI.log('WIPEOUT: Wipeout created.');
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- LAYER LOCK/UNLOCK ---
+    lockLayer(layerName, lock) {
+        const layer = CAD.getLayer(layerName);
+        if (!layer) {
+            const layerNames = CAD.layers.map(l => l.name).join(', ');
+            UI.log(`Layer "${layerName}" not found. Available: ${layerNames}`, 'error');
+            return;
+        }
+        layer.locked = lock;
+        UI.log(`Layer "${layerName}" ${lock ? 'locked' : 'unlocked'}.`);
+        UI.updateLayerUI();
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- NAMED VIEWS ---
+    saveNamedView(name) {
+        if (!name) {
+            UI.log('VIEW: Enter a valid name.', 'error');
+            return;
+        }
+        if (!CAD.namedViews) CAD.namedViews = {};
+        CAD.namedViews[name] = {
+            pan: { ...CAD.pan },
+            zoom: CAD.zoom
+        };
+        UI.log(`VIEW: View "${name}" saved.`);
+        this.finishCommand();
+    },
+
+    restoreNamedView(name) {
+        if (!CAD.namedViews || !CAD.namedViews[name]) {
+            UI.log(`VIEW: View "${name}" not found.`, 'error');
+            return;
+        }
+        const view = CAD.namedViews[name];
+        CAD.pan = { ...view.pan };
+        CAD.zoom = view.zoom;
+        UI.log(`VIEW: Restored view "${name}".`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    deleteNamedView(name) {
+        if (!CAD.namedViews || !CAD.namedViews[name]) {
+            UI.log(`VIEW: View "${name}" not found.`, 'error');
+            return;
+        }
+        delete CAD.namedViews[name];
+        UI.log(`VIEW: View "${name}" deleted.`);
+        this.finishCommand();
+    },
+
+    listNamedViews() {
+        if (!CAD.namedViews || Object.keys(CAD.namedViews).length === 0) {
+            UI.log('VIEW: No named views defined.');
+        } else {
+            const views = Object.keys(CAD.namedViews);
+            UI.log(`VIEW: ${views.length} view(s): ${views.join(', ')}`);
+        }
+        this.finishCommand();
+    },
+
+    // --- DIMORDINATE ---
+    handleDimOrdinateClick(point) {
+        const state = CAD;
+        if (state.step === 0) {
+            state.points.push(point);
+            state.step = 1;
+            UI.log('DIMORDINATE: Specify leader endpoint or [Xdatum/Ydatum]:', 'prompt');
+        } else if (state.step === 1) {
+            state.points.push(point);
+            const featurePt = state.points[0];
+            const leaderEnd = state.points[1];
+
+            // Determine X or Y based on direction of leader
+            const dx = Math.abs(leaderEnd.x - featurePt.x);
+            const dy = Math.abs(leaderEnd.y - featurePt.y);
+            const isXDatum = state.cmdOptions.dimOrdAxis === 'x' || (!state.cmdOptions.dimOrdAxis && dy > dx);
+            const isYDatum = state.cmdOptions.dimOrdAxis === 'y' || (!state.cmdOptions.dimOrdAxis && dx >= dy);
+
+            const value = isXDatum ? featurePt.x : featurePt.y;
+            const precision = CAD.dimPrecision || 4;
+            const text = value.toFixed(precision);
+
+            CAD.saveUndoState('Ordinate Dimension');
+            CAD.addEntity({
+                type: 'dimension',
+                dimType: 'ordinate',
+                featurePoint: { ...featurePt },
+                leaderEnd: { ...leaderEnd },
+                isXDatum: isXDatum,
+                text: text,
+                value: value
+            }, true);
+
+            UI.log(`DIMORDINATE: ${isXDatum ? 'X' : 'Y'} = ${text}`);
+            CAD.lastLinearDim = { p1: featurePt, p2: leaderEnd };
+            this.finishCommand();
+            Renderer.draw();
+        }
+    },
+
+    // --- SELECTION CYCLING ---
+    hitTestAll(point) {
+        const tolerance = 10 / CAD.zoom;
+        const entities = CAD.getVisibleEntities();
+        const hits = [];
+
+        for (let i = entities.length - 1; i >= 0; i--) {
+            if (Geometry.hitTest(point, entities[i], tolerance)) {
+                hits.push(entities[i]);
+            }
+        }
+        return hits;
+    },
+
+    handleSelectionClick(point) {
+        const hits = this.hitTestAll(point);
+        if (hits.length === 0) {
+            // Start window/crossing selection
+            CAD.selectionMode = true;
+            CAD.selectStart = point;
+            Renderer.draw();
+            return;
+        }
+
+        if (hits.length === 1) {
+            CAD.select(hits[0].id);
+            UI.log(`Selected: ${hits[0].type} on layer "${hits[0].layer}"`);
+        } else {
+            // Selection cycling: cycle through overlapping entities
+            if (!CAD.cmdOptions._cycleHits ||
+                !CAD.cmdOptions._cyclePoint ||
+                Utils.dist(CAD.cmdOptions._cyclePoint, point) > 5 / CAD.zoom) {
+                // New cycle location
+                CAD.cmdOptions._cycleHits = hits;
+                CAD.cmdOptions._cycleIndex = 0;
+                CAD.cmdOptions._cyclePoint = { ...point };
+            } else {
+                // Advance cycle
+                CAD.cmdOptions._cycleIndex = (CAD.cmdOptions._cycleIndex + 1) % hits.length;
+            }
+
+            const idx = CAD.cmdOptions._cycleIndex;
+            const entity = hits[idx];
+            CAD.clearSelection();
+            CAD.select(entity.id);
+            UI.log(`Cycling (${idx + 1}/${hits.length}): ${entity.type} on layer "${entity.layer}". Click again to cycle.`);
+        }
+        UI.updateSelectionRibbon();
+        Renderer.draw();
+    },
+
+    // --- OVERKILL ---
+    executeOverkill() {
+        const entities = CAD.getVisibleEntities();
+        const toRemove = [];
+        const tolerance = 0.001;
+
+        for (let i = 0; i < entities.length; i++) {
+            if (toRemove.includes(entities[i].id)) continue;
+            for (let j = i + 1; j < entities.length; j++) {
+                if (toRemove.includes(entities[j].id)) continue;
+                if (this.areEntitiesDuplicate(entities[i], entities[j], tolerance)) {
+                    toRemove.push(entities[j].id);
+                }
+            }
+        }
+
+        if (toRemove.length === 0) {
+            UI.log('OVERKILL: No duplicate objects found.');
+        } else {
+            CAD.saveUndoState('Overkill');
+            CAD.removeEntities(toRemove, true);
+            UI.log(`OVERKILL: ${toRemove.length} duplicate object(s) removed.`);
+        }
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    areEntitiesDuplicate(a, b, tol) {
+        if (a.type !== b.type) return false;
+        if (a.layer !== b.layer) return false;
+
+        switch (a.type) {
+            case 'line':
+                return (this.pointsEqual(a.p1, b.p1, tol) && this.pointsEqual(a.p2, b.p2, tol)) ||
+                       (this.pointsEqual(a.p1, b.p2, tol) && this.pointsEqual(a.p2, b.p1, tol));
+            case 'circle':
+                return this.pointsEqual(a.center, b.center, tol) && Math.abs(a.r - b.r) < tol;
+            case 'arc':
+                return this.pointsEqual(a.center, b.center, tol) &&
+                       Math.abs(a.r - b.r) < tol &&
+                       Math.abs(a.start - b.start) < tol &&
+                       Math.abs(a.end - b.end) < tol;
+            case 'rect':
+                return (this.pointsEqual(a.p1, b.p1, tol) && this.pointsEqual(a.p2, b.p2, tol)) ||
+                       (this.pointsEqual(a.p1, b.p2, tol) && this.pointsEqual(a.p2, b.p1, tol));
+            case 'point':
+                return this.pointsEqual(a.position, b.position, tol);
+            case 'polyline':
+                if (a.points.length !== b.points.length) return false;
+                return a.points.every((p, i) => this.pointsEqual(p, b.points[i], tol));
+            case 'text':
+            case 'mtext':
+                return this.pointsEqual(a.position, b.position, tol) && a.text === b.text;
+            case 'ellipse':
+                return this.pointsEqual(a.center, b.center, tol) &&
+                       Math.abs(a.rx - b.rx) < tol &&
+                       Math.abs(a.ry - b.ry) < tol;
+            default:
+                return false;
+        }
+    },
+
+    pointsEqual(a, b, tol) {
+        return Math.abs(a.x - b.x) < tol && Math.abs(a.y - b.y) < tol;
+    },
+
+    // ==========================================
     // INPUT HANDLING
     // ==========================================
 
@@ -3157,6 +3770,37 @@ const Commands = {
                 return true;
             }
 
+            // WIPEOUT - finish on Enter
+            if (state.activeCmd === 'wipeout' && state.points.length >= 3) {
+                this.createWipeout();
+                return true;
+            }
+
+            // REVCLOUD - accept default arc length on Enter
+            if (state.activeCmd === 'revcloud' && state.step === 0) {
+                state.step = 1;
+                UI.log('REVCLOUD: Specify first point:', 'prompt');
+                return true;
+            }
+
+            // REVCLOUD - close on Enter
+            if (state.activeCmd === 'revcloud' && state.points.length >= 3) {
+                this.createRevcloud(state.points);
+                return true;
+            }
+
+            // MATCHPROP - finish on Enter
+            if (state.activeCmd === 'matchprop' && state.cmdOptions.matchSource) {
+                this.finishCommand();
+                return true;
+            }
+
+            // VIEW - toggle default on enter
+            if (state.activeCmd === 'view') {
+                this.listNamedViews();
+                return true;
+            }
+
             if (state.activeCmd === 'leader' && state.step === 2) {
                 UI.log('LEADER: Text required to finish leader.', 'error');
                 return true;
@@ -3174,6 +3818,110 @@ const Commands = {
         if (state.activeCmd === 'leader' && state.step === 2) {
             this.completeLeaderCommand(input);
             return true;
+        }
+
+        // DIVIDE - number of segments input
+        if (state.activeCmd === 'divide' && state.cmdOptions.divideTarget) {
+            const num = parseInt(input);
+            if (!isNaN(num) && num >= 2) {
+                this.executeDivide(state.cmdOptions.divideTarget, num);
+                return true;
+            }
+            UI.log('DIVIDE: Enter a valid number (2 or more).', 'error');
+            return true;
+        }
+
+        // MEASURE - distance input
+        if (state.activeCmd === 'measure' && state.cmdOptions.measureTarget) {
+            const dist = parseFloat(input);
+            if (!isNaN(dist) && dist > 0) {
+                this.executeMeasure(state.cmdOptions.measureTarget, dist);
+                return true;
+            }
+            UI.log('MEASURE: Enter a valid positive distance.', 'error');
+            return true;
+        }
+
+        // REVCLOUD - arc length input
+        if (state.activeCmd === 'revcloud' && state.step === 0) {
+            const arcLen = parseFloat(input);
+            if (!isNaN(arcLen) && arcLen > 0) {
+                CAD.cmdOptions.revcloudArcLen = arcLen;
+                state.step = 1;
+                UI.log('REVCLOUD: Specify first point:', 'prompt');
+                return true;
+            }
+            // If not a number, accept default and start picking
+            state.step = 1;
+            UI.log('REVCLOUD: Specify first point:', 'prompt');
+            return true;
+        }
+
+        // VIEW command
+        if (state.activeCmd === 'view') {
+            const value = input.toLowerCase();
+            if (state.cmdOptions.viewAction === 'save') {
+                this.saveNamedView(input.trim());
+                return true;
+            }
+            if (state.cmdOptions.viewAction === 'restore') {
+                this.restoreNamedView(input.trim());
+                return true;
+            }
+            if (state.cmdOptions.viewAction === 'delete') {
+                this.deleteNamedView(input.trim());
+                return true;
+            }
+            if (value === 's' || value === 'save') {
+                state.cmdOptions.viewAction = 'save';
+                UI.log('VIEW: Enter name for current view:', 'prompt');
+                return true;
+            }
+            if (value === 'r' || value === 'restore') {
+                state.cmdOptions.viewAction = 'restore';
+                const viewNames = Object.keys(CAD.namedViews || {});
+                UI.log(`VIEW: Available views: ${viewNames.length ? viewNames.join(', ') : 'None'}`);
+                UI.log('VIEW: Enter view name to restore:', 'prompt');
+                return true;
+            }
+            if (value === 'd' || value === 'delete') {
+                state.cmdOptions.viewAction = 'delete';
+                UI.log('VIEW: Enter view name to delete:', 'prompt');
+                return true;
+            }
+            if (value === 'l' || value === 'list') {
+                this.listNamedViews();
+                return true;
+            }
+            UI.log('VIEW: Unknown option. [Save/Restore/Delete/List]', 'error');
+            return true;
+        }
+
+        // LAYLCK - lock layer
+        if (state.activeCmd === 'laylck') {
+            this.lockLayer(input.trim(), true);
+            return true;
+        }
+
+        // LAYULK - unlock layer
+        if (state.activeCmd === 'layulk') {
+            this.lockLayer(input.trim(), false);
+            return true;
+        }
+
+        // DIMORDINATE - axis option
+        if (state.activeCmd === 'dimordinate' && state.step === 1) {
+            const opt = input.toLowerCase();
+            if (opt === 'x' || opt === 'xdatum') {
+                CAD.cmdOptions.dimOrdAxis = 'x';
+                UI.log('DIMORDINATE: X datum selected. Specify leader endpoint:', 'prompt');
+                return true;
+            }
+            if (opt === 'y' || opt === 'ydatum') {
+                CAD.cmdOptions.dimOrdAxis = 'y';
+                UI.log('DIMORDINATE: Y datum selected. Specify leader endpoint:', 'prompt');
+                return true;
+            }
         }
 
         if (state.activeCmd === 'osnap') {

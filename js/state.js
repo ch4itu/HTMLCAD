@@ -120,6 +120,9 @@ class StateManager {
         // { blockName: { name, basePoint, entities: [...], description } }
         this.blocks = {};
 
+        // Named views { name: { pan: {x,y}, zoom: number } }
+        this.namedViews = {};
+
         // Grid display
         this.showGrid = true;
         this.gridSpacing = 100;
@@ -207,6 +210,18 @@ class StateManager {
             const layer = this.getLayer(e.layer);
             return layer && layer.visible;
         });
+    }
+
+    getEditableEntities() {
+        return this.entities.filter(e => {
+            const layer = this.getLayer(e.layer);
+            return layer && layer.visible && !layer.locked;
+        });
+    }
+
+    isEntityLocked(entity) {
+        const layer = this.getLayer(entity.layer);
+        return layer && layer.locked;
     }
 
     // ==========================================
@@ -880,12 +895,13 @@ class StateManager {
 
     toJSON() {
         return {
-            version: '1.1',
+            version: '1.2',
             name: this.drawingName,
             layers: this.layers,
             currentLayer: this.currentLayer,
             entities: this.entities,
             blocks: this.blocks,
+            namedViews: this.namedViews,
             view: {
                 pan: this.pan,
                 zoom: this.zoom
@@ -910,6 +926,7 @@ class StateManager {
             this.currentLayer = data.currentLayer || '0';
             this.entities = data.entities || [];
             this.blocks = data.blocks || {};
+            this.namedViews = data.namedViews || {};
 
             if (data.view) {
                 this.pan = data.view.pan || this.pan;
@@ -945,6 +962,7 @@ class StateManager {
         this.entities = [];
         this.selectedIds = [];
         this.blocks = {};
+        this.namedViews = {};
         this.layers = [
             { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }
         ];
