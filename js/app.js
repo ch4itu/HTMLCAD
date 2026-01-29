@@ -489,6 +489,15 @@ const MobileUI = {
             case 'help':
                 App.executeCommand('help');
                 break;
+            case 'driveopen':
+                Storage.openFromDrive();
+                break;
+            case 'drivesave':
+                Storage.saveToDrivePrompt();
+                break;
+            case 'googlesignin':
+                Storage.handleGoogleSignIn();
+                break;
         }
     },
 

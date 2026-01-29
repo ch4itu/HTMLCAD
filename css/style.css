@@ -1794,3 +1794,66 @@ body {
     }
 }
 
+/* ============================================
+   GOOGLE DRIVE INTEGRATION
+   ============================================ */
+
+.menu-separator {
+    width: 1px;
+    height: 16px;
+    background: var(--border-medium);
+    align-self: center;
+    margin: 0 4px;
+}
+
+.drive-menu {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.drive-menu.drive-ready {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.google-signin-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    margin-right: 10px;
+    transition: all 0.15s ease;
+}
+
+.google-signin-btn:hover {
+    background: var(--bg-lighter);
+    border-color: var(--border-light);
+    color: var(--text-bright);
+}
+
+.google-signin-btn.signed-in {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+.google-signin-btn.signed-in:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.google-signin-btn svg {
+    flex-shrink: 0;
+}
+
+.mobile-menu-divider {
+    height: 1px;
+    background: var(--border-medium);
+    margin: 4px 0;
+}
+
