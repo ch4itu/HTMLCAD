@@ -86,7 +86,11 @@ const Storage = {
             if (!saved) return false;
 
             const settings = JSON.parse(saved);
-            Object.assign(CAD, settings);
+            const { snapModes, ...rest } = settings;
+            Object.assign(CAD, rest);
+            if (snapModes) {
+                CAD.snapModes = { ...CAD.snapModes, ...snapModes };
+            }
             UI.updateStatusBar();
             return true;
         } catch (e) {

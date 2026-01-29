@@ -94,6 +94,7 @@ const App = {
 
         // Update cursor position
         CAD.cursor = world;
+        CAD.cursorWorld = world;
         CAD.tempEnd = world;
         UI.updateCoordinates(world.x, world.y);
 
