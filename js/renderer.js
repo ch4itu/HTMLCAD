@@ -202,6 +202,7 @@ const Renderer = {
         const state = CAD;
 
         state.entities.forEach(entity => {
+            if (entity._hidden) return;
             const layer = state.getLayer(entity.layer);
             if (!layer || !layer.visible) return;
 

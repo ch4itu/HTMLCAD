@@ -207,6 +207,7 @@ class StateManager {
 
     getVisibleEntities() {
         return this.entities.filter(e => {
+            if (e._hidden) return false;
             const layer = this.getLayer(e.layer);
             return layer && layer.visible;
         });
@@ -214,6 +215,7 @@ class StateManager {
 
     getEditableEntities() {
         return this.entities.filter(e => {
+            if (e._hidden) return false;
             const layer = this.getLayer(e.layer);
             return layer && layer.visible && !layer.locked;
         });
@@ -556,6 +558,10 @@ class StateManager {
     }
 
     clearSelection() {
+        // Store previous selection for SELECTPREVIOUS command
+        if (this.selectedIds.length > 0) {
+            this._previousSelection = [...this.selectedIds];
+        }
         this.selectedIds = [];
         // Update UI
         if (typeof UI !== 'undefined') {
