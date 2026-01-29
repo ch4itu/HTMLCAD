@@ -233,6 +233,14 @@
                             <i class="icon">&#11035;</i>
                             <span class="label">Boundary</span>
                         </button>
+                        <button class="tool-btn" data-cmd="mline" onclick="App.executeCommand('mline')" title="Multiline (ML)">
+                            <i class="icon">&#9552;</i>
+                            <span class="label">MLine</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="table" onclick="App.executeCommand('table')" title="Table (TB)">
+                            <i class="icon">&#9638;</i>
+                            <span class="label">Table</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
                 </div>
@@ -398,6 +406,39 @@
                         </button>
                     </div>
                     <div class="ribbon-panel-title">Selection</div>
+                </div>
+                <div class="ribbon-panel">
+                    <div class="ribbon-panel-content">
+                        <button class="tool-btn" data-cmd="chprop" onclick="App.executeCommand('chprop')" title="Change Properties (CH)">
+                            <i class="icon">&#9998;</i>
+                            <span class="label">ChProp</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="draworderfront" onclick="App.executeCommand('draworderfront')" title="Bring to Front">
+                            <i class="icon">&#8679;</i>
+                            <span class="label">ToFront</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="draworderback" onclick="App.executeCommand('draworderback')" title="Send to Back">
+                            <i class="icon">&#8681;</i>
+                            <span class="label">ToBack</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="group" onclick="App.executeCommand('group')" title="Group Objects (G)">
+                            <i class="icon">&#9881;</i>
+                            <span class="label">Group</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="hideobjects" onclick="App.executeCommand('hideobjects')" title="Hide Objects">
+                            <i class="icon">&#9676;</i>
+                            <span class="label">Hide</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="unisolateobjects" onclick="App.executeCommand('unisolateobjects')" title="Show All Objects">
+                            <i class="icon">&#9673;</i>
+                            <span class="label">ShowAll</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="reverse" onclick="App.executeCommand('reverse')" title="Reverse Direction">
+                            <i class="icon">&#8634;</i>
+                            <span class="label">Reverse</span>
+                        </button>
+                    </div>
+                    <div class="ribbon-panel-title">Advanced</div>
                 </div>
             </div>
 

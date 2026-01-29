@@ -279,6 +279,47 @@ const Commands = {
         'help': 'help',
         '?': 'help',
 
+        // Phase 3: Advanced Drawing & Editing
+        'chprop': 'chprop',
+        'change': 'chprop',
+        'ch': 'chprop',
+
+        'draworder': 'draworder',
+        'dr': 'draworder',
+        'bringtofront': 'draworderfront',
+        'draworderfront': 'draworderfront',
+        'sendtoback': 'draworderback',
+        'draworderback': 'draworderback',
+        'draworderabove': 'draworderabove',
+        'draworderbelow': 'draworderbelow',
+        'texttofront': 'texttofront',
+
+        'hideobjects': 'hideobjects',
+        'isolateobjects': 'isolateobjects',
+        'unisolateobjects': 'unisolateobjects',
+        'objectshide': 'hideobjects',
+        'objectsisolate': 'isolateobjects',
+
+        'group': 'group',
+        'g': 'group',
+        'ungroup': 'ungroup',
+
+        'arraypath': 'arraypath',
+
+        'mline': 'mline',
+        'ml': 'mline',
+
+        'table': 'table',
+        'tb': 'table',
+
+        'copybase': 'copybase',
+        'pasteblock': 'pasteblock',
+        'pasteasblock': 'pasteblock',
+
+        'reverse': 'reverse',
+
+        'selectprevious': 'selectprevious',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -1059,6 +1100,188 @@ const Commands = {
                 this.showHelp();
                 break;
 
+            // ==========================================
+            // PHASE 3 COMMANDS
+            // ==========================================
+
+            // Change properties
+            case 'chprop':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('CHPROP: Select objects to change properties:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('CHPROP: Enter property to change [Color/LAyer/LType/LtScale/LWeight/Thickness]:', 'prompt');
+                    CAD.cmdOptions.chpropStep = 'property';
+                }
+                break;
+
+            // Draw order
+            case 'draworder':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('DRAWORDER: Select objects:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('DRAWORDER: Enter option [Above/Under/Front/Back]:', 'prompt');
+                    CAD.cmdOptions.draworderStep = 'option';
+                }
+                break;
+
+            case 'draworderfront':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('DRAWORDER: Select objects to bring to front:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.draworderAction = 'front';
+                } else {
+                    this.executeDrawOrder('front');
+                }
+                break;
+
+            case 'draworderback':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('DRAWORDER: Select objects to send to back:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.draworderAction = 'back';
+                } else {
+                    this.executeDrawOrder('back');
+                }
+                break;
+
+            case 'draworderabove':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('DRAWORDER: Select objects to move above:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.draworderAction = 'above';
+                } else {
+                    UI.log('DRAWORDER: Select reference object:', 'prompt');
+                    CAD.cmdOptions.draworderStep = 'ref';
+                }
+                break;
+
+            case 'draworderbelow':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('DRAWORDER: Select objects to move below:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.draworderAction = 'below';
+                } else {
+                    UI.log('DRAWORDER: Select reference object:', 'prompt');
+                    CAD.cmdOptions.draworderStep = 'ref';
+                }
+                break;
+
+            case 'texttofront':
+                this.executeTextToFront();
+                break;
+
+            // Hide/Isolate objects
+            case 'hideobjects':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('HIDEOBJECTS: Select objects to hide:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.hideAction = 'hide';
+                } else {
+                    this.executeHideObjects();
+                }
+                break;
+
+            case 'isolateobjects':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('ISOLATEOBJECTS: Select objects to isolate (all others hidden):', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.hideAction = 'isolate';
+                } else {
+                    this.executeIsolateObjects();
+                }
+                break;
+
+            case 'unisolateobjects':
+                this.executeUnisolateObjects();
+                break;
+
+            // Group / Ungroup
+            case 'group':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('GROUP: Select objects to group:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('GROUP: Enter group name (or press Enter for auto-name):', 'prompt');
+                    CAD.cmdOptions.groupStep = 'name';
+                }
+                break;
+
+            case 'ungroup':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('UNGROUP: Select grouped object:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    this.executeUngroup();
+                }
+                break;
+
+            // Array along path
+            case 'arraypath':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('ARRAYPATH: Select objects to array:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('ARRAYPATH: Select path curve:', 'prompt');
+                    CAD.cmdOptions.arraypathStep = 'path';
+                }
+                break;
+
+            // Multiline
+            case 'mline':
+                UI.log(`MLINE: Specify start point or [Justification/Scale] <scale=${CAD.cmdOptions.mlineScale || 10}>:`, 'prompt');
+                CAD.cmdOptions.mlineScale = CAD.cmdOptions.mlineScale || 10;
+                CAD.cmdOptions.mlineJust = CAD.cmdOptions.mlineJust || 'top';
+                break;
+
+            // Table
+            case 'table':
+                UI.log('TABLE: Specify insertion point:', 'prompt');
+                CAD.cmdOptions.tableStep = 'insert';
+                CAD.cmdOptions.tableRows = 3;
+                CAD.cmdOptions.tableCols = 3;
+                CAD.cmdOptions.tableCellW = 40;
+                CAD.cmdOptions.tableCellH = 10;
+                break;
+
+            // Copy with base point
+            case 'copybase':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('COPYBASE: Select objects:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                    CAD.cmdOptions.copybaseAction = true;
+                } else {
+                    UI.log('COPYBASE: Specify base point:', 'prompt');
+                    CAD.cmdOptions.copybaseAction = true;
+                }
+                break;
+
+            // Paste as block
+            case 'pasteblock':
+                if (!CAD.clipboard || CAD.clipboard.length === 0) {
+                    UI.log('PASTEBLOCK: Clipboard is empty. Use COPYBASE first.', 'error');
+                    this.finishCommand();
+                } else {
+                    UI.log('PASTEBLOCK: Specify insertion point:', 'prompt');
+                }
+                break;
+
+            // Reverse polyline
+            case 'reverse':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('REVERSE: Select polylines to reverse:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    this.executeReverse();
+                }
+                break;
+
+            // Select previous
+            case 'selectprevious':
+                this.executeSelectPrevious();
+                break;
+
             default:
                 UI.log(`Command "${name}" not yet implemented.`, 'error');
                 this.finishCommand();
@@ -1129,6 +1352,31 @@ const Commands = {
         UI.log('  DIVIDE (DIV)    Divide into segments');
         UI.log('  MEASURE (ME)    Measure intervals');
         UI.log('  OVERKILL        Remove duplicates');
+        UI.log('  CHPROP (CH)     Change entity properties');
+        UI.log('  REVERSE         Reverse polyline direction');
+        UI.log('');
+
+        UI.log('--- Draw Order & Visibility ---', 'info');
+        UI.log('  DRAWORDER (DR)  Change draw order');
+        UI.log('  BRINGTOFRONT    Bring objects to front');
+        UI.log('  SENDTOBACK      Send objects to back');
+        UI.log('  TEXTTOFRONT     Text/dims to front');
+        UI.log('  HIDEOBJECTS     Hide selected objects');
+        UI.log('  ISOLATEOBJECTS  Isolate selected objects');
+        UI.log('  UNISOLATEOBJECTS Restore hidden objects');
+        UI.log('');
+
+        UI.log('--- Grouping ---', 'info');
+        UI.log('  GROUP (G)       Group objects');
+        UI.log('  UNGROUP         Ungroup objects');
+        UI.log('');
+
+        UI.log('--- Advanced ---', 'info');
+        UI.log('  ARRAYPATH       Array along a path');
+        UI.log('  MLINE (ML)      Draw multilines');
+        UI.log('  TABLE (TB)      Create table grid');
+        UI.log('  COPYBASE        Copy with base point');
+        UI.log('  PASTEBLOCK      Paste as block');
         UI.log('');
 
         UI.log('--- Block Commands ---', 'info');
@@ -1273,6 +1521,23 @@ const Commands = {
             'filter': 'FILTER (FI): Select entities by Type, Layer, or Color filter.',
             'view': 'VIEW: Named views. Options: Save/Restore/Delete/List.',
             'purge': 'PURGE (PU): Remove unused layers and unreferenced block definitions.',
+            'chprop': 'CHPROP (CH): Change entity properties. Select objects, then choose Color/LAyer/LType/LtScale/LWeight.',
+            'draworder': 'DRAWORDER (DR): Change draw order. Options: Front, Back, Above (ref), Under (ref).',
+            'draworderfront': 'BRINGTOFRONT: Move selected objects to the front (drawn last).',
+            'draworderback': 'SENDTOBACK: Move selected objects to the back (drawn first).',
+            'texttofront': 'TEXTTOFRONT: Bring all text, mtext, dimensions, and leaders to the front.',
+            'hideobjects': 'HIDEOBJECTS: Temporarily hide selected objects. Use UNISOLATEOBJECTS to restore.',
+            'isolateobjects': 'ISOLATEOBJECTS: Show only selected objects, hide everything else.',
+            'unisolateobjects': 'UNISOLATEOBJECTS: Restore all hidden objects to visible.',
+            'group': 'GROUP (G): Create a named group. Select objects, enter name. Clicking one selects all.',
+            'ungroup': 'UNGROUP: Dissolve groups. Select grouped object, all groups it belongs to are removed.',
+            'arraypath': 'ARRAYPATH: Array objects along a path. Select objects, select path, enter count.',
+            'mline': 'MLINE (ML): Draw parallel lines. Options: Justification (Top/Zero/Bottom), Scale (line spacing).',
+            'table': 'TABLE (TB): Create a table grid. Click insertion point, enter rows, columns, cell dimensions.',
+            'copybase': 'COPYBASE: Copy with a specified base point. Select objects, click base point.',
+            'pasteblock': 'PASTEBLOCK: Paste clipboard contents as a block reference. Click insertion point.',
+            'reverse': 'REVERSE: Reverse the direction of polylines, lines, or arcs.',
+            'selectprevious': 'SELECTPREVIOUS: Re-select the previous selection set.',
             'help': 'HELP (?): Display available commands and keyboard shortcuts. Type HELP <command> for details.'
         };
 
@@ -1562,6 +1827,32 @@ const Commands = {
 
             case 'dimspace':
                 this.handleDimSpaceClick(point);
+                break;
+
+            // Phase 3 click handlers
+            case 'draworderabove':
+            case 'draworderbelow':
+                this.handleDrawOrderRefClick(point);
+                break;
+
+            case 'arraypath':
+                this.handleArrayPathClick(point);
+                break;
+
+            case 'mline':
+                this.handleMlineClick(point);
+                break;
+
+            case 'table':
+                this.handleTableClick(point);
+                break;
+
+            case 'copybase':
+                this.handleCopyBaseClick(point);
+                break;
+
+            case 'pasteblock':
+                this.handlePasteBlockClick(point);
                 break;
 
             default:
@@ -2614,6 +2905,54 @@ const Commands = {
             case 'qdim':
                 CAD.cmdOptions.qdimReady = true;
                 UI.log('QDIM: Specify dimension line position:', 'prompt');
+                break;
+
+            // Phase 3 commands
+            case 'chprop':
+                UI.log('CHPROP: Enter property to change [Color/LAyer/LType/LtScale/LWeight/Thickness]:', 'prompt');
+                CAD.cmdOptions.chpropStep = 'property';
+                break;
+            case 'draworder':
+                UI.log('DRAWORDER: Enter option [Above/Under/Front/Back]:', 'prompt');
+                CAD.cmdOptions.draworderStep = 'option';
+                break;
+            case 'draworderfront':
+                this.executeDrawOrder('front');
+                break;
+            case 'draworderback':
+                this.executeDrawOrder('back');
+                break;
+            case 'draworderabove':
+                UI.log('DRAWORDER: Select reference object:', 'prompt');
+                CAD.cmdOptions.draworderStep = 'ref';
+                break;
+            case 'draworderbelow':
+                UI.log('DRAWORDER: Select reference object:', 'prompt');
+                CAD.cmdOptions.draworderStep = 'ref';
+                break;
+            case 'hideobjects':
+                this.executeHideObjects();
+                break;
+            case 'isolateobjects':
+                this.executeIsolateObjects();
+                break;
+            case 'group':
+                UI.log('GROUP: Enter group name (or press Enter for auto-name):', 'prompt');
+                CAD.cmdOptions.groupStep = 'name';
+                break;
+            case 'ungroup':
+                this.executeUngroup();
+                break;
+            case 'arraypath':
+                UI.log('ARRAYPATH: Select path curve:', 'prompt');
+                CAD.cmdOptions.arraypathStep = 'path';
+                break;
+            case 'copybase':
+                UI.log('COPYBASE: Specify base point:', 'prompt');
+                CAD.cmdOptions.copybaseAction = true;
+                break;
+            case 'reverse':
+                this.executeReverse();
                 break;
         }
     },
@@ -3920,8 +4259,24 @@ const Commands = {
         }
 
         if (hits.length === 1) {
-            CAD.select(hits[0].id);
-            UI.log(`Selected: ${hits[0].type} on layer "${hits[0].layer}"`);
+            const hitEnt = hits[0];
+            CAD.select(hitEnt.id);
+            // Group-aware selection: select all group members
+            if (hitEnt._groups && hitEnt._groups.length > 0 && CAD._groups) {
+                hitEnt._groups.forEach(gName => {
+                    const memberIds = CAD._groups[gName];
+                    if (memberIds) {
+                        memberIds.forEach(mid => {
+                            if (!CAD.selectedIds.includes(mid)) {
+                                CAD.selectedIds.push(mid);
+                            }
+                        });
+                    }
+                });
+                UI.log(`Selected group: ${hitEnt.type} on layer "${hitEnt.layer}" (${CAD.selectedIds.length} in group)`);
+            } else {
+                UI.log(`Selected: ${hitEnt.type} on layer "${hitEnt.layer}"`);
+            }
         } else {
             // Selection cycling: cycle through overlapping entities
             if (!CAD.cmdOptions._cycleHits ||
@@ -4768,6 +5123,597 @@ const Commands = {
     },
 
     // ==========================================
+    // PHASE 3: ADVANCED DRAWING & EDITING
+    // ==========================================
+
+    // --- CHPROP (Change Properties) ---
+    handleChpropInput(input) {
+        const state = CAD;
+        const opt = input.toLowerCase();
+
+        if (state.cmdOptions.chpropStep === 'property') {
+            if (opt === 'c' || opt === 'color') {
+                UI.log('CHPROP: Enter new color (hex, e.g. #ff0000):', 'prompt');
+                state.cmdOptions.chpropStep = 'color';
+            } else if (opt === 'la' || opt === 'layer') {
+                const layerNames = CAD.layers.map(l => l.name).join(', ');
+                UI.log(`CHPROP: Enter new layer name [${layerNames}]:`, 'prompt');
+                state.cmdOptions.chpropStep = 'layer';
+            } else if (opt === 'lt' || opt === 'ltype') {
+                UI.log('CHPROP: Enter new linetype [Continuous/Dashed/Dotted/DashDot/Center/Hidden/Phantom]:', 'prompt');
+                state.cmdOptions.chpropStep = 'ltype';
+            } else if (opt === 'lts' || opt === 'ltscale') {
+                UI.log('CHPROP: Enter new linetype scale:', 'prompt');
+                state.cmdOptions.chpropStep = 'ltscale';
+            } else if (opt === 'lw' || opt === 'lweight') {
+                UI.log('CHPROP: Enter new lineweight (1-10):', 'prompt');
+                state.cmdOptions.chpropStep = 'lweight';
+            } else {
+                UI.log('CHPROP: Unknown property. [Color/LAyer/LType/LtScale/LWeight]:', 'prompt');
+            }
+            return true;
+        }
+
+        if (state.cmdOptions.chpropStep === 'color') {
+            CAD.saveUndoState('CHPROP Color');
+            const selected = CAD.getSelectedEntities();
+            selected.forEach(e => { e.color = input; });
+            UI.log(`Changed color of ${selected.length} object(s) to ${input}.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.chpropStep === 'layer') {
+            const layer = CAD.getLayer(input);
+            if (!layer) {
+                UI.log(`CHPROP: Layer "${input}" not found.`, 'error');
+                return true;
+            }
+            CAD.saveUndoState('CHPROP Layer');
+            const selected = CAD.getSelectedEntities();
+            selected.forEach(e => { e.layer = input; });
+            UI.log(`Moved ${selected.length} object(s) to layer "${input}".`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.chpropStep === 'ltype') {
+            CAD.saveUndoState('CHPROP Linetype');
+            const selected = CAD.getSelectedEntities();
+            selected.forEach(e => { e.lineType = input.toLowerCase(); });
+            UI.log(`Changed linetype of ${selected.length} object(s) to ${input}.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.chpropStep === 'ltscale') {
+            const val = parseFloat(input);
+            if (isNaN(val) || val <= 0) { UI.log('Invalid scale.', 'error'); return true; }
+            CAD.saveUndoState('CHPROP LTScale');
+            const selected = CAD.getSelectedEntities();
+            selected.forEach(e => { e.lineTypeScale = val; });
+            UI.log(`Changed linetype scale of ${selected.length} object(s) to ${val}.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.chpropStep === 'lweight') {
+            const val = parseFloat(input);
+            if (isNaN(val) || val <= 0) { UI.log('Invalid lineweight.', 'error'); return true; }
+            CAD.saveUndoState('CHPROP LWeight');
+            const selected = CAD.getSelectedEntities();
+            selected.forEach(e => { e.lineWeight = val; });
+            UI.log(`Changed lineweight of ${selected.length} object(s) to ${val}.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        return false;
+    },
+
+    // --- DRAW ORDER ---
+    executeDrawOrder(action) {
+        const selectedIds = [...CAD.selectedIds];
+        if (selectedIds.length === 0) {
+            UI.log('DRAWORDER: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('DRAWORDER');
+
+        if (action === 'front') {
+            // Move selected to end of array (drawn last = on top)
+            const selected = CAD.entities.filter(e => selectedIds.includes(e.id));
+            CAD.entities = CAD.entities.filter(e => !selectedIds.includes(e.id));
+            CAD.entities.push(...selected);
+            UI.log(`${selected.length} object(s) brought to front.`);
+        } else if (action === 'back') {
+            // Move selected to beginning of array (drawn first = behind)
+            const selected = CAD.entities.filter(e => selectedIds.includes(e.id));
+            CAD.entities = CAD.entities.filter(e => !selectedIds.includes(e.id));
+            CAD.entities.unshift(...selected);
+            UI.log(`${selected.length} object(s) sent to back.`);
+        }
+
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    handleDrawOrderRefClick(point) {
+        // User clicks on reference entity for above/below
+        const hit = this.hitTest(point);
+        if (!hit) {
+            UI.log('DRAWORDER: No object at that point. Click on reference object:', 'prompt');
+            return;
+        }
+
+        const action = CAD.cmdOptions.draworderAction;
+        const selectedIds = [...CAD.selectedIds];
+        const refIndex = CAD.entities.findIndex(e => e.id === hit.id);
+        if (refIndex === -1) return;
+
+        CAD.saveUndoState('DRAWORDER');
+
+        const selected = CAD.entities.filter(e => selectedIds.includes(e.id));
+        CAD.entities = CAD.entities.filter(e => !selectedIds.includes(e.id));
+
+        // Recalculate ref index after removal
+        const newRefIndex = CAD.entities.findIndex(e => e.id === hit.id);
+
+        if (action === 'above') {
+            CAD.entities.splice(newRefIndex + 1, 0, ...selected);
+            UI.log(`${selected.length} object(s) moved above reference.`);
+        } else {
+            CAD.entities.splice(newRefIndex, 0, ...selected);
+            UI.log(`${selected.length} object(s) moved below reference.`);
+        }
+
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeTextToFront() {
+        CAD.saveUndoState('TEXTTOFRONT');
+        const textEnts = CAD.entities.filter(e =>
+            e.type === 'text' || e.type === 'mtext' || e.type === 'dimension' || e.type === 'leader'
+        );
+        CAD.entities = CAD.entities.filter(e =>
+            e.type !== 'text' && e.type !== 'mtext' && e.type !== 'dimension' && e.type !== 'leader'
+        );
+        CAD.entities.push(...textEnts);
+        UI.log(`${textEnts.length} text/dimension objects brought to front.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- HIDE / ISOLATE / UNISOLATE OBJECTS ---
+    executeHideObjects() {
+        const selectedIds = [...CAD.selectedIds];
+        if (selectedIds.length === 0) {
+            UI.log('HIDEOBJECTS: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        // Store hidden ids for unisolate
+        if (!CAD._hiddenEntityIds) CAD._hiddenEntityIds = [];
+        CAD.saveUndoState('HIDEOBJECTS');
+
+        selectedIds.forEach(id => {
+            const ent = CAD.getEntity(id);
+            if (ent) {
+                ent._hidden = true;
+                CAD._hiddenEntityIds.push(id);
+            }
+        });
+
+        CAD.clearSelection();
+        UI.log(`${selectedIds.length} object(s) hidden. Use UNISOLATEOBJECTS to show all.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeIsolateObjects() {
+        const selectedIds = [...CAD.selectedIds];
+        if (selectedIds.length === 0) {
+            UI.log('ISOLATEOBJECTS: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        if (!CAD._hiddenEntityIds) CAD._hiddenEntityIds = [];
+        CAD.saveUndoState('ISOLATEOBJECTS');
+
+        CAD.entities.forEach(ent => {
+            if (!selectedIds.includes(ent.id)) {
+                ent._hidden = true;
+                CAD._hiddenEntityIds.push(ent.id);
+            }
+        });
+
+        UI.log(`Isolated ${selectedIds.length} object(s). All others hidden.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeUnisolateObjects() {
+        CAD.saveUndoState('UNISOLATEOBJECTS');
+        let count = 0;
+        CAD.entities.forEach(ent => {
+            if (ent._hidden) {
+                delete ent._hidden;
+                count++;
+            }
+        });
+        CAD._hiddenEntityIds = [];
+        UI.log(`${count} object(s) restored to visible.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- GROUP / UNGROUP ---
+    executeGroup(groupName) {
+        const selectedIds = [...CAD.selectedIds];
+        if (selectedIds.length < 2) {
+            UI.log('GROUP: Select at least 2 objects to group.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        // Initialize groups storage
+        if (!CAD._groups) CAD._groups = {};
+        if (CAD._groups[groupName]) {
+            UI.log(`GROUP: Group "${groupName}" already exists. Choose another name.`, 'error');
+            return;
+        }
+
+        CAD._groups[groupName] = [...selectedIds];
+
+        // Tag entities with group name
+        selectedIds.forEach(id => {
+            const ent = CAD.getEntity(id);
+            if (ent) {
+                if (!ent._groups) ent._groups = [];
+                ent._groups.push(groupName);
+            }
+        });
+
+        UI.log(`GROUP: Created group "${groupName}" with ${selectedIds.length} objects.`);
+        this.finishCommand();
+    },
+
+    executeUngroup() {
+        const selected = CAD.getSelectedEntities();
+        if (selected.length === 0) {
+            UI.log('UNGROUP: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        if (!CAD._groups) CAD._groups = {};
+
+        let ungrouped = 0;
+        selected.forEach(ent => {
+            if (ent._groups && ent._groups.length > 0) {
+                const groupNames = [...ent._groups];
+                groupNames.forEach(gName => {
+                    // Remove group from all members
+                    if (CAD._groups[gName]) {
+                        CAD._groups[gName].forEach(memberId => {
+                            const member = CAD.getEntity(memberId);
+                            if (member && member._groups) {
+                                member._groups = member._groups.filter(g => g !== gName);
+                                if (member._groups.length === 0) delete member._groups;
+                            }
+                        });
+                        delete CAD._groups[gName];
+                        ungrouped++;
+                    }
+                });
+            }
+        });
+
+        UI.log(`UNGROUP: ${ungrouped} group(s) dissolved.`);
+        this.finishCommand();
+    },
+
+    // --- ARRAY PATH ---
+    handleArrayPathClick(point) {
+        const state = CAD;
+
+        if (state.cmdOptions.arraypathStep === 'path') {
+            // User clicks to select the path entity
+            const hit = this.hitTest(point);
+            if (!hit) {
+                UI.log('ARRAYPATH: Click on a path object (line, polyline, arc, circle):', 'prompt');
+                return;
+            }
+            if (!['line', 'polyline', 'arc', 'circle', 'spline'].includes(hit.type)) {
+                UI.log('ARRAYPATH: Object must be a line, polyline, arc, or circle.', 'error');
+                return;
+            }
+            state.cmdOptions.arraypathEntity = hit;
+            state.cmdOptions.arraypathStep = 'count';
+            UI.log('ARRAYPATH: Enter number of items:', 'prompt');
+        }
+    },
+
+    executeArrayPath(count) {
+        const state = CAD;
+        const pathEntity = state.cmdOptions.arraypathEntity;
+        const selectedIds = [...CAD.selectedIds];
+        if (!pathEntity || selectedIds.length === 0) {
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('ARRAYPATH');
+
+        // Get points along the path
+        const pathPoints = this.getPointsAlongEntity(pathEntity, count);
+        if (pathPoints.length < 2) {
+            UI.log('ARRAYPATH: Could not calculate path points.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        const sourceEntities = selectedIds.map(id => CAD.getEntity(id)).filter(Boolean);
+        // Compute centroid of source entities for offset calculation
+        const centroid = this.getEntitiesCentroid(sourceEntities);
+
+        let created = 0;
+        // Skip first point (original objects stay), array from second point onward
+        for (let i = 1; i < pathPoints.length; i++) {
+            const dx = pathPoints[i].x - centroid.x;
+            const dy = pathPoints[i].y - centroid.y;
+
+            sourceEntities.forEach(ent => {
+                const clone = JSON.parse(JSON.stringify(ent));
+                clone.id = undefined;
+                const moved = Geometry.moveEntity(clone, { x: dx, y: dy });
+                CAD.addEntity(moved, true);
+                created++;
+            });
+        }
+
+        UI.log(`ARRAYPATH: Created ${created} objects along path.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    getEntitiesCentroid(entities) {
+        let sx = 0, sy = 0, count = 0;
+        entities.forEach(ent => {
+            const pts = this.getEntityKeyPoints(ent);
+            pts.forEach(p => { sx += p.x; sy += p.y; count++; });
+        });
+        return count > 0 ? { x: sx / count, y: sy / count } : { x: 0, y: 0 };
+    },
+
+    getEntityKeyPoints(ent) {
+        switch (ent.type) {
+            case 'line': return [ent.p1, ent.p2];
+            case 'circle': case 'arc': case 'ellipse': case 'donut': return [ent.center];
+            case 'rect': return [ent.p1, ent.p2];
+            case 'polyline': return ent.points;
+            case 'text': case 'mtext': case 'point': return [ent.position];
+            case 'block': return [ent.insertPoint];
+            default: return [{ x: 0, y: 0 }];
+        }
+    },
+
+    getPointsAlongEntity(entity, count) {
+        const points = [];
+        const totalLen = this.getEntityLength(entity);
+        if (totalLen <= 0 || count < 1) return points;
+
+        for (let i = 0; i < count; i++) {
+            const t = i / (count - 1);
+            const dist = t * totalLen;
+            const pt = this.getPointAtDistance(entity, dist);
+            if (pt) points.push(pt);
+        }
+        return points;
+    },
+
+    // --- MULTILINE (MLINE) ---
+    handleMlineClick(point) {
+        const state = CAD;
+        state.points.push(point);
+        state.step++;
+
+        if (state.points.length >= 2) {
+            // Create two parallel lines for each segment
+            const p1 = state.points[state.points.length - 2];
+            const p2 = state.points[state.points.length - 1];
+            const halfScale = (state.cmdOptions.mlineScale || 10) / 2;
+
+            const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            const perpAngle = angle + Math.PI / 2;
+
+            let off1, off2;
+            const just = state.cmdOptions.mlineJust || 'top';
+            if (just === 'top') {
+                off1 = 0;
+                off2 = -halfScale * 2;
+            } else if (just === 'bottom') {
+                off1 = halfScale * 2;
+                off2 = 0;
+            } else {
+                // zero (center)
+                off1 = halfScale;
+                off2 = -halfScale;
+            }
+
+            const cos = Math.cos(perpAngle);
+            const sin = Math.sin(perpAngle);
+
+            CAD.addEntity({
+                type: 'line',
+                p1: { x: p1.x + cos * off1, y: p1.y + sin * off1 },
+                p2: { x: p2.x + cos * off1, y: p2.y + sin * off1 }
+            }, true);
+            CAD.addEntity({
+                type: 'line',
+                p1: { x: p1.x + cos * off2, y: p1.y + sin * off2 },
+                p2: { x: p2.x + cos * off2, y: p2.y + sin * off2 }
+            });
+
+            UI.log('MLINE: Specify next point or [Close/Undo]:', 'prompt');
+        } else {
+            UI.log('MLINE: Specify next point:', 'prompt');
+        }
+    },
+
+    // --- TABLE ---
+    handleTableClick(point) {
+        const state = CAD;
+        if (state.cmdOptions.tableStep === 'insert') {
+            state.cmdOptions.tableInsert = { ...point };
+            state.cmdOptions.tableStep = 'rows';
+            UI.log(`TABLE: Enter number of rows <${state.cmdOptions.tableRows}>:`, 'prompt');
+        }
+    },
+
+    createTable() {
+        const state = CAD;
+        const opts = state.cmdOptions;
+        const insert = opts.tableInsert;
+        if (!insert) { this.finishCommand(); return; }
+
+        const rows = opts.tableRows;
+        const cols = opts.tableCols;
+        const cellW = opts.tableCellW;
+        const cellH = opts.tableCellH;
+
+        CAD.saveUndoState('TABLE');
+
+        // Create horizontal lines
+        for (let r = 0; r <= rows; r++) {
+            CAD.addEntity({
+                type: 'line',
+                p1: { x: insert.x, y: insert.y - r * cellH },
+                p2: { x: insert.x + cols * cellW, y: insert.y - r * cellH }
+            }, true);
+        }
+
+        // Create vertical lines
+        for (let c = 0; c <= cols; c++) {
+            CAD.addEntity({
+                type: 'line',
+                p1: { x: insert.x + c * cellW, y: insert.y },
+                p2: { x: insert.x + c * cellW, y: insert.y - rows * cellH }
+            }, true);
+        }
+
+        UI.log(`TABLE: Created ${rows}x${cols} table (${cellW}x${cellH} cells).`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- COPYBASE ---
+    handleCopyBaseClick(point) {
+        const state = CAD;
+
+        if (state.cmdOptions.copybaseAction && state.points.length === 0) {
+            // Base point specified
+            state.points.push(point);
+            const selected = CAD.getSelectedEntities();
+            CAD.clipboard = selected.map(e => JSON.parse(JSON.stringify(e)));
+            CAD.clipboardBasePoint = { ...point };
+            UI.log(`COPYBASE: ${selected.length} object(s) copied with base point (${point.x.toFixed(2)}, ${point.y.toFixed(2)}).`);
+            this.finishCommand();
+        }
+    },
+
+    // --- PASTEBLOCK ---
+    handlePasteBlockClick(point) {
+        if (!CAD.clipboard || CAD.clipboard.length === 0) {
+            UI.log('PASTEBLOCK: Nothing to paste.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        const basePoint = CAD.clipboardBasePoint || { x: 0, y: 0 };
+        const dx = point.x - basePoint.x;
+        const dy = point.y - basePoint.y;
+
+        // Create a block from clipboard, insert at click point
+        const blockName = `PastedBlock_${Date.now()}`;
+        const blockEntities = CAD.clipboard.map(e => {
+            const clone = JSON.parse(JSON.stringify(e));
+            delete clone.id;
+            return clone;
+        });
+
+        CAD.addBlock(blockName, basePoint, blockEntities);
+        CAD.addEntity({
+            type: 'block',
+            blockName: blockName,
+            insertPoint: { ...point },
+            scale: { x: 1, y: 1 },
+            rotation: 0
+        });
+
+        UI.log(`PASTEBLOCK: Pasted as block "${blockName}" at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}).`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- REVERSE ---
+    executeReverse() {
+        const selected = CAD.getSelectedEntities();
+        if (selected.length === 0) {
+            UI.log('REVERSE: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('REVERSE');
+        let count = 0;
+
+        selected.forEach(ent => {
+            if (ent.type === 'polyline' && ent.points) {
+                ent.points.reverse();
+                count++;
+            } else if (ent.type === 'line') {
+                const temp = { ...ent.p1 };
+                ent.p1 = { ...ent.p2 };
+                ent.p2 = temp;
+                count++;
+            } else if (ent.type === 'arc') {
+                const temp = ent.start;
+                ent.start = ent.end;
+                ent.end = temp;
+                count++;
+            }
+        });
+
+        UI.log(`REVERSE: ${count} object(s) reversed.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // --- SELECT PREVIOUS ---
+    executeSelectPrevious() {
+        if (CAD._previousSelection && CAD._previousSelection.length > 0) {
+            CAD.selectedIds = [...CAD._previousSelection];
+            UI.log(`${CAD.selectedIds.length} object(s) re-selected from previous selection.`);
+            UI.updateSelectionRibbon();
+        } else {
+            UI.log('SELECTPREVIOUS: No previous selection.', 'error');
+        }
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // ==========================================
     // INPUT HANDLING
     // ==========================================
 
@@ -5007,6 +5953,29 @@ const Commands = {
             if (state.activeCmd === 'qdim' && state.cmdOptions.qdimReady) {
                 this.finishCommand();
                 Renderer.draw();
+                return true;
+            }
+
+            // GROUP - auto-name on empty enter
+            if (state.activeCmd === 'group' && state.cmdOptions.groupStep === 'name') {
+                this.executeGroup(`Group_${Date.now()}`);
+                return true;
+            }
+
+            // TABLE - use defaults on enter for dimension prompts
+            if (state.activeCmd === 'table' && ['rows', 'cols', 'cellw', 'cellh'].includes(state.cmdOptions.tableStep)) {
+                if (state.cmdOptions.tableStep === 'rows') {
+                    state.cmdOptions.tableStep = 'cols';
+                    UI.log(`TABLE: Enter number of columns <${state.cmdOptions.tableCols}>:`, 'prompt');
+                } else if (state.cmdOptions.tableStep === 'cols') {
+                    state.cmdOptions.tableStep = 'cellw';
+                    UI.log(`TABLE: Enter cell width <${state.cmdOptions.tableCellW}>:`, 'prompt');
+                } else if (state.cmdOptions.tableStep === 'cellw') {
+                    state.cmdOptions.tableStep = 'cellh';
+                    UI.log(`TABLE: Enter cell height <${state.cmdOptions.tableCellH}>:`, 'prompt');
+                } else if (state.cmdOptions.tableStep === 'cellh') {
+                    this.createTable();
+                }
                 return true;
             }
 
@@ -5853,6 +6822,113 @@ const Commands = {
                 CAD.chamferDist2 = d2 !== null ? Math.abs(parseFloat(d2)) || CAD.chamferDist1 : CAD.chamferDist1;
                 UI.log(`CHAMFER: Distances = ${CAD.chamferDist1}, ${CAD.chamferDist2}. Select first line:`, 'prompt');
             }
+            return true;
+        }
+
+        // ==========================================
+        // PHASE 3 INPUT HANDLING
+        // ==========================================
+
+        // CHPROP input
+        if (state.activeCmd === 'chprop' && state.cmdOptions.chpropStep) {
+            return this.handleChpropInput(input);
+        }
+
+        // DRAWORDER input
+        if (state.activeCmd === 'draworder' && state.cmdOptions.draworderStep === 'option') {
+            const opt = input.toLowerCase();
+            if (opt === 'f' || opt === 'front') {
+                this.executeDrawOrder('front');
+            } else if (opt === 'b' || opt === 'back') {
+                this.executeDrawOrder('back');
+            } else if (opt === 'a' || opt === 'above') {
+                UI.log('DRAWORDER: Select reference object:', 'prompt');
+                state.cmdOptions.draworderStep = 'ref';
+                state.cmdOptions.draworderAction = 'above';
+            } else if (opt === 'u' || opt === 'under') {
+                UI.log('DRAWORDER: Select reference object:', 'prompt');
+                state.cmdOptions.draworderStep = 'ref';
+                state.cmdOptions.draworderAction = 'below';
+            } else {
+                UI.log('DRAWORDER: Invalid option. [Above/Under/Front/Back]:', 'prompt');
+            }
+            return true;
+        }
+
+        // GROUP name input
+        if (state.activeCmd === 'group' && state.cmdOptions.groupStep === 'name') {
+            const groupName = input || `Group_${Date.now()}`;
+            this.executeGroup(groupName);
+            return true;
+        }
+
+        // ARRAYPATH count input
+        if (state.activeCmd === 'arraypath' && state.cmdOptions.arraypathStep === 'count') {
+            const count = parseInt(input);
+            if (isNaN(count) || count < 2) {
+                UI.log('ARRAYPATH: Enter a valid count (2 or more):', 'prompt');
+                return true;
+            }
+            this.executeArrayPath(count);
+            return true;
+        }
+
+        // MLINE options input
+        if (state.activeCmd === 'mline' && state.step === 0) {
+            const opt = input.toLowerCase();
+            if (opt === 'j' || opt === 'justification') {
+                UI.log('MLINE: Enter justification [Top/Zero/Bottom] <Top>:', 'prompt');
+                state.cmdOptions.mlineInputStep = 'just';
+                return true;
+            }
+            if (opt === 's' || opt === 'scale') {
+                UI.log(`MLINE: Enter mline scale <${state.cmdOptions.mlineScale}>:`, 'prompt');
+                state.cmdOptions.mlineInputStep = 'scale';
+                return true;
+            }
+            if (state.cmdOptions.mlineInputStep === 'just') {
+                if (opt === 't' || opt === 'top') state.cmdOptions.mlineJust = 'top';
+                else if (opt === 'z' || opt === 'zero') state.cmdOptions.mlineJust = 'zero';
+                else if (opt === 'b' || opt === 'bottom') state.cmdOptions.mlineJust = 'bottom';
+                state.cmdOptions.mlineInputStep = null;
+                UI.log(`MLINE: Justification = ${state.cmdOptions.mlineJust}. Specify start point:`, 'prompt');
+                return true;
+            }
+            if (state.cmdOptions.mlineInputStep === 'scale') {
+                const s = parseFloat(opt);
+                if (!isNaN(s) && s > 0) state.cmdOptions.mlineScale = s;
+                state.cmdOptions.mlineInputStep = null;
+                UI.log(`MLINE: Scale = ${state.cmdOptions.mlineScale}. Specify start point:`, 'prompt');
+                return true;
+            }
+        }
+
+        // TABLE dimension input
+        if (state.activeCmd === 'table' && state.cmdOptions.tableStep === 'rows') {
+            const rows = parseInt(input);
+            if (!isNaN(rows) && rows > 0) state.cmdOptions.tableRows = rows;
+            state.cmdOptions.tableStep = 'cols';
+            UI.log(`TABLE: Enter number of columns <${state.cmdOptions.tableCols}>:`, 'prompt');
+            return true;
+        }
+        if (state.activeCmd === 'table' && state.cmdOptions.tableStep === 'cols') {
+            const cols = parseInt(input);
+            if (!isNaN(cols) && cols > 0) state.cmdOptions.tableCols = cols;
+            state.cmdOptions.tableStep = 'cellw';
+            UI.log(`TABLE: Enter cell width <${state.cmdOptions.tableCellW}>:`, 'prompt');
+            return true;
+        }
+        if (state.activeCmd === 'table' && state.cmdOptions.tableStep === 'cellw') {
+            const w = parseFloat(input);
+            if (!isNaN(w) && w > 0) state.cmdOptions.tableCellW = w;
+            state.cmdOptions.tableStep = 'cellh';
+            UI.log(`TABLE: Enter cell height <${state.cmdOptions.tableCellH}>:`, 'prompt');
+            return true;
+        }
+        if (state.activeCmd === 'table' && state.cmdOptions.tableStep === 'cellh') {
+            const h = parseFloat(input);
+            if (!isNaN(h) && h > 0) state.cmdOptions.tableCellH = h;
+            this.createTable();
             return true;
         }
 
