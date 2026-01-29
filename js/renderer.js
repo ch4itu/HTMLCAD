@@ -227,6 +227,11 @@ const Renderer = {
                 return;
             }
 
+            if (entity.type === 'wipeout') {
+                this.drawWipeoutEntity(entity, color, isSelected, isHovered);
+                return;
+            }
+
             ctx.beginPath();
             ctx.strokeStyle = color;
 
@@ -798,6 +803,38 @@ const Renderer = {
             ctx.textBaseline = 'bottom';
             ctx.fillText(entity.text, 0, -textHeight * 0.3);
             ctx.restore();
+
+        } else if (entity.dimType === 'ordinate') {
+            const fp = entity.featurePoint;
+            const le = entity.leaderEnd;
+
+            // Draw leader line (two segments: feature to bend, bend to endpoint)
+            if (entity.isXDatum) {
+                // X ordinate: horizontal then vertical leader
+                const bend = { x: le.x, y: fp.y };
+                ctx.moveTo(fp.x, fp.y);
+                ctx.lineTo(bend.x, bend.y);
+                ctx.lineTo(le.x, le.y);
+            } else {
+                // Y ordinate: vertical then horizontal leader
+                const bend = { x: fp.x, y: le.y };
+                ctx.moveTo(fp.x, fp.y);
+                ctx.lineTo(bend.x, bend.y);
+                ctx.lineTo(le.x, le.y);
+            }
+
+            // Draw text at leader endpoint
+            ctx.save();
+            ctx.translate(le.x, le.y);
+            ctx.textAlign = entity.isXDatum ? 'center' : 'left';
+            ctx.textBaseline = 'bottom';
+            const textOffset = textHeight * 0.5;
+            if (entity.isXDatum) {
+                ctx.fillText(entity.text, 0, -textOffset);
+            } else {
+                ctx.fillText(entity.text, textOffset, textHeight * 0.3);
+            }
+            ctx.restore();
         }
 
         ctx.restore();
@@ -813,6 +850,35 @@ const Renderer = {
         ctx.lineTo(x + size * Math.cos(a1), y + size * Math.sin(a1));
         ctx.moveTo(x, y);
         ctx.lineTo(x + size * Math.cos(a2), y + size * Math.sin(a2));
+    },
+
+    drawWipeoutEntity(entity, color, isSelected, isHovered) {
+        const ctx = this.ctx;
+        const state = CAD;
+
+        ctx.save();
+
+        // Draw filled background polygon (masks entities behind it)
+        ctx.beginPath();
+        if (entity.points && entity.points.length > 0) {
+            ctx.moveTo(entity.points[0].x, entity.points[0].y);
+            for (let i = 1; i < entity.points.length; i++) {
+                ctx.lineTo(entity.points[i].x, entity.points[i].y);
+            }
+            ctx.closePath();
+        }
+        ctx.fillStyle = this.colors.background;
+        ctx.fill();
+
+        // Draw border if selected or hovered
+        if (isSelected || isHovered) {
+            ctx.strokeStyle = isSelected ? this.colors.selection : this.colors.hover;
+            ctx.lineWidth = (isSelected ? 2 : 1.5) / state.zoom;
+            ctx.setLineDash(isSelected ? [5 / state.zoom, 3 / state.zoom] : [3 / state.zoom, 3 / state.zoom]);
+            ctx.stroke();
+        }
+
+        ctx.restore();
     },
 
     // ==========================================

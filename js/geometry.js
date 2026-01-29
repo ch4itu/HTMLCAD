@@ -623,12 +623,27 @@ const Geometry = {
                 return donutDist >= entity.innerRadius - tolerance &&
                        donutDist <= entity.outerRadius + tolerance;
 
+            case 'wipeout':
+                // Hit test for wipeout - check boundary edges
+                if (entity.points) {
+                    for (let i = 0; i < entity.points.length - 1; i++) {
+                        if (Utils.distToSegment(point, entity.points[i], entity.points[i + 1]) < tolerance) {
+                            return true;
+                        }
+                    }
+                    // Also check if point is inside the polygon
+                    return Utils.pointInPolygon(point, entity.points);
+                }
+                return false;
+
             case 'dimension':
                 // Hit test for dimension - check dimension line
                 if (entity.dimType === 'linear' || entity.dimType === 'aligned') {
                     return Utils.distToSegment(point, entity.p1, entity.p2) < tolerance * 2;
                 } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
                     return Utils.dist(point, entity.center) < entity.radius + tolerance;
+                } else if (entity.dimType === 'ordinate') {
+                    return Utils.distToSegment(point, entity.featurePoint, entity.leaderEnd) < tolerance * 2;
                 }
                 return false;
 
