@@ -754,7 +754,10 @@ const Geometry = {
                         // Cursor is near entity — calculate perpendicular foot from fromPoint
                         const perpPoint = this.getPerpendicularPoint(fromPoint, entity);
                         if (perpPoint) {
-                            snaps.push({ point: perpPoint, type: 'perpendicular', distance: distToEntity });
+                            const distToPerp = Utils.dist(point, perpPoint);
+                            if (distToPerp < tolerance) {
+                                snaps.push({ point: perpPoint, type: 'perpendicular', distance: distToPerp });
+                            }
                         }
                     }
                 }
@@ -769,7 +772,10 @@ const Geometry = {
                     if (distToEntity < tolerance) {
                         const tangentPt = this.getTangentPoint(fromPoint, entity);
                         if (tangentPt) {
-                            snaps.push({ point: tangentPt, type: 'tangent', distance: distToEntity });
+                            const distToTangent = Utils.dist(point, tangentPt);
+                            if (distToTangent < tolerance) {
+                                snaps.push({ point: tangentPt, type: 'tangent', distance: distToTangent });
+                            }
                         }
                     }
                 }
