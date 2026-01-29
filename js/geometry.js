@@ -755,7 +755,7 @@ const Geometry = {
                         const perpPoint = this.getPerpendicularPoint(fromPoint, entity);
                         if (perpPoint) {
                             const distToPerp = Utils.dist(point, perpPoint);
-                            if (distToPerp < tolerance) {
+                            if (distToPerp < tolerance * 2) {
                                 snaps.push({ point: perpPoint, type: 'perpendicular', distance: distToPerp });
                             }
                         }
@@ -773,7 +773,7 @@ const Geometry = {
                         const tangentPt = this.getTangentPoint(fromPoint, entity);
                         if (tangentPt) {
                             const distToTangent = Utils.dist(point, tangentPt);
-                            if (distToTangent < tolerance) {
+                            if (distToTangent < tolerance * 2) {
                                 snaps.push({ point: tangentPt, type: 'tangent', distance: distToTangent });
                             }
                         }
