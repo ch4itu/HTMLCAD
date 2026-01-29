@@ -15,7 +15,7 @@ const Storage = {
 
     DriveConfig: {
         apiKey: 'YOUR_API_KEY_HERE',
-        clientId: 'YOUR_CLIENT_ID_HERE',
+        clientId: '478921384117-pek84672fntq2hip7va2rss6m55q9jft.apps.googleusercontent.com',
         appId: 'YOUR_PROJECT_NUMBER',
         scope: 'https://www.googleapis.com/auth/drive.file',
         allowedOrigins: [
