@@ -575,9 +575,6 @@
                         <button class="mobile-quick-btn" onclick="Commands.cancelCommand()" title="Cancel">&#10005;</button>
                     </div>
 
-                    <!-- Free tier watermark -->
-                    <div class="watermark" id="watermark">BrowserCAD Free</div>
-
                     <!-- Floating Canvas Selection Toolbar -->
                     <div class="canvas-selection-toolbar" id="canvasSelectionToolbar" style="display: none;">
                         <div class="cst-title">Select Objects:</div>
@@ -848,34 +845,6 @@
                 <div class="mobile-menu-section-title">Settings</div>
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('settings')"><i class="m-icon">&#9881;</i> Drawing Settings</div>
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('help')"><i class="m-icon">?</i> Help</div>
-            </div>
-            <div class="mobile-menu-section" id="mobileUpgradeSection">
-                <div class="upgrade-banner visible" onclick="ProFeatures.showUpgradeModal()">
-                    <div class="upgrade-title">Upgrade to Pro</div>
-                    <div class="upgrade-text">Unlock DXF export, no watermarks, and more</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pro Feature Gate Modal -->
-    <div class="pro-gate-overlay" id="proGateOverlay">
-        <div class="pro-gate-modal">
-            <div class="pro-gate-header">
-                <h2>BrowserCAD Pro</h2>
-                <p>Unlock the full power of professional CAD</p>
-            </div>
-            <div class="pro-gate-features">
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> Unlimited DXF/SVG exports</div>
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> No watermark on canvas</div>
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> AutoLISP scripting engine</div>
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> Advanced dimensions (Baseline, Continue, Arc)</div>
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> Block library management</div>
-                <div class="pro-gate-feature"><span class="check">&#10003;</span> Priority support</div>
-            </div>
-            <div class="pro-gate-actions">
-                <button class="btn-upgrade" onclick="ProFeatures.handleUpgrade()">Upgrade to Pro - $9.99/month</button>
-                <button class="btn-dismiss" onclick="ProFeatures.hideUpgradeModal()">Continue with Free</button>
             </div>
         </div>
     </div>
