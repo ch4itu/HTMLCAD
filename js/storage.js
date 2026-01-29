@@ -1298,8 +1298,345 @@ const Storage = {
             }
         };
         input.click();
+    },
+
+    // ==========================================
+    // GOOGLE DRIVE INTEGRATION
+    // ==========================================
+
+    // State
+    _gisInited: false,
+    _gapiInited: false,
+    _accessToken: null,
+    _tokenClient: null,
+    _currentDriveFileId: null,
+    _pickerInited: false,
+
+    /**
+     * Initialize the Google API client library (gapi).
+     * Called once gapi.js has loaded.
+     */
+    initGapiClient() {
+        gapi.load('client:picker', async () => {
+            try {
+                await gapi.client.init({});
+                await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
+                this._gapiInited = true;
+                this._pickerInited = true;
+                console.log('Google API client initialized.');
+                this._maybeEnableDriveButtons();
+            } catch (err) {
+                console.error('Error initializing GAPI client:', err);
+            }
+        });
+    },
+
+    /**
+     * Initialize Google Identity Services (GIS) token client.
+     * Called once the GIS library has loaded.
+     */
+    initGisClient() {
+        const config = window.CAD_CONFIG;
+        if (!config || !config.clientId) {
+            console.warn('CAD_CONFIG.clientId not set. Google Drive disabled.');
+            return;
+        }
+
+        this._tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: config.clientId,
+            scope: config.scope,
+            callback: '', // Set dynamically per-request
+        });
+        this._gisInited = true;
+        console.log('Google Identity Services initialized.');
+        this._maybeEnableDriveButtons();
+    },
+
+    /**
+     * Enable Drive menu items once both libraries are loaded.
+     */
+    _maybeEnableDriveButtons() {
+        if (this._gisInited && this._gapiInited) {
+            document.querySelectorAll('.drive-menu').forEach(el => {
+                el.classList.add('drive-ready');
+            });
+        }
+    },
+
+    /**
+     * Handle the Sign In / Sign Out button click.
+     */
+    handleGoogleSignIn() {
+        if (this._accessToken) {
+            // Sign out
+            google.accounts.oauth2.revoke(this._accessToken, () => {
+                this._accessToken = null;
+                this._currentDriveFileId = null;
+                this._updateSignInUI(false);
+                UI.log('Signed out of Google.');
+            });
+            return;
+        }
+
+        // Sign in: request an access token
+        this._getAccessToken().then(token => {
+            if (token) {
+                this._updateSignInUI(true);
+                UI.log('Signed in to Google successfully.');
+            }
+        }).catch(err => {
+            UI.log('Google sign-in failed: ' + err.message, 'error');
+        });
+    },
+
+    /**
+     * Request an access token from GIS.
+     * Returns a Promise that resolves with the token string.
+     */
+    _getAccessToken() {
+        return new Promise((resolve, reject) => {
+            if (!this._gisInited) {
+                reject(new Error('Google Identity Services not loaded yet.'));
+                return;
+            }
+            if (this._accessToken) {
+                resolve(this._accessToken);
+                return;
+            }
+
+            // Set callback for this token request
+            this._tokenClient.callback = (response) => {
+                if (response.error) {
+                    reject(new Error(response.error));
+                    return;
+                }
+                this._accessToken = response.access_token;
+                resolve(this._accessToken);
+            };
+
+            // If no token, prompt user consent; otherwise use existing session
+            if (this._accessToken === null) {
+                this._tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                this._tokenClient.requestAccessToken({ prompt: '' });
+            }
+        });
+    },
+
+    /**
+     * Update the sign-in button UI.
+     */
+    _updateSignInUI(signedIn) {
+        const btn = document.getElementById('googleSignInBtn');
+        const text = document.getElementById('googleSignInText');
+        if (!btn || !text) return;
+
+        if (signedIn) {
+            text.textContent = 'Sign Out';
+            btn.classList.add('signed-in');
+            btn.title = 'Sign out of Google';
+        } else {
+            text.textContent = 'Sign In';
+            btn.classList.remove('signed-in');
+            btn.title = 'Sign in with Google';
+        }
+    },
+
+    /**
+     * Open the Google Drive Picker to select a .json file.
+     * Loads the file content and imports it into BrowserCAD.
+     */
+    async openFromDrive() {
+        try {
+            const token = await this._getAccessToken();
+            this._updateSignInUI(true);
+
+            const config = window.CAD_CONFIG;
+
+            const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+                .setMimeTypes('application/json')
+                .setMode(google.picker.DocsViewMode.LIST);
+
+            const picker = new google.picker.PickerBuilder()
+                .enableFeature(google.picker.Feature.NAV_HIDDEN)
+                .setDeveloperKey(config.apiKey)
+                .setAppId(config.appId)
+                .setOAuthToken(token)
+                .addView(view)
+                .addView(new google.picker.DocsUploadView())
+                .setTitle('Open BrowserCAD Drawing from Google Drive')
+                .setCallback((data) => this._pickerOpenCallback(data))
+                .setOrigin(window.location.protocol + '//' + window.location.host)
+                .build();
+
+            picker.setVisible(true);
+        } catch (err) {
+            UI.log('Could not open Drive picker: ' + err.message, 'error');
+            console.error('Drive Picker error:', err);
+        }
+    },
+
+    /**
+     * Picker callback for opening a file.
+     */
+    async _pickerOpenCallback(data) {
+        if (data.action !== google.picker.Action.PICKED) return;
+
+        const file = data[google.picker.Response.DOCUMENTS][0];
+        const fileId = file[google.picker.Document.ID];
+        const fileName = file[google.picker.Document.NAME];
+
+        UI.log(`Loading "${fileName}" from Google Drive...`);
+
+        try {
+            const response = await gapi.client.drive.files.get({
+                fileId: fileId,
+                alt: 'media'
+            });
+
+            const content = response.body;
+            const jsonData = JSON.parse(content);
+
+            CAD.fromJSON(jsonData);
+            UI.updateLayerUI();
+            Renderer.draw();
+
+            // Remember the file ID so we can update it later
+            this._currentDriveFileId = fileId;
+            CAD.drawingName = fileName.replace(/\.json$/i, '');
+
+            const fileNameEl = document.getElementById('fileName');
+            if (fileNameEl) fileNameEl.textContent = fileName;
+
+            UI.log(`Drawing "${fileName}" loaded from Google Drive.`, 'success');
+        } catch (err) {
+            UI.log('Error loading file from Drive: ' + err.message, 'error');
+            console.error('Drive file load error:', err);
+        }
+    },
+
+    /**
+     * Prompt for filename and save to Drive.
+     */
+    saveToDrivePrompt() {
+        const defaultName = (CAD.drawingName || 'drawing') + '.json';
+        const filename = prompt('Save to Google Drive as:', defaultName);
+        if (filename) {
+            this.saveToDrive(JSON.stringify(CAD.toJSON(), null, 2), filename);
+        }
+    },
+
+    /**
+     * Save (create or update) a file on Google Drive.
+     * @param {string} jsonData - The JSON string to save.
+     * @param {string} filename - The filename to use.
+     */
+    async saveToDrive(jsonData, filename) {
+        try {
+            const token = await this._getAccessToken();
+            this._updateSignInUI(true);
+
+            UI.log(`Saving "${filename}" to Google Drive...`);
+
+            const fileContent = jsonData;
+            const metadata = {
+                name: filename,
+                mimeType: 'application/json'
+            };
+
+            const boundary = '-------browsercad_boundary';
+            const delimiter = '\r\n--' + boundary + '\r\n';
+            const closeDelimiter = '\r\n--' + boundary + '--';
+
+            const multipartBody =
+                delimiter +
+                'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+                JSON.stringify(metadata) +
+                delimiter +
+                'Content-Type: application/json\r\n\r\n' +
+                fileContent +
+                closeDelimiter;
+
+            let url, method;
+
+            if (this._currentDriveFileId) {
+                // Update existing file
+                url = `https://www.googleapis.com/upload/drive/v3/files/${this._currentDriveFileId}?uploadType=multipart`;
+                method = 'PATCH';
+            } else {
+                // Create new file
+                url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+                method = 'POST';
+            }
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'multipart/related; boundary=' + boundary
+                },
+                body: multipartBody
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
+
+            const result = await response.json();
+            this._currentDriveFileId = result.id;
+
+            CAD.drawingName = filename.replace(/\.json$/i, '');
+            const fileNameEl = document.getElementById('fileName');
+            if (fileNameEl) fileNameEl.textContent = filename;
+
+            CAD.modified = false;
+            UI.log(`Drawing saved to Google Drive as "${filename}".`, 'success');
+        } catch (err) {
+            UI.log('Error saving to Drive: ' + err.message, 'error');
+            console.error('Drive save error:', err);
+        }
     }
 };
+
+// ==========================================
+// Google API Initialization Callbacks
+// ==========================================
+
+// Called by gapi.js when it finishes loading
+function gapiLoaded() {
+    Storage.initGapiClient();
+}
+
+// Called by GIS library when it finishes loading
+function gisLoaded() {
+    Storage.initGisClient();
+}
+
+// Auto-detect when libraries are available (for async/defer loading)
+(function initGoogleDrive() {
+    // Poll for gapi
+    const gapiCheck = setInterval(() => {
+        if (typeof gapi !== 'undefined') {
+            clearInterval(gapiCheck);
+            Storage.initGapiClient();
+        }
+    }, 200);
+
+    // Poll for google.accounts
+    const gisCheck = setInterval(() => {
+        if (typeof google !== 'undefined' && google.accounts) {
+            clearInterval(gisCheck);
+            Storage.initGisClient();
+        }
+    }, 200);
+
+    // Stop polling after 15 seconds
+    setTimeout(() => {
+        clearInterval(gapiCheck);
+        clearInterval(gisCheck);
+    }, 15000);
+})();
 
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {
