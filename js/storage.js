@@ -223,7 +223,8 @@ const Storage = {
             }
         });
         if (!response.ok) {
-            throw new Error(`Drive list failed: ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(`Drive list failed: ${response.status} ${errorText}`);
         }
         const data = await response.json();
         return data.files || [];
@@ -259,7 +260,8 @@ const Storage = {
                 }
             });
             if (!response.ok) {
-                throw new Error(`Drive download failed: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`Drive download failed: ${response.status} ${errorText}`);
             }
 
             const content = await response.text();
@@ -362,7 +364,8 @@ const Storage = {
             });
 
             if (!response.ok) {
-                throw new Error(`Drive upload failed: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`Drive upload failed: ${response.status} ${errorText}`);
             }
 
             const result = await response.json();
