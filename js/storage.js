@@ -1391,15 +1391,16 @@ const Storage = {
 
     /**
      * Request an access token from GIS.
+     * @param {boolean} forceNew - If true, discard cached token and request a new one.
      * Returns a Promise that resolves with the token string.
      */
-    _getAccessToken() {
+    _getAccessToken(forceNew) {
         return new Promise((resolve, reject) => {
             if (!this._gisInited) {
                 reject(new Error('Google Identity Services not loaded yet.'));
                 return;
             }
-            if (this._accessToken) {
+            if (this._accessToken && !forceNew) {
                 resolve(this._accessToken);
                 return;
             }
@@ -1414,12 +1415,9 @@ const Storage = {
                 resolve(this._accessToken);
             };
 
-            // If no token, prompt user consent; otherwise use existing session
-            if (this._accessToken === null) {
-                this._tokenClient.requestAccessToken({ prompt: 'consent' });
-            } else {
-                this._tokenClient.requestAccessToken({ prompt: '' });
-            }
+            this._tokenClient.requestAccessToken({
+                prompt: this._accessToken ? '' : 'consent'
+            });
         });
     },
 
@@ -1448,7 +1446,8 @@ const Storage = {
      */
     async openFromDrive() {
         try {
-            const token = await this._getAccessToken();
+            // Always get a fresh token for the Picker
+            const token = await this._getAccessToken(true);
             this._updateSignInUI(true);
 
             const config = window.CAD_CONFIG;
@@ -1457,18 +1456,21 @@ const Storage = {
                 .setMimeTypes('application/json')
                 .setMode(google.picker.DocsViewMode.LIST);
 
-            const picker = new google.picker.PickerBuilder()
-                .enableFeature(google.picker.Feature.NAV_HIDDEN)
+            const builder = new google.picker.PickerBuilder()
                 .setDeveloperKey(config.apiKey)
-                .setAppId(config.appId)
                 .setOAuthToken(token)
                 .addView(view)
                 .addView(new google.picker.DocsUploadView())
                 .setTitle('Open BrowserCAD Drawing from Google Drive')
                 .setCallback((data) => this._pickerOpenCallback(data))
-                .setOrigin(window.location.protocol + '//' + window.location.host)
-                .build();
+                .setOrigin(window.location.protocol + '//' + window.location.host);
 
+            // Only set appId if configured (must match actual GCP project number)
+            if (config.appId) {
+                builder.setAppId(config.appId);
+            }
+
+            const picker = builder.build();
             picker.setVisible(true);
         } catch (err) {
             UI.log('Could not open Drive picker: ' + err.message, 'error');
