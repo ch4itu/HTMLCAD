@@ -5,6 +5,13 @@
 const Storage = {
     STORAGE_KEY: 'htmlcad_drawing',
     SETTINGS_KEY: 'htmlcad_settings',
+    DRIVE_CONFIG_KEY: 'htmlcad_drive_config',
+    driveState: {
+        fileId: null,
+        fileName: null,
+        token: null,
+        tokenExpiry: null
+    },
 
     // ==========================================
     // LOCAL STORAGE OPERATIONS
@@ -96,6 +103,278 @@ const Storage = {
         } catch (e) {
             console.error('Error loading settings:', e);
             return false;
+        }
+    },
+
+    // ==========================================
+    // GOOGLE DRIVE INTEGRATION
+    // ==========================================
+
+    getDriveConfig() {
+        const saved = localStorage.getItem(this.DRIVE_CONFIG_KEY);
+        if (!saved) return null;
+        try {
+            return JSON.parse(saved);
+        } catch (e) {
+            console.error('Error parsing Drive config:', e);
+            return null;
+        }
+    },
+
+    saveDriveConfig(config) {
+        localStorage.setItem(this.DRIVE_CONFIG_KEY, JSON.stringify(config));
+    },
+
+    configureGoogleDrive() {
+        const current = this.getDriveConfig() || {};
+        const content = `
+            <p>Enter your Google Client ID to enable Google Drive sign-in. This is stored locally in this browser.</p>
+            <div class="property-row">
+                <label class="property-label" for="driveClientId">Client ID</label>
+                <input id="driveClientId" class="property-input" type="text" value="${current.clientId || ''}" />
+            </div>
+        `;
+
+        UI.showModal('Google Drive Sign-In', content, [
+            {
+                label: 'Cancel',
+                action: () => {}
+            },
+            {
+                label: 'Save',
+                primary: true,
+                action: () => {
+                    const clientId = document.getElementById('driveClientId')?.value.trim();
+                    if (!clientId) {
+                        UI.log('Google Drive: Please provide a Client ID.', 'error');
+                        return;
+                    }
+                    this.saveDriveConfig({ clientId });
+                    UI.log('Google Drive settings saved.', 'success');
+                }
+            }
+        ]);
+    },
+
+    ensureDriveConfig() {
+        const config = this.getDriveConfig();
+        if (!config || !config.clientId) {
+            this.configureGoogleDrive();
+            return null;
+        }
+        return config;
+    },
+
+    ensureDriveToken(config, prompt = '') {
+        return new Promise((resolve, reject) => {
+            const now = Date.now();
+            if (this.driveState.token && this.driveState.tokenExpiry && now < this.driveState.tokenExpiry) {
+                resolve(this.driveState.token);
+                return;
+            }
+
+            if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+                reject(new Error('Google Identity Services not loaded.'));
+                return;
+            }
+
+            const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: config.clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
+                callback: (resp) => {
+                    if (resp.error) {
+                        reject(resp);
+                        return;
+                    }
+                    this.driveState.token = resp.access_token;
+                    this.driveState.tokenExpiry = Date.now() + (resp.expires_in * 1000);
+                    resolve(resp.access_token);
+                }
+            });
+
+            tokenClient.requestAccessToken({ prompt });
+        });
+    },
+
+    async loadFromGoogleDrive() {
+        const config = this.ensureDriveConfig();
+        if (!config) return;
+
+        try {
+            const token = await this.ensureDriveToken(config, 'select_account');
+            const files = await this.fetchDriveFiles(token);
+            this.showDriveFilePicker(files);
+        } catch (err) {
+            console.error('Google Drive load error:', err);
+            UI.log('Google Drive: Unable to load files. Check settings and console for details.', 'error');
+        }
+    },
+
+    async fetchDriveFiles(token) {
+        const params = new URLSearchParams({
+            pageSize: '50',
+            fields: 'files(id,name,mimeType,modifiedTime)',
+            orderBy: 'modifiedTime desc',
+            q: 'trashed=false'
+        });
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Drive list failed: ${response.status} ${errorText}`);
+        }
+        const data = await response.json();
+        return data.files || [];
+    },
+
+    showDriveFilePicker(files) {
+        const supported = files.filter((file) => {
+            const name = (file.name || '').toLowerCase();
+            return name.endsWith('.dxf') || name.endsWith('.svg') || name.endsWith('.json') || name.endsWith('.htmlcad');
+        });
+
+        const items = supported.map((file) => `
+            <div class="property-row">
+                <button class="btn btn-primary" onclick="Storage.loadDriveFile('${file.id}', '${file.name?.replace(/'/g, '&#39;') || 'drive-file'}')">Open</button>
+                <span class="property-value">${file.name || 'Untitled'}</span>
+            </div>
+        `).join('') || '<p>No supported files found in Drive.</p>';
+
+        UI.showModal('Google Drive Files', `<div class="drive-file-list">${items}</div>`, [
+            { label: 'Close', action: () => {} }
+        ]);
+    },
+
+    async loadDriveFile(fileId, fileName) {
+        const config = this.getDriveConfig();
+        if (!config) return;
+
+        try {
+            const token = await this.ensureDriveToken(config);
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Drive download failed: ${response.status} ${errorText}`);
+            }
+
+            const content = await response.text();
+            const ext = fileName.split('.').pop().toLowerCase();
+            const blob = new Blob([content], { type: 'text/plain' });
+            const file = new File([blob], fileName, { type: blob.type });
+
+            if (ext === 'dxf') {
+                this.importDXF(file);
+            } else if (ext === 'svg') {
+                this.importSVG(file);
+            } else if (ext === 'json' || ext === 'htmlcad') {
+                this.importJSON(file);
+            } else {
+                UI.log(`Unsupported Drive file format: .${ext}. Use .dxf, .json, or .svg`, 'error');
+                return;
+            }
+
+            this.driveState.fileId = fileId;
+            this.driveState.fileName = fileName;
+            UI.log(`Google Drive: Loaded ${fileName}.`, 'success');
+        } catch (err) {
+            console.error('Google Drive download error:', err);
+            UI.log('Google Drive: Failed to load file.', 'error');
+        }
+    },
+
+    promptDriveFilename(defaultName) {
+        return new Promise((resolve) => {
+            const content = `
+                <div class="property-row">
+                    <label class="property-label" for="driveFileName">File name</label>
+                    <input id="driveFileName" class="property-input" type="text" value="${defaultName}" />
+                </div>
+            `;
+            UI.showModal('Save to Google Drive', content, [
+                {
+                    label: 'Cancel',
+                    action: () => resolve(null)
+                },
+                {
+                    label: 'Save',
+                    primary: true,
+                    action: () => {
+                        const name = document.getElementById('driveFileName')?.value.trim();
+                        if (!name) {
+                            UI.log('Google Drive: Please enter a file name.', 'error');
+                            resolve(null);
+                            return;
+                        }
+                        resolve(name);
+                    }
+                }
+            ]);
+        });
+    },
+
+    async saveToGoogleDrive() {
+        const config = this.ensureDriveConfig();
+        if (!config) return;
+
+        try {
+            const token = await this.ensureDriveToken(config, 'select_account');
+            let fileName = this.driveState.fileName || `${CAD.drawingName || 'drawing'}.json`;
+            if (!this.driveState.fileId) {
+                const chosen = await this.promptDriveFilename(fileName);
+                if (!chosen) return;
+                fileName = chosen;
+            }
+            const metadata = {
+                name: fileName,
+                mimeType: 'application/json'
+            };
+            const content = JSON.stringify(CAD.toJSON(), null, 2);
+            const boundary = `-------htmlcad${Date.now()}`;
+            const body = [
+                `--${boundary}`,
+                'Content-Type: application/json; charset=UTF-8',
+                '',
+                JSON.stringify(metadata),
+                `--${boundary}`,
+                'Content-Type: application/json',
+                '',
+                content,
+                `--${boundary}--`
+            ].join('\\r\\n');
+
+            const isUpdate = Boolean(this.driveState.fileId);
+            const url = isUpdate
+                ? `https://www.googleapis.com/upload/drive/v3/files/${this.driveState.fileId}?uploadType=multipart`
+                : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+
+            const response = await fetch(url, {
+                method: isUpdate ? 'PATCH' : 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': `multipart/related; boundary=${boundary}`
+                },
+                body
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Drive upload failed: ${response.status} ${errorText}`);
+            }
+
+            const result = await response.json();
+            this.driveState.fileId = result.id;
+            this.driveState.fileName = result.name || fileName;
+            UI.log(`Google Drive: Saved ${this.driveState.fileName}.`, 'success');
+        } catch (err) {
+            console.error('Google Drive save error:', err);
+            UI.log('Google Drive: Failed to save file.', 'error');
         }
     },
 
