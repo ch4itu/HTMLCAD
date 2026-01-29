@@ -644,6 +644,21 @@ const Geometry = {
                     return Utils.dist(point, entity.center) < entity.radius + tolerance;
                 } else if (entity.dimType === 'ordinate') {
                     return Utils.distToSegment(point, entity.featurePoint, entity.leaderEnd) < tolerance * 2;
+                } else if (entity.dimType === 'arclength') {
+                    const dist = Math.abs(Utils.dist(point, entity.center) - entity.radius);
+                    return dist < tolerance * 2;
+                }
+                return false;
+
+            case 'region':
+                // Region is a closed polyline - test boundary and interior
+                if (entity.points) {
+                    for (let i = 0; i < entity.points.length - 1; i++) {
+                        if (Utils.distToSegment(point, entity.points[i], entity.points[i + 1]) < tolerance) {
+                            return true;
+                        }
+                    }
+                    return Utils.pointInPolygon(point, entity.points);
                 }
                 return false;
 

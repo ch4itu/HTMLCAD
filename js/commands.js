@@ -234,6 +234,47 @@ const Commands = {
         // Overkill
         'overkill': 'overkill',
 
+        // Layer management (Phase 2)
+        'laydel': 'laydel',
+        'laydelete': 'laydel',
+        'layiso': 'layiso',
+        'layisolate': 'layiso',
+        'layuniso': 'layuniso',
+        'layunisolate': 'layuniso',
+        'laymerge': 'laymerge',
+        'laymrg': 'laymerge',
+
+        // Selection (Phase 2)
+        'filter': 'filter',
+        'fi': 'filter',
+
+        // Modify (Phase 2)
+        'al': 'align',
+        'align': 'align',
+        'scaletext': 'scaletext',
+        'st': 'scaletext',
+        'justifytext': 'justifytext',
+        'jt': 'justifytext',
+
+        // Utilities (Phase 2)
+        'find': 'find',
+        'purge': 'purge',
+        'pu': 'purge',
+
+        // Drawing (Phase 2)
+        'solid': 'solid',
+        'so': 'solid',
+        'boundary': 'boundary',
+        'bo': 'boundary',
+        'region': 'region',
+        'reg': 'region',
+
+        // Dimensions (Phase 2)
+        'qdim': 'qdim',
+        'dimarc': 'dimarc',
+        'dimbreak': 'dimbreak',
+        'dimspace': 'dimspace',
+
         // Close/End options (handled specially in execute() when activeCmd exists)
         'close': 'close'
     },
@@ -905,6 +946,104 @@ const Commands = {
                 this.executeOverkill();
                 break;
 
+            // ==========================================
+            // PHASE 2 COMMANDS
+            // ==========================================
+
+            // Layer management
+            case 'laydel':
+                UI.log('LAYDEL: Enter name of layer to delete (entities moved to "0"):', 'prompt');
+                break;
+
+            case 'layiso':
+                UI.log('LAYISO: Select object on layer to isolate:', 'prompt');
+                break;
+
+            case 'layuniso':
+                this.executeLayUniso();
+                break;
+
+            case 'laymerge':
+                UI.log('LAYMERGE: Enter source layer name to merge:', 'prompt');
+                break;
+
+            // Selection
+            case 'filter':
+                UI.log('FILTER: Enter filter [Type/Layer/Color/All] <All>:', 'prompt');
+                CAD.cmdOptions.filterStep = 'mode';
+                break;
+
+            // Modify
+            case 'align':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('ALIGN: Select objects to align:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    CAD.step = 0;
+                    UI.log('ALIGN: Specify first source point:', 'prompt');
+                }
+                break;
+
+            case 'scaletext':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('SCALETEXT: Select text objects:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('SCALETEXT: Specify new height:', 'prompt');
+                }
+                break;
+
+            case 'justifytext':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('JUSTIFYTEXT: Select text objects:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    UI.log('JUSTIFYTEXT: Enter justification [Left/Center/Right] <Left>:', 'prompt');
+                }
+                break;
+
+            // Utilities
+            case 'find':
+                UI.log('FIND: Enter search string:', 'prompt');
+                CAD.cmdOptions.findStep = 'search';
+                break;
+
+            case 'purge':
+                this.executePurge();
+                break;
+
+            // Drawing
+            case 'solid':
+                UI.log('SOLID: Specify first point:', 'prompt');
+                break;
+
+            case 'boundary':
+            case 'region':
+                UI.log(`${name.toUpperCase()}: Specify internal point to detect boundary:`, 'prompt');
+                break;
+
+            // Dimensions
+            case 'qdim':
+                if (CAD.selectedIds.length === 0) {
+                    UI.log('QDIM: Select objects to dimension:', 'prompt');
+                    CAD.cmdOptions.needSelection = true;
+                } else {
+                    this.continueCommand('qdim');
+                }
+                break;
+
+            case 'dimarc':
+                UI.log('DIMARC: Select arc to dimension:', 'prompt');
+                break;
+
+            case 'dimbreak':
+                UI.log('DIMBREAK: Select dimension to break:', 'prompt');
+                break;
+
+            case 'dimspace':
+                UI.log('DIMSPACE: Select base dimension:', 'prompt');
+                break;
+
             default:
                 UI.log(`Command "${name}" not yet implemented.`, 'error');
                 this.finishCommand();
@@ -1155,6 +1294,40 @@ const Commands = {
 
             case 'dimordinate':
                 this.handleDimOrdinateClick(point);
+                break;
+
+            // Phase 2 click handlers
+            case 'layiso':
+                this.handleLayIsoClick(point);
+                break;
+
+            case 'align':
+                this.handleAlignClick(point);
+                break;
+
+            case 'solid':
+                this.handleSolidClick(point);
+                break;
+
+            case 'boundary':
+            case 'region':
+                this.handleBoundaryClick(point);
+                break;
+
+            case 'qdim':
+                this.handleQdimClick(point);
+                break;
+
+            case 'dimarc':
+                this.handleDimArcClick(point);
+                break;
+
+            case 'dimbreak':
+                this.handleDimBreakClick(point);
+                break;
+
+            case 'dimspace':
+                this.handleDimSpaceClick(point);
                 break;
 
             default:
@@ -2191,6 +2364,22 @@ const Commands = {
             case 'stretch':
                 CAD.cmdOptions.stretchMode = 'basePoint';
                 UI.log('STRETCH: Specify base point:', 'prompt');
+                break;
+
+            // Phase 2 commands
+            case 'align':
+                CAD.step = 0;
+                UI.log('ALIGN: Specify first source point:', 'prompt');
+                break;
+            case 'scaletext':
+                UI.log('SCALETEXT: Specify new height:', 'prompt');
+                break;
+            case 'justifytext':
+                UI.log('JUSTIFYTEXT: Enter justification [Left/Center/Right] <Left>:', 'prompt');
+                break;
+            case 'qdim':
+                CAD.cmdOptions.qdimReady = true;
+                UI.log('QDIM: Specify dimension line position:', 'prompt');
                 break;
         }
     },
@@ -3590,6 +3779,761 @@ const Commands = {
     },
 
     // ==========================================
+    // PHASE 2: LAYER SYSTEM
+    // ==========================================
+
+    executeLayDel(layerName) {
+        if (layerName === '0') {
+            UI.log('LAYDEL: Cannot delete layer "0".', 'error');
+            this.finishCommand();
+            return;
+        }
+        const layer = CAD.getLayer(layerName);
+        if (!layer) {
+            UI.log(`LAYDEL: Layer "${layerName}" not found.`, 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Delete Layer');
+        // Move all entities on deleted layer to layer "0"
+        let moved = 0;
+        CAD.entities.forEach(e => {
+            if (e.layer === layerName) {
+                e.layer = '0';
+                moved++;
+            }
+        });
+        // Remove the layer
+        CAD.layers = CAD.layers.filter(l => l.name !== layerName);
+        if (CAD.currentLayer === layerName) {
+            CAD.currentLayer = '0';
+        }
+        UI.log(`LAYDEL: Layer "${layerName}" deleted. ${moved} entity(ies) moved to layer "0".`);
+        UI.updateLayerUI();
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    handleLayIsoClick(point) {
+        const hit = this.hitTest(point);
+        if (!hit) {
+            UI.log('LAYISO: No object found. Select object on layer to isolate:', 'prompt');
+            return;
+        }
+        const targetLayer = hit.layer;
+        CAD.saveUndoState('Layer Isolate');
+        // Store pre-isolation state
+        CAD._layIsoState = CAD.layers.map(l => ({ name: l.name, visible: l.visible }));
+        // Hide all layers except the target
+        let hidden = 0;
+        CAD.layers.forEach(l => {
+            if (l.name !== targetLayer) {
+                l.visible = false;
+                hidden++;
+            }
+        });
+        UI.log(`LAYISO: Layer "${targetLayer}" isolated. ${hidden} layer(s) hidden.`);
+        UI.updateLayerUI();
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeLayUniso() {
+        if (!CAD._layIsoState) {
+            UI.log('LAYUNISO: No isolated layers to restore.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Layer Unisolate');
+        CAD._layIsoState.forEach(saved => {
+            const layer = CAD.getLayer(saved.name);
+            if (layer) layer.visible = saved.visible;
+        });
+        delete CAD._layIsoState;
+        UI.log('LAYUNISO: All layers restored to previous visibility.');
+        UI.updateLayerUI();
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeLayMerge(srcName, destName) {
+        if (srcName === destName) {
+            UI.log('LAYMERGE: Source and destination are the same.', 'error');
+            this.finishCommand();
+            return;
+        }
+        const srcLayer = CAD.getLayer(srcName);
+        const destLayer = CAD.getLayer(destName);
+        if (!srcLayer) {
+            UI.log(`LAYMERGE: Source layer "${srcName}" not found.`, 'error');
+            this.finishCommand();
+            return;
+        }
+        if (!destLayer) {
+            UI.log(`LAYMERGE: Destination layer "${destName}" not found.`, 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Merge Layers');
+        let moved = 0;
+        CAD.entities.forEach(e => {
+            if (e.layer === srcName) {
+                e.layer = destName;
+                moved++;
+            }
+        });
+        CAD.layers = CAD.layers.filter(l => l.name !== srcName);
+        if (CAD.currentLayer === srcName) {
+            CAD.currentLayer = destName;
+        }
+        UI.log(`LAYMERGE: "${srcName}" merged into "${destName}". ${moved} entity(ies) moved.`);
+        UI.updateLayerUI();
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // ==========================================
+    // PHASE 2: SELECTION FILTER
+    // ==========================================
+
+    handleFilterInput(input) {
+        const state = CAD;
+        const val = input.toLowerCase().trim();
+
+        if (state.cmdOptions.filterStep === 'mode') {
+            if (val === 'type' || val === 't') {
+                state.cmdOptions.filterStep = 'type';
+                UI.log('FILTER: Enter entity type (line/circle/arc/polyline/rect/text/point/dimension/ellipse/donut/block):', 'prompt');
+                return true;
+            }
+            if (val === 'layer' || val === 'la') {
+                state.cmdOptions.filterStep = 'layer';
+                const layerNames = CAD.layers.map(l => l.name).join(', ');
+                UI.log(`FILTER: Enter layer name [${layerNames}]:`, 'prompt');
+                return true;
+            }
+            if (val === 'color' || val === 'c') {
+                state.cmdOptions.filterStep = 'color';
+                UI.log('FILTER: Enter color (e.g. #ff0000, red, white):', 'prompt');
+                return true;
+            }
+            if (val === 'all' || val === 'a' || val === '') {
+                this.executeFilterAll();
+                return true;
+            }
+            UI.log('FILTER: Enter filter [Type/Layer/Color/All]:', 'prompt');
+            return true;
+        }
+
+        if (state.cmdOptions.filterStep === 'type') {
+            const type = val;
+            const entities = CAD.getVisibleEntities().filter(e => e.type === type);
+            CAD.selectedIds = entities.map(e => e.id);
+            UI.log(`FILTER: ${entities.length} ${type} entity(ies) selected.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.filterStep === 'layer') {
+            const entities = CAD.getVisibleEntities().filter(e => e.layer === input.trim());
+            CAD.selectedIds = entities.map(e => e.id);
+            UI.log(`FILTER: ${entities.length} entity(ies) on layer "${input.trim()}" selected.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        if (state.cmdOptions.filterStep === 'color') {
+            const entities = CAD.getVisibleEntities().filter(e => {
+                const ec = CAD.getEntityColor(e).toLowerCase();
+                return ec === val || ec.includes(val);
+            });
+            CAD.selectedIds = entities.map(e => e.id);
+            UI.log(`FILTER: ${entities.length} entity(ies) with color "${val}" selected.`);
+            this.finishCommand();
+            Renderer.draw();
+            return true;
+        }
+
+        return false;
+    },
+
+    executeFilterAll() {
+        const entities = CAD.getVisibleEntities();
+        CAD.selectedIds = entities.map(e => e.id);
+        UI.log(`FILTER: All ${entities.length} visible entity(ies) selected.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // ==========================================
+    // PHASE 2: MODIFY COMMANDS
+    // ==========================================
+
+    handleAlignClick(point) {
+        const state = CAD;
+        if (state.cmdOptions.needSelection) return;
+
+        if (state.step === 0) {
+            state.cmdOptions.srcPt1 = point;
+            state.step = 1;
+            UI.log('ALIGN: Specify second source point:', 'prompt');
+        } else if (state.step === 1) {
+            state.cmdOptions.srcPt2 = point;
+            state.step = 2;
+            UI.log('ALIGN: Specify first destination point:', 'prompt');
+        } else if (state.step === 2) {
+            state.cmdOptions.dstPt1 = point;
+            state.step = 3;
+            UI.log('ALIGN: Specify second destination point:', 'prompt');
+        } else if (state.step === 3) {
+            state.cmdOptions.dstPt2 = point;
+            state.step = 4;
+            UI.log('ALIGN: Scale objects to alignment points? [Yes/No] <No>:', 'prompt');
+        }
+    },
+
+    executeAlign(doScale) {
+        const state = CAD;
+        const src1 = state.cmdOptions.srcPt1;
+        const src2 = state.cmdOptions.srcPt2;
+        const dst1 = state.cmdOptions.dstPt1;
+        const dst2 = state.cmdOptions.dstPt2;
+
+        if (!src1 || !dst1) {
+            UI.log('ALIGN: Insufficient points.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('Align');
+        const selected = CAD.getSelectedEntities();
+
+        // Calculate translation
+        const dx = dst1.x - src1.x;
+        const dy = dst1.y - src1.y;
+
+        // Calculate rotation and scale if we have 2 point pairs
+        let angle = 0;
+        let scale = 1;
+        if (src2 && dst2) {
+            const srcAngle = Utils.angle(src1, src2);
+            const dstAngle = Utils.angle(dst1, dst2);
+            angle = dstAngle - srcAngle;
+
+            if (doScale) {
+                const srcDist = Utils.dist(src1, src2);
+                const dstDist = Utils.dist(dst1, dst2);
+                if (srcDist > 0) scale = dstDist / srcDist;
+            }
+        }
+
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        const transformPt = (p) => {
+            // Translate relative to src1
+            let x = p.x - src1.x;
+            let y = p.y - src1.y;
+            // Scale
+            x *= scale;
+            y *= scale;
+            // Rotate
+            const rx = x * cos - y * sin;
+            const ry = x * sin + y * cos;
+            // Translate to dst1
+            return { x: rx + dst1.x, y: ry + dst1.y };
+        };
+
+        selected.forEach(entity => {
+            this.transformEntity(entity, transformPt);
+            CAD.updateEntity(entity.id, entity, true);
+        });
+
+        UI.log(`ALIGN: ${selected.length} object(s) aligned.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    transformEntity(entity, transformPt) {
+        switch (entity.type) {
+            case 'line':
+                entity.p1 = transformPt(entity.p1);
+                entity.p2 = transformPt(entity.p2);
+                break;
+            case 'circle':
+            case 'arc':
+                entity.center = transformPt(entity.center);
+                break;
+            case 'rect':
+                entity.p1 = transformPt(entity.p1);
+                entity.p2 = transformPt(entity.p2);
+                break;
+            case 'polyline':
+                entity.points = entity.points.map(p => transformPt(p));
+                break;
+            case 'ellipse':
+                entity.center = transformPt(entity.center);
+                break;
+            case 'text':
+            case 'mtext':
+                entity.position = transformPt(entity.position);
+                break;
+            case 'point':
+                entity.position = transformPt(entity.position);
+                break;
+            case 'donut':
+                entity.center = transformPt(entity.center);
+                break;
+        }
+    },
+
+    executeScaleText(newHeight) {
+        const selected = CAD.getSelectedEntities().filter(e => e.type === 'text' || e.type === 'mtext');
+        if (selected.length === 0) {
+            UI.log('SCALETEXT: No text objects in selection.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Scale Text');
+        selected.forEach(e => {
+            CAD.updateEntity(e.id, { height: newHeight }, true);
+        });
+        UI.log(`SCALETEXT: ${selected.length} text object(s) scaled to height ${newHeight}.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executeJustifyText(justification) {
+        const val = justification.toLowerCase();
+        const validJust = { l: 'left', left: 'left', c: 'center', center: 'center', r: 'right', right: 'right' };
+        const just = validJust[val];
+        if (!just) {
+            UI.log('JUSTIFYTEXT: Invalid option. [Left/Center/Right]', 'error');
+            return;
+        }
+        const selected = CAD.getSelectedEntities().filter(e => e.type === 'text' || e.type === 'mtext');
+        if (selected.length === 0) {
+            UI.log('JUSTIFYTEXT: No text objects in selection.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Justify Text');
+        selected.forEach(e => {
+            CAD.updateEntity(e.id, { justify: just }, true);
+        });
+        UI.log(`JUSTIFYTEXT: ${selected.length} text object(s) set to "${just}" justification.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // ==========================================
+    // PHASE 2: UTILITY COMMANDS
+    // ==========================================
+
+    handleFindInput(input) {
+        const state = CAD;
+        if (state.cmdOptions.findStep === 'search') {
+            state.cmdOptions.findSearch = input;
+            state.cmdOptions.findStep = 'replace';
+            UI.log('FIND: Enter replacement string (or press Enter for find-only):', 'prompt');
+            return true;
+        }
+        if (state.cmdOptions.findStep === 'replace') {
+            const search = state.cmdOptions.findSearch;
+            const replace = input;
+            this.executeFind(search, replace);
+            return true;
+        }
+        return false;
+    },
+
+    executeFind(search, replace) {
+        const entities = CAD.getVisibleEntities().filter(e =>
+            (e.type === 'text' || e.type === 'mtext') && e.text && e.text.includes(search)
+        );
+
+        if (entities.length === 0) {
+            UI.log(`FIND: "${search}" not found in any text objects.`);
+            this.finishCommand();
+            return;
+        }
+
+        if (replace === '') {
+            // Find only - select matching entities
+            CAD.selectedIds = entities.map(e => e.id);
+            UI.log(`FIND: Found "${search}" in ${entities.length} text object(s). Objects selected.`);
+        } else {
+            // Find and replace
+            CAD.saveUndoState('Find & Replace');
+            entities.forEach(e => {
+                const newText = e.text.split(search).join(replace);
+                CAD.updateEntity(e.id, { text: newText }, true);
+            });
+            CAD.selectedIds = entities.map(e => e.id);
+            UI.log(`FIND: Replaced "${search}" with "${replace}" in ${entities.length} text object(s).`);
+        }
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    executePurge() {
+        let purged = 0;
+
+        // Purge unused layers (no entities)
+        const usedLayers = new Set(CAD.entities.map(e => e.layer));
+        const before = CAD.layers.length;
+        CAD.layers = CAD.layers.filter(l => l.name === '0' || usedLayers.has(l.name));
+        purged += (before - CAD.layers.length);
+        const layersPurged = before - CAD.layers.length;
+
+        // Purge unused blocks (no INSERT references)
+        const usedBlocks = new Set(CAD.entities.filter(e => e.type === 'block').map(e => e.blockName));
+        const blocksBefore = Object.keys(CAD.blocks).length;
+        Object.keys(CAD.blocks).forEach(name => {
+            if (!usedBlocks.has(name)) {
+                delete CAD.blocks[name];
+                purged++;
+            }
+        });
+        const blocksPurged = blocksBefore - Object.keys(CAD.blocks).length;
+
+        if (purged === 0) {
+            UI.log('PURGE: No unused items to purge.');
+        } else {
+            UI.log(`PURGE: Removed ${layersPurged} layer(s), ${blocksPurged} block(s).`);
+            UI.updateLayerUI();
+        }
+        this.finishCommand();
+    },
+
+    // ==========================================
+    // PHASE 2: DRAWING COMMANDS
+    // ==========================================
+
+    handleSolidClick(point) {
+        const state = CAD;
+        state.points.push(point);
+
+        if (state.points.length === 1) {
+            UI.log('SOLID: Specify second point:', 'prompt');
+        } else if (state.points.length === 2) {
+            UI.log('SOLID: Specify third point:', 'prompt');
+        } else if (state.points.length === 3) {
+            UI.log('SOLID: Specify fourth point or press Enter for triangle:', 'prompt');
+        } else if (state.points.length === 4) {
+            this.createSolidEntity();
+        }
+    },
+
+    createSolidEntity() {
+        const state = CAD;
+        if (state.points.length < 3) {
+            UI.log('SOLID: Need at least 3 points.', 'error');
+            this.finishCommand();
+            return;
+        }
+        CAD.saveUndoState('Solid');
+        const pts = [...state.points];
+        // AutoCAD SOLID uses triangle (3 pts) or quad (4 pts)
+        if (pts.length === 3) {
+            pts.push({ ...pts[2] }); // Degenerate quad
+        }
+        // Close the polygon
+        pts.push({ ...pts[0] });
+        CAD.addEntity({
+            type: 'polyline',
+            points: pts,
+            isSolid: true,
+            hatch: 'solid'
+        }, true);
+        UI.log('SOLID: Solid created.');
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    handleBoundaryClick(point) {
+        // Detect closed boundary at clicked point by ray-casting
+        const entities = CAD.getVisibleEntities();
+        const boundaryPts = this.detectBoundary(point, entities);
+
+        if (!boundaryPts || boundaryPts.length < 3) {
+            UI.log(`${CAD.activeCmd.toUpperCase()}: No closed boundary found at click point.`, 'error');
+            return;
+        }
+
+        CAD.saveUndoState(CAD.activeCmd === 'region' ? 'Region' : 'Boundary');
+        const pts = [...boundaryPts, { ...boundaryPts[0] }];
+        const entityType = CAD.activeCmd === 'region' ? 'region' : 'polyline';
+        CAD.addEntity({
+            type: entityType,
+            points: pts,
+            isRegion: CAD.activeCmd === 'region',
+            isBoundary: true
+        }, true);
+        UI.log(`${CAD.activeCmd.toUpperCase()}: Boundary created with ${boundaryPts.length} vertices.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    detectBoundary(point, entities) {
+        // Simple boundary detection: find the smallest closed polyline/rect that contains the point
+        const candidates = [];
+
+        entities.forEach(entity => {
+            let pts = null;
+            if (entity.type === 'polyline' && entity.points.length >= 3) {
+                if (Utils.isPolygonClosed(entity.points)) {
+                    pts = entity.points;
+                }
+            } else if (entity.type === 'rect') {
+                pts = [
+                    { ...entity.p1 },
+                    { x: entity.p2.x, y: entity.p1.y },
+                    { ...entity.p2 },
+                    { x: entity.p1.x, y: entity.p2.y }
+                ];
+            } else if (entity.type === 'circle') {
+                // Approximate circle as polygon for containment test
+                const n = 32;
+                pts = [];
+                for (let i = 0; i < n; i++) {
+                    const a = (2 * Math.PI * i) / n;
+                    pts.push({
+                        x: entity.center.x + entity.r * Math.cos(a),
+                        y: entity.center.y + entity.r * Math.sin(a)
+                    });
+                }
+            }
+
+            if (pts && Utils.pointInPolygon(point, pts)) {
+                const area = Math.abs(Utils.polygonArea(pts));
+                candidates.push({ points: pts, area: area });
+            }
+        });
+
+        // Return the smallest enclosing boundary
+        if (candidates.length === 0) return null;
+        candidates.sort((a, b) => a.area - b.area);
+        return candidates[0].points;
+    },
+
+    // ==========================================
+    // PHASE 2: DIMENSION COMMANDS
+    // ==========================================
+
+    handleQdimClick(point) {
+        const state = CAD;
+        if (state.cmdOptions.needSelection) return;
+
+        // Point is for dimension line placement
+        if (state.cmdOptions.qdimReady) {
+            // Already collected, this is the dimension line position click
+            return;
+        }
+
+        // Place dimensions for all selected objects
+        const selected = CAD.getSelectedEntities();
+        if (selected.length === 0) {
+            UI.log('QDIM: No objects selected.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('Quick Dimension');
+        let count = 0;
+
+        selected.forEach(entity => {
+            if (entity.type === 'line') {
+                // Create linear dimension for line
+                const dimPos = {
+                    x: (entity.p1.x + entity.p2.x) / 2,
+                    y: point.y
+                };
+                const len = Utils.dist(entity.p1, entity.p2);
+                const precision = CAD.dimPrecision || 4;
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: 'linear',
+                    p1: { ...entity.p1 },
+                    p2: { ...entity.p2 },
+                    dimLinePos: dimPos,
+                    text: len.toFixed(precision),
+                    value: len
+                }, true);
+                count++;
+            } else if (entity.type === 'circle') {
+                const precision = CAD.dimPrecision || 4;
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: 'diameter',
+                    center: { ...entity.center },
+                    radius: entity.r,
+                    dimLinePos: {
+                        x: entity.center.x + entity.r,
+                        y: entity.center.y
+                    },
+                    text: '%%C' + (entity.r * 2).toFixed(precision),
+                    value: entity.r * 2
+                }, true);
+                count++;
+            } else if (entity.type === 'arc') {
+                const precision = CAD.dimPrecision || 4;
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: 'radius',
+                    center: { ...entity.center },
+                    radius: entity.r,
+                    dimLinePos: {
+                        x: entity.center.x + entity.r * Math.cos(entity.start),
+                        y: entity.center.y + entity.r * Math.sin(entity.start)
+                    },
+                    text: 'R' + entity.r.toFixed(precision),
+                    value: entity.r
+                }, true);
+                count++;
+            } else if (entity.type === 'rect') {
+                const precision = CAD.dimPrecision || 4;
+                const w = Math.abs(entity.p2.x - entity.p1.x);
+                const h = Math.abs(entity.p2.y - entity.p1.y);
+                const minX = Math.min(entity.p1.x, entity.p2.x);
+                const minY = Math.min(entity.p1.y, entity.p2.y);
+                const maxX = Math.max(entity.p1.x, entity.p2.x);
+                const maxY = Math.max(entity.p1.y, entity.p2.y);
+                // Width dimension
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: 'linear',
+                    p1: { x: minX, y: minY },
+                    p2: { x: maxX, y: minY },
+                    dimLinePos: { x: (minX + maxX) / 2, y: point.y },
+                    text: w.toFixed(precision),
+                    value: w
+                }, true);
+                // Height dimension
+                CAD.addEntity({
+                    type: 'dimension',
+                    dimType: 'linear',
+                    p1: { x: maxX, y: minY },
+                    p2: { x: maxX, y: maxY },
+                    dimLinePos: { x: point.x, y: (minY + maxY) / 2 },
+                    text: h.toFixed(precision),
+                    value: h
+                }, true);
+                count += 2;
+            }
+        });
+
+        UI.log(`QDIM: ${count} dimension(s) created.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    handleDimArcClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (state.step === 0) {
+            if (!hit || hit.type !== 'arc') {
+                UI.log('DIMARC: Select an arc entity.', 'error');
+                return;
+            }
+            state.cmdOptions.dimArcEntity = hit;
+            state.step = 1;
+            UI.log('DIMARC: Specify dimension arc line location:', 'prompt');
+        } else if (state.step === 1) {
+            const arc = state.cmdOptions.dimArcEntity;
+            let sweep = arc.end - arc.start;
+            if (sweep < 0) sweep += 2 * Math.PI;
+            const arcLength = arc.r * sweep;
+            const precision = CAD.dimPrecision || 4;
+
+            CAD.saveUndoState('Arc Length Dimension');
+            const midAngle = arc.start + sweep / 2;
+            const dimPt = {
+                x: arc.center.x + (arc.r + 15 / CAD.zoom) * Math.cos(midAngle),
+                y: arc.center.y + (arc.r + 15 / CAD.zoom) * Math.sin(midAngle)
+            };
+
+            CAD.addEntity({
+                type: 'dimension',
+                dimType: 'arclength',
+                center: { ...arc.center },
+                radius: arc.r,
+                startAngle: arc.start,
+                endAngle: arc.end,
+                dimLinePos: dimPt,
+                text: '⌒' + arcLength.toFixed(precision),
+                value: arcLength
+            }, true);
+
+            UI.log(`DIMARC: Arc length = ${arcLength.toFixed(precision)}`);
+            this.finishCommand();
+            Renderer.draw();
+        }
+    },
+
+    handleDimBreakClick(point) {
+        const hit = this.hitTest(point);
+        if (!hit || hit.type !== 'dimension') {
+            UI.log('DIMBREAK: Select a dimension entity.', 'error');
+            return;
+        }
+        CAD.saveUndoState('Dimension Break');
+        CAD.updateEntity(hit.id, { dimBreak: !hit.dimBreak }, true);
+        UI.log(`DIMBREAK: Dimension break ${hit.dimBreak ? 'removed' : 'applied'}.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    handleDimSpaceClick(point) {
+        const state = CAD;
+        const hit = this.hitTest(point);
+
+        if (!state.cmdOptions.dimspaceBase) {
+            if (!hit || hit.type !== 'dimension') {
+                UI.log('DIMSPACE: Select a base dimension.', 'error');
+                return;
+            }
+            state.cmdOptions.dimspaceBase = hit;
+            state.cmdOptions.dimspaceDims = [hit];
+            UI.log('DIMSPACE: Select next dimension (or Enter when done):', 'prompt');
+        } else {
+            if (hit && hit.type === 'dimension') {
+                state.cmdOptions.dimspaceDims.push(hit);
+                UI.log(`DIMSPACE: ${state.cmdOptions.dimspaceDims.length} dimensions selected. Select next or Enter:`, 'prompt');
+            } else {
+                UI.log('DIMSPACE: Enter spacing distance:', 'prompt');
+            }
+        }
+    },
+
+    executeDimSpace(spacing) {
+        const dims = CAD.cmdOptions.dimspaceDims;
+        if (!dims || dims.length < 2) {
+            UI.log('DIMSPACE: Need at least 2 dimensions.', 'error');
+            this.finishCommand();
+            return;
+        }
+
+        CAD.saveUndoState('Dimension Space');
+        const base = dims[0];
+        const baseY = base.dimLinePos ? base.dimLinePos.y : 0;
+
+        for (let i = 1; i < dims.length; i++) {
+            if (dims[i].dimLinePos) {
+                dims[i].dimLinePos.y = baseY + spacing * i;
+                CAD.updateEntity(dims[i].id, dims[i], true);
+            }
+        }
+
+        UI.log(`DIMSPACE: ${dims.length} dimensions spaced at ${spacing} intervals.`);
+        this.finishCommand();
+        Renderer.draw();
+    },
+
+    // ==========================================
     // INPUT HANDLING
     // ==========================================
 
@@ -3801,6 +4745,37 @@ const Commands = {
                 return true;
             }
 
+            // SOLID - finish on Enter (need 3-4 points)
+            if (state.activeCmd === 'solid' && state.points.length >= 3) {
+                this.createSolidEntity();
+                return true;
+            }
+
+            // FILTER - default to All on Enter
+            if (state.activeCmd === 'filter' && CAD.cmdOptions.filterStep === 'mode') {
+                this.executeFilterAll();
+                return true;
+            }
+
+            // JUSTIFYTEXT - default to Left on Enter
+            if (state.activeCmd === 'justifytext' && !state.cmdOptions.needSelection) {
+                this.executeJustifyText('left');
+                return true;
+            }
+
+            // ALIGN - finish or scale prompt
+            if (state.activeCmd === 'align' && state.step === 2) {
+                this.executeAlign(false);
+                return true;
+            }
+
+            // QDIM - place dimension line
+            if (state.activeCmd === 'qdim' && state.cmdOptions.qdimReady) {
+                this.finishCommand();
+                Renderer.draw();
+                return true;
+            }
+
             if (state.activeCmd === 'leader' && state.step === 2) {
                 UI.log('LEADER: Text required to finish leader.', 'error');
                 return true;
@@ -3922,6 +4897,85 @@ const Commands = {
                 UI.log('DIMORDINATE: Y datum selected. Specify leader endpoint:', 'prompt');
                 return true;
             }
+        }
+
+        // ==========================================
+        // PHASE 2 INPUT HANDLERS
+        // ==========================================
+
+        // LAYDEL
+        if (state.activeCmd === 'laydel') {
+            this.executeLayDel(input.trim());
+            return true;
+        }
+
+        // LAYMERGE
+        if (state.activeCmd === 'laymerge') {
+            if (!state.cmdOptions.mergeSource) {
+                state.cmdOptions.mergeSource = input.trim();
+                UI.log('LAYMERGE: Enter destination layer name:', 'prompt');
+                return true;
+            }
+            this.executeLayMerge(state.cmdOptions.mergeSource, input.trim());
+            return true;
+        }
+
+        // FILTER
+        if (state.activeCmd === 'filter') {
+            return this.handleFilterInput(input);
+        }
+
+        // SCALETEXT
+        if (state.activeCmd === 'scaletext' && !state.cmdOptions.needSelection) {
+            const height = parseFloat(input);
+            if (!isNaN(height) && height > 0) {
+                this.executeScaleText(height);
+                return true;
+            }
+            UI.log('SCALETEXT: Enter a valid positive height.', 'error');
+            return true;
+        }
+
+        // JUSTIFYTEXT
+        if (state.activeCmd === 'justifytext' && !state.cmdOptions.needSelection) {
+            this.executeJustifyText(input.trim());
+            return true;
+        }
+
+        // FIND
+        if (state.activeCmd === 'find') {
+            return this.handleFindInput(input);
+        }
+
+        // ALIGN
+        if (state.activeCmd === 'align' && !state.cmdOptions.needSelection) {
+            const opt = input.toLowerCase();
+            if (state.step === 2 && (opt === 'y' || opt === 'yes')) {
+                this.executeAlign(true);
+                return true;
+            }
+            if (state.step === 2 && (opt === 'n' || opt === 'no' || opt === '')) {
+                this.executeAlign(false);
+                return true;
+            }
+        }
+
+        // SOLID - number of points input
+        if (state.activeCmd === 'solid' && state.points.length >= 3) {
+            // Just treat text input as done
+            this.createSolidEntity();
+            return true;
+        }
+
+        // DIMSPACE
+        if (state.activeCmd === 'dimspace' && state.cmdOptions.dimspaceBase) {
+            const spacing = parseFloat(input);
+            if (!isNaN(spacing) && spacing > 0) {
+                this.executeDimSpace(spacing);
+                return true;
+            }
+            UI.log('DIMSPACE: Enter a valid positive spacing value.', 'error');
+            return true;
         }
 
         if (state.activeCmd === 'osnap') {
