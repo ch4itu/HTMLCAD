@@ -30,7 +30,8 @@ const Renderer = {
             intersection: '#ffff00',
             grid: '#808080',
             nearest: '#ff8800',
-            perpendicular: '#00ff88'
+            perpendicular: '#00ff88',
+            tangent: '#ff88ff'
         }
     },
     hatchPatterns: new Map(),
@@ -1262,6 +1263,16 @@ const Renderer = {
                 ctx.moveTo(screen.x - size, screen.y + size);
                 ctx.lineTo(screen.x - size, screen.y - size);
                 ctx.lineTo(screen.x + size, screen.y - size);
+                ctx.stroke();
+                break;
+
+            case 'tangent':
+                // Circle with horizontal tangent line
+                ctx.arc(screen.x, screen.y, size * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(screen.x - size, screen.y + size * 0.7);
+                ctx.lineTo(screen.x + size, screen.y + size * 0.7);
                 ctx.stroke();
                 break;
 
