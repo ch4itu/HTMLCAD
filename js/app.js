@@ -447,11 +447,9 @@ const MobileUI = {
                 Storage.saveToLocalStorage();
                 break;
             case 'exportdxf':
-                if (ProFeatures.requirePro('dxf_export')) return;
                 Storage.exportDXF();
                 break;
             case 'exportsvg':
-                if (ProFeatures.requirePro('svg_export')) return;
                 Storage.exportSVG();
                 break;
             case 'exportjson':
@@ -543,133 +541,10 @@ const MobileUI = {
         }
     }
 };
-
-// ============================================
-// MONETIZATION / PRO FEATURES MODULE
-// ============================================
-
-const ProFeatures = {
-    // Feature tier definitions
-    // 'free' = available to all, 'pro' = requires upgrade
-    tiers: {
-        // Drawing commands - all free
-        draw_basic: 'free',
-        modify_basic: 'free',
-        dimensions_basic: 'free',
-
-        // Pro features
-        dxf_export: 'pro',
-        svg_export: 'pro',
-        autolisp: 'pro',
-        batch_export: 'pro',
-        custom_linetypes: 'pro',
-        advanced_dims: 'pro',  // baseline, continue, arc dims
-        block_library: 'pro'
-    },
-
-    // Current user state
-    isPro: false,
-    exportCount: 0,
-    maxFreeExports: 3,
-
-    init() {
-        // Check local storage for pro status
-        try {
-            const proStatus = localStorage.getItem('browsercad_pro');
-            if (proStatus === 'true') {
-                this.isPro = true;
-            }
-            const count = localStorage.getItem('browsercad_export_count');
-            if (count) {
-                this.exportCount = parseInt(count, 10) || 0;
-            }
-        } catch (e) {
-            // localStorage may be unavailable
-        }
-        this.updateUI();
-    },
-
-    updateUI() {
-        // Show/hide watermark
-        const watermark = document.getElementById('watermark');
-        if (watermark) {
-            watermark.style.display = this.isPro ? 'none' : 'block';
-        }
-
-        // Show/hide upgrade banner
-        const upgradeSection = document.getElementById('mobileUpgradeSection');
-        if (upgradeSection) {
-            upgradeSection.style.display = this.isPro ? 'none' : 'block';
-        }
-    },
-
-    // Check if a feature requires pro and show gate if needed
-    // Returns true if blocked, false if allowed
-    requirePro(featureKey) {
-        if (this.isPro) return false;
-
-        const tier = this.tiers[featureKey];
-        if (tier !== 'pro') return false;
-
-        // Allow limited free exports
-        if ((featureKey === 'dxf_export' || featureKey === 'svg_export') && this.exportCount < this.maxFreeExports) {
-            this.exportCount++;
-            try {
-                localStorage.setItem('browsercad_export_count', this.exportCount.toString());
-            } catch (e) { /* ignore */ }
-            UI.log(`Export ${this.exportCount}/${this.maxFreeExports} free exports used. Upgrade to Pro for unlimited exports.`);
-            return false;  // Allow it
-        }
-
-        // Show upgrade modal
-        this.showUpgradeModal();
-        return true;
-    },
-
-    showUpgradeModal() {
-        const overlay = document.getElementById('proGateOverlay');
-        if (overlay) {
-            overlay.classList.add('visible');
-        }
-    },
-
-    hideUpgradeModal() {
-        const overlay = document.getElementById('proGateOverlay');
-        if (overlay) {
-            overlay.classList.remove('visible');
-        }
-    },
-
-    handleUpgrade() {
-        // In production, this would redirect to a payment page (Stripe, Paddle, etc.)
-        // For now, show a message about where to set up payments
-        UI.log('Pro upgrade flow would connect to your payment provider (Stripe, Paddle, LemonSqueezy, etc.)');
-        UI.log('Set up at: https://stripe.com or https://www.lemonsqueezy.com');
-
-        // For demo/development, allow toggling pro
-        if (confirm('DEVELOPMENT MODE: Activate Pro features for testing?\n\nIn production, this would redirect to your payment page.')) {
-            this.isPro = true;
-            try {
-                localStorage.setItem('browsercad_pro', 'true');
-            } catch (e) { /* ignore */ }
-            this.updateUI();
-            UI.log('Pro features activated (development mode).');
-        }
-        this.hideUpgradeModal();
-    },
-
-    // Add watermark to exported files
-    getExportWatermark() {
-        if (this.isPro) return null;
-        return 'Created with BrowserCAD Free - browsercad.com';
-    }
-};
-
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
     MobileUI.init();
-    ProFeatures.init();
 });
 
 // Export for module usage

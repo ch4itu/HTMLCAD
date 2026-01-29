@@ -115,16 +115,8 @@ const Storage = {
     // ==========================================
 
     exportDXF() {
-        if (typeof ProFeatures !== 'undefined' && ProFeatures.requirePro('dxf_export')) return;
         try {
-            let dxf = this.generateDXF();
-            // Add watermark comment for free tier
-            if (typeof ProFeatures !== 'undefined') {
-                const wm = ProFeatures.getExportWatermark();
-                if (wm) {
-                    dxf = '999\n' + wm + '\n' + dxf;
-                }
-            }
+            const dxf = this.generateDXF();
             const blob = new Blob([dxf], { type: 'application/dxf' });
             this.downloadBlob(blob, `${CAD.drawingName || 'drawing'}.dxf`);
             UI.log('Drawing exported as DXF.');
@@ -414,16 +406,8 @@ const Storage = {
     // ==========================================
 
     exportSVG() {
-        if (typeof ProFeatures !== 'undefined' && ProFeatures.requirePro('svg_export')) return;
         try {
-            let svg = this.generateSVG();
-            // Add watermark comment for free tier
-            if (typeof ProFeatures !== 'undefined') {
-                const wm = ProFeatures.getExportWatermark();
-                if (wm) {
-                    svg = svg.replace('</svg>', `<!-- ${wm} -->\n</svg>`);
-                }
-            }
+            const svg = this.generateSVG();
             const blob = new Blob([svg], { type: 'image/svg+xml' });
             this.downloadBlob(blob, `${CAD.drawingName || 'drawing'}.svg`);
             UI.log('Drawing exported as SVG.');
