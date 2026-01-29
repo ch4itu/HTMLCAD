@@ -485,6 +485,17 @@ const Renderer = {
                 }
                 break;
 
+            case 'region':
+                // Render region like a closed polyline with subtle fill
+                if (entity.points && entity.points.length > 0) {
+                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                    for (let i = 1; i < entity.points.length; i++) {
+                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    }
+                    ctx.closePath();
+                }
+                break;
+
             case 'leader':
                 if (entity.points && entity.points.length > 0) {
                     ctx.moveTo(entity.points[0].x, entity.points[0].y);
@@ -834,6 +845,45 @@ const Renderer = {
             } else {
                 ctx.fillText(entity.text, textOffset, textHeight * 0.3);
             }
+            ctx.restore();
+
+        } else if (entity.dimType === 'arclength') {
+            // Draw arc length dimension
+            const center = entity.center;
+            const r = entity.radius;
+            const start = entity.startAngle;
+            const end = entity.endAngle;
+            let sweep = end - start;
+            if (sweep < 0) sweep += 2 * Math.PI;
+
+            // Draw offset arc
+            const offsetR = r + 15 / CAD.zoom;
+            ctx.arc(center.x, center.y, offsetR, start, start + sweep);
+
+            // Draw radial ticks at start/end
+            const tickLen = 5 / CAD.zoom;
+            const startPt = { x: center.x + r * Math.cos(start), y: center.y + r * Math.sin(start) };
+            const startOut = { x: center.x + (offsetR + tickLen) * Math.cos(start), y: center.y + (offsetR + tickLen) * Math.sin(start) };
+            ctx.moveTo(startPt.x, startPt.y);
+            ctx.lineTo(startOut.x, startOut.y);
+
+            const endA = start + sweep;
+            const endPt = { x: center.x + r * Math.cos(endA), y: center.y + r * Math.sin(endA) };
+            const endOut = { x: center.x + (offsetR + tickLen) * Math.cos(endA), y: center.y + (offsetR + tickLen) * Math.sin(endA) };
+            ctx.moveTo(endPt.x, endPt.y);
+            ctx.lineTo(endOut.x, endOut.y);
+
+            // Draw text at midpoint
+            const midAngle = start + sweep / 2;
+            const textPt = {
+                x: center.x + (offsetR + textHeight) * Math.cos(midAngle),
+                y: center.y + (offsetR + textHeight) * Math.sin(midAngle)
+            };
+            ctx.save();
+            ctx.translate(textPt.x, textPt.y);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(entity.text, 0, 0);
             ctx.restore();
         }
 

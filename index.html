@@ -220,6 +220,18 @@
                             <i class="icon">&#9634;</i>
                             <span class="label">Wipeout</span>
                         </button>
+                        <button class="tool-btn" data-cmd="solid" onclick="App.executeCommand('solid')" title="Solid (SO)">
+                            <i class="icon">&#9632;</i>
+                            <span class="label">Solid</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="region" onclick="App.executeCommand('region')" title="Region (REG)">
+                            <i class="icon">&#9683;</i>
+                            <span class="label">Region</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="boundary" onclick="App.executeCommand('boundary')" title="Boundary (BO)">
+                            <i class="icon">&#11035;</i>
+                            <span class="label">Boundary</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Draw</div>
                 </div>
@@ -240,6 +252,14 @@
                         <button class="tool-btn" data-cmd="dimordinate" onclick="App.executeCommand('dimordinate')" title="Ordinate Dimension (DOR)">
                             <i class="icon">&#8614;</i>
                             <span class="label">DimOrd</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="qdim" onclick="App.executeCommand('qdim')" title="Quick Dimension (QDIM)">
+                            <i class="icon">&#9889;</i>
+                            <span class="label">QDim</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="dimarc" onclick="App.executeCommand('dimarc')" title="Arc Length Dimension">
+                            <i class="icon">&#8994;</i>
+                            <span class="label">DimArc</span>
                         </button>
                     </div>
                     <div class="ribbon-panel-title">Dimension</div>
@@ -346,8 +366,37 @@
                             <i class="icon">&#10060;</i>
                             <span class="label">Overkill</span>
                         </button>
+                        <button class="tool-btn" data-cmd="align" onclick="App.executeCommand('align')" title="Align (AL)">
+                            <i class="icon">&#8677;</i>
+                            <span class="label">Align</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="find" onclick="App.executeCommand('find')" title="Find & Replace Text">
+                            <i class="icon">&#128269;</i>
+                            <span class="label">Find</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="purge" onclick="App.executeCommand('purge')" title="Purge Unused (PU)">
+                            <i class="icon">&#128465;</i>
+                            <span class="label">Purge</span>
+                        </button>
                     </div>
                     <div class="ribbon-panel-title">Utilities</div>
+                </div>
+                <div class="ribbon-panel">
+                    <div class="ribbon-panel-content">
+                        <button class="tool-btn" data-cmd="filter" onclick="App.executeCommand('filter')" title="Selection Filter (FI)">
+                            <i class="icon">&#9782;</i>
+                            <span class="label">Filter</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="layiso" onclick="App.executeCommand('layiso')" title="Layer Isolate">
+                            <i class="icon">&#9788;</i>
+                            <span class="label">LayIso</span>
+                        </button>
+                        <button class="tool-btn" data-cmd="layuniso" onclick="App.executeCommand('layuniso')" title="Layer Unisolate">
+                            <i class="icon">&#9790;</i>
+                            <span class="label">LayUniso</span>
+                        </button>
+                    </div>
+                    <div class="ribbon-panel-title">Selection</div>
                 </div>
             </div>
 
