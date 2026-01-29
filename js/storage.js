@@ -5,6 +5,33 @@
 const Storage = {
     STORAGE_KEY: 'htmlcad_drawing',
     SETTINGS_KEY: 'htmlcad_settings',
+    DRIVE_STATE_KEY: 'htmlcad_drive_file',
+    DRIVE_TOKEN_KEY: 'htmlcad_drive_token',
+    DRIVE_TOKEN_EXPIRY_KEY: 'htmlcad_drive_token_expiry',
+
+    // ==========================================
+    // GOOGLE DRIVE CONFIGURATION
+    // ==========================================
+
+    DriveConfig: {
+        apiKey: 'YOUR_API_KEY_HERE',
+        clientId: 'YOUR_CLIENT_ID_HERE',
+        appId: 'YOUR_PROJECT_NUMBER',
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        allowedOrigins: [
+            'http://localhost:8000',
+            'https://your-github-username.github.io'
+        ]
+    },
+
+    tokenClient: null,
+    accessToken: null,
+    accessTokenExpiry: null,
+    pickerInited: false,
+    gisInited: false,
+    driveFileId: null,
+    driveFileName: null,
+    pickerPending: null,
 
     // ==========================================
     // LOCAL STORAGE OPERATIONS
@@ -97,6 +124,221 @@ const Storage = {
             console.error('Error loading settings:', e);
             return false;
         }
+    },
+
+    // ==========================================
+    // GOOGLE DRIVE INTEGRATION
+    // ==========================================
+
+    initGoogleDrive(options = {}) {
+        this.ensureDriveOrigin();
+        if (options.buttonId) {
+            this.setSignInButton(options.buttonId);
+        }
+        this.restoreDriveState();
+        this.loadGapi();
+        this.loadGis();
+    },
+
+    setSignInButton(buttonId) {
+        const button = document.getElementById(buttonId);
+        if (!button) {
+            console.warn(`Drive sign-in button not found: #${buttonId}`);
+            return;
+        }
+        button.addEventListener('click', () => {
+            this.getAccessToken({ prompt: 'consent' }).catch((err) => {
+                console.error('Drive sign-in failed:', err);
+            });
+        });
+    },
+
+    loadGapi() {
+        if (!window.gapi) {
+            console.warn('Google API script not loaded. Add https://apis.google.com/js/api.js.');
+            return;
+        }
+        gapi.load('client:picker', async () => {
+            await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
+            this.pickerInited = true;
+            console.log('GAPI Loaded');
+        });
+    },
+
+    loadGis() {
+        if (!window.google || !google.accounts || !google.accounts.oauth2) {
+            console.warn('Google Identity Services script not loaded. Add https://accounts.google.com/gsi/client.');
+            return;
+        }
+        this.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: this.DriveConfig.clientId,
+            scope: this.DriveConfig.scope,
+            callback: ''
+        });
+        this.gisInited = true;
+        console.log('GIS Loaded');
+    },
+
+    ensureDriveOrigin() {
+        if (typeof window === 'undefined') return;
+        const origin = window.location.origin;
+        if (!this.DriveConfig.allowedOrigins.includes(origin)) {
+            console.warn(
+                `Drive OAuth origin mismatch. Add "${origin}" to Google Cloud Console Authorized JavaScript origins.`
+            );
+        }
+    },
+
+    restoreDriveState() {
+        try {
+            const savedFile = localStorage.getItem(this.DRIVE_STATE_KEY);
+            if (savedFile) {
+                const parsed = JSON.parse(savedFile);
+                this.driveFileId = parsed.fileId || null;
+                this.driveFileName = parsed.fileName || null;
+            }
+
+            const token = localStorage.getItem(this.DRIVE_TOKEN_KEY);
+            const expiry = localStorage.getItem(this.DRIVE_TOKEN_EXPIRY_KEY);
+            if (token && expiry && Date.now() < Number(expiry)) {
+                this.accessToken = token;
+                this.accessTokenExpiry = Number(expiry);
+            }
+        } catch (err) {
+            console.warn('Failed to restore Drive state:', err);
+        }
+    },
+
+    persistDriveState() {
+        localStorage.setItem(
+            this.DRIVE_STATE_KEY,
+            JSON.stringify({ fileId: this.driveFileId, fileName: this.driveFileName })
+        );
+        if (this.accessToken && this.accessTokenExpiry) {
+            localStorage.setItem(this.DRIVE_TOKEN_KEY, this.accessToken);
+            localStorage.setItem(this.DRIVE_TOKEN_EXPIRY_KEY, String(this.accessTokenExpiry));
+        }
+    },
+
+    async getAccessToken(options = {}) {
+        if (!this.gisInited) {
+            throw new Error('Google Identity Services not initialized.');
+        }
+
+        if (this.accessToken && this.accessTokenExpiry && Date.now() < this.accessTokenExpiry - 60 * 1000) {
+            return this.accessToken;
+        }
+
+        return new Promise((resolve, reject) => {
+            this.tokenClient.callback = (resp) => {
+                if (resp.error) {
+                    reject(resp);
+                    return;
+                }
+                this.accessToken = resp.access_token;
+                this.accessTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+                this.persistDriveState();
+                resolve(this.accessToken);
+            };
+
+            this.tokenClient.requestAccessToken({
+                prompt: options.prompt || '',
+                hint: options.loginHint
+            });
+        });
+    },
+
+    async openFromDrive() {
+        if (!this.pickerInited) {
+            throw new Error('Google Picker not initialized.');
+        }
+
+        const token = await this.getAccessToken();
+
+        return new Promise((resolve, reject) => {
+            this.pickerPending = { resolve, reject };
+            const view = new google.picker.View(google.picker.ViewId.DOCS);
+            view.setMimeTypes('application/json');
+
+            const picker = new google.picker.PickerBuilder()
+                .setDeveloperKey(this.DriveConfig.apiKey)
+                .setAppId(this.DriveConfig.appId)
+                .setOAuthToken(token)
+                .addView(view)
+                .setCallback(this.pickerCallback.bind(this))
+                .build();
+
+            picker.setVisible(true);
+        });
+    },
+
+    async pickerCallback(data) {
+        if (data.action === google.picker.Action.CANCEL && this.pickerPending) {
+            this.pickerPending.reject(new Error('Picker cancelled.'));
+            this.pickerPending = null;
+            return;
+        }
+
+        if (data.action === google.picker.Action.PICKED && data.docs?.length) {
+            const fileId = data.docs[0].id;
+            const fileName = data.docs[0].name;
+            this.driveFileId = fileId;
+            this.driveFileName = fileName;
+            this.persistDriveState();
+            const fileData = await this.loadDriveFile(fileId);
+            if (this.pickerPending) {
+                this.pickerPending.resolve(fileData);
+                this.pickerPending = null;
+            }
+        }
+    },
+
+    async loadDriveFile(fileId) {
+        const response = await gapi.client.drive.files.get({
+            fileId,
+            alt: 'media'
+        });
+        const body = response.body || response.result;
+        if (typeof body === 'string') {
+            return JSON.parse(body);
+        }
+        return body;
+    },
+
+    async saveToDrive(jsonData, filename) {
+        const token = await this.getAccessToken();
+        const fileContent = JSON.stringify(jsonData, null, 2);
+        const fileName = filename || this.driveFileName || 'drawing.json';
+
+        const metadata = {
+            name: fileName,
+            mimeType: 'application/json'
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+        const updateExisting = Boolean(this.driveFileId);
+        const uploadUrl = updateExisting
+            ? `https://www.googleapis.com/upload/drive/v3/files/${this.driveFileId}?uploadType=multipart`
+            : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+
+        const response = await fetch(uploadUrl, {
+            method: updateExisting ? 'PATCH' : 'POST',
+            headers: new Headers({ Authorization: `Bearer ${token}` }),
+            body: form
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error?.message || 'Drive upload failed.');
+        }
+
+        this.driveFileId = result.id;
+        this.driveFileName = result.name || fileName;
+        this.persistDriveState();
+        return result;
     },
 
     // ==========================================
