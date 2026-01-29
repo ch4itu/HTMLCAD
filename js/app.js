@@ -207,7 +207,18 @@ const App = {
     touchState: {
         lastTap: 0,
         lastDistance: 0,
-        touches: []
+        touches: [],
+        startX: 0,
+        startY: 0,
+        startTime: 0,
+        moved: false,
+        isPanning: false,
+        longPressTimer: null,
+        panModeActive: false  // Toggle pan mode on mobile
+    },
+
+    isMobile() {
+        return window.innerWidth <= 768 || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
     },
 
     onTouchStart(e) {
@@ -219,21 +230,51 @@ const App = {
             const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
 
+            this.touchState.startX = x;
+            this.touchState.startY = y;
+            this.touchState.startTime = Date.now();
+            this.touchState.moved = false;
+            this.touchState.isPanning = false;
+
             // Check for double tap
             const now = Date.now();
             if (now - this.touchState.lastTap < 300) {
+                // Double tap — zoom extents
+                clearTimeout(this.touchState.longPressTimer);
                 Commands.zoomExtents();
+                this.touchState.lastTap = 0;
+                Renderer.draw();
+                return;
             }
             this.touchState.lastTap = now;
 
+            // Long press timer for context menu (500ms)
+            this.touchState.longPressTimer = setTimeout(() => {
+                if (!this.touchState.moved) {
+                    // Long press: show context menu at touch location
+                    UI.showContextMenu(touch.clientX, touch.clientY);
+                    this.touchState.isPanning = false;
+                }
+            }, 500);
+
+            // In pan mode or no active command: start panning
+            if (this.touchState.panModeActive || (!CAD.activeCmd && !CAD.selectionMode)) {
+                this.touchState.isPanning = true;
+            }
+
             const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
             CAD.cursor = world;
-            Commands.handleClick(world);
         } else if (e.touches.length === 2) {
+            // Cancel long press and single-touch actions
+            clearTimeout(this.touchState.longPressTimer);
+            this.touchState.isPanning = false;
+
             // Start pinch zoom
             const t1 = e.touches[0];
             const t2 = e.touches[1];
             this.touchState.lastDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+            this.touchState.pinchCenterX = (t1.clientX + t2.clientX) / 2;
+            this.touchState.pinchCenterY = (t1.clientY + t2.clientY) / 2;
         }
 
         Renderer.draw();
@@ -248,24 +289,43 @@ const App = {
             const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
 
-            const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
-            CAD.cursor = world;
-            CAD.tempEnd = world;
-            UI.updateCoordinates(world.x, world.y);
+            const dx = x - this.touchState.startX;
+            const dy = y - this.touchState.startY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // If moved more than 8px, cancel long press and mark as moved
+            if (dist > 8) {
+                this.touchState.moved = true;
+                clearTimeout(this.touchState.longPressTimer);
+            }
+
+            if (this.touchState.isPanning || (this.touchState.moved && this.touchState.panModeActive)) {
+                // Pan the view
+                CAD.pan.x += (x - this.touchState.startX);
+                CAD.pan.y += (y - this.touchState.startY);
+                this.touchState.startX = x;
+                this.touchState.startY = y;
+                this.touchState.isPanning = true;
+            } else {
+                // Update cursor and temp line for drawing
+                const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
+                CAD.cursor = world;
+                CAD.tempEnd = world;
+                UI.updateCoordinates(world.x, world.y);
+            }
         } else if (e.touches.length === 2) {
-            // Pinch zoom
+            // Pinch zoom + two-finger pan
             const t1 = e.touches[0];
             const t2 = e.touches[1];
             const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+            const newCenterX = (t1.clientX + t2.clientX) / 2;
+            const newCenterY = (t1.clientY + t2.clientY) / 2;
 
             if (this.touchState.lastDistance > 0) {
                 const scale = distance / this.touchState.lastDistance;
-                const centerX = (t1.clientX + t2.clientX) / 2;
-                const centerY = (t1.clientY + t2.clientY) / 2;
-
                 const rect = e.target.getBoundingClientRect();
-                const x = centerX - rect.left;
-                const y = centerY - rect.top;
+                const x = newCenterX - rect.left;
+                const y = newCenterY - rect.top;
 
                 const worldBefore = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
                 CAD.zoom *= scale;
@@ -274,15 +334,44 @@ const App = {
                 CAD.pan.y = y - worldBefore.y * CAD.zoom;
             }
 
+            // Two-finger pan (movement of center point)
+            if (this.touchState.pinchCenterX !== undefined) {
+                const panDx = newCenterX - this.touchState.pinchCenterX;
+                const panDy = newCenterY - this.touchState.pinchCenterY;
+                CAD.pan.x += panDx;
+                CAD.pan.y += panDy;
+            }
+
             this.touchState.lastDistance = distance;
+            this.touchState.pinchCenterX = newCenterX;
+            this.touchState.pinchCenterY = newCenterY;
         }
 
         Renderer.draw();
     },
 
     onTouchEnd(e) {
+        clearTimeout(this.touchState.longPressTimer);
+
         if (e.touches.length === 0) {
             this.touchState.lastDistance = 0;
+            this.touchState.pinchCenterX = undefined;
+            this.touchState.pinchCenterY = undefined;
+
+            // If it was a tap (not a pan/long-press), handle as click
+            if (!this.touchState.moved && !this.touchState.isPanning) {
+                const rect = e.target.getBoundingClientRect();
+                const x = this.touchState.startX;
+                const y = this.touchState.startY;
+                const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
+                CAD.cursor = world;
+                Commands.handleClick(world);
+                UI.updatePropertiesPanel();
+                Renderer.draw();
+            }
+
+            this.touchState.isPanning = false;
+            this.touchState.moved = false;
         }
     },
 
@@ -309,9 +398,278 @@ const App = {
     }
 };
 
+// ============================================
+// MOBILE UI MODULE
+// ============================================
+
+const MobileUI = {
+    init() {
+        // Update mobile snap button states on load
+        this.updateSnapButtons();
+    },
+
+    switchTab(tabName) {
+        // Switch mobile toolbar tabs
+        document.querySelectorAll('.mobile-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.mtab === tabName);
+        });
+        document.querySelectorAll('.mobile-tool-row').forEach(row => {
+            row.classList.toggle('active', row.dataset.mtab === tabName);
+        });
+    },
+
+    toggleMenu() {
+        const overlay = document.getElementById('mobileMenuOverlay');
+        overlay.classList.add('visible');
+    },
+
+    closeMenu(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const overlay = document.getElementById('mobileMenuOverlay');
+        overlay.classList.remove('visible');
+    },
+
+    menuAction(action) {
+        this.closeMenu();
+        switch (action) {
+            case 'new':
+                if (confirm('Start a new drawing? All unsaved changes will be lost.')) {
+                    CAD.newDrawing();
+                    UI.log('New drawing started.');
+                    Renderer.draw();
+                    UI.updateLayerUI();
+                }
+                break;
+            case 'open':
+                Storage.openFile();
+                break;
+            case 'save':
+                Storage.saveToLocalStorage();
+                break;
+            case 'exportdxf':
+                if (ProFeatures.requirePro('dxf_export')) return;
+                Storage.exportDXF();
+                break;
+            case 'exportsvg':
+                if (ProFeatures.requirePro('svg_export')) return;
+                Storage.exportSVG();
+                break;
+            case 'exportjson':
+                Storage.exportJSON();
+                break;
+            case 'selectall':
+                Commands.execute('selectall');
+                break;
+            case 'filter':
+                Commands.execute('filter');
+                break;
+            case 'qselect':
+                Commands.execute('qselect');
+                break;
+            case 'block':
+                App.executeCommand('block');
+                break;
+            case 'insert':
+                App.executeCommand('insert');
+                break;
+            case 'matchprop':
+                App.executeCommand('matchprop');
+                break;
+            case 'overkill':
+                App.executeCommand('overkill');
+                break;
+            case 'purge':
+                App.executeCommand('purge');
+                break;
+            case 'find':
+                App.executeCommand('find');
+                break;
+            case 'settings':
+                UI.log('Settings: Use command line for GRID, SNAP, ORTHO, OSNAP, POLAR, LTSCALE, DIMSCALE');
+                break;
+            case 'help':
+                App.executeCommand('help');
+                break;
+        }
+    },
+
+    toggleSnap(type) {
+        switch (type) {
+            case 'osnap':
+                UI.toggleOsnap();
+                break;
+            case 'grid':
+                UI.toggleGrid();
+                break;
+            case 'ortho':
+                UI.toggleOrtho();
+                break;
+            case 'polar':
+                UI.togglePolar();
+                break;
+        }
+        this.updateSnapButtons();
+    },
+
+    updateSnapButtons() {
+        const osnapBtn = document.getElementById('mSnapOsnap');
+        const gridBtn = document.getElementById('mSnapGrid');
+        const orthoBtn = document.getElementById('mSnapOrtho');
+        const polarBtn = document.getElementById('mSnapPolar');
+
+        if (osnapBtn) osnapBtn.classList.toggle('active', CAD.osnapEnabled);
+        if (gridBtn) gridBtn.classList.toggle('active', CAD.showGrid);
+        if (orthoBtn) orthoBtn.classList.toggle('active', CAD.orthoEnabled);
+        if (polarBtn) polarBtn.classList.toggle('active', CAD.polarEnabled);
+    },
+
+    togglePanMode() {
+        App.touchState.panModeActive = !App.touchState.panModeActive;
+        const viewport = document.getElementById('viewport');
+        if (App.touchState.panModeActive) {
+            viewport.style.cursor = 'grab';
+            UI.log('Pan mode: ON (tap to place points disabled)');
+        } else {
+            viewport.style.cursor = 'crosshair';
+            UI.log('Pan mode: OFF (tap to draw/select)');
+        }
+    },
+
+    // Collapse/expand command panel on mobile
+    toggleCommandPanel() {
+        const panel = document.querySelector('.command-panel');
+        if (panel) {
+            panel.classList.toggle('mobile-collapsed');
+        }
+    }
+};
+
+// ============================================
+// MONETIZATION / PRO FEATURES MODULE
+// ============================================
+
+const ProFeatures = {
+    // Feature tier definitions
+    // 'free' = available to all, 'pro' = requires upgrade
+    tiers: {
+        // Drawing commands - all free
+        draw_basic: 'free',
+        modify_basic: 'free',
+        dimensions_basic: 'free',
+
+        // Pro features
+        dxf_export: 'pro',
+        svg_export: 'pro',
+        autolisp: 'pro',
+        batch_export: 'pro',
+        custom_linetypes: 'pro',
+        advanced_dims: 'pro',  // baseline, continue, arc dims
+        block_library: 'pro'
+    },
+
+    // Current user state
+    isPro: false,
+    exportCount: 0,
+    maxFreeExports: 3,
+
+    init() {
+        // Check local storage for pro status
+        try {
+            const proStatus = localStorage.getItem('browsercad_pro');
+            if (proStatus === 'true') {
+                this.isPro = true;
+            }
+            const count = localStorage.getItem('browsercad_export_count');
+            if (count) {
+                this.exportCount = parseInt(count, 10) || 0;
+            }
+        } catch (e) {
+            // localStorage may be unavailable
+        }
+        this.updateUI();
+    },
+
+    updateUI() {
+        // Show/hide watermark
+        const watermark = document.getElementById('watermark');
+        if (watermark) {
+            watermark.style.display = this.isPro ? 'none' : 'block';
+        }
+
+        // Show/hide upgrade banner
+        const upgradeSection = document.getElementById('mobileUpgradeSection');
+        if (upgradeSection) {
+            upgradeSection.style.display = this.isPro ? 'none' : 'block';
+        }
+    },
+
+    // Check if a feature requires pro and show gate if needed
+    // Returns true if blocked, false if allowed
+    requirePro(featureKey) {
+        if (this.isPro) return false;
+
+        const tier = this.tiers[featureKey];
+        if (tier !== 'pro') return false;
+
+        // Allow limited free exports
+        if ((featureKey === 'dxf_export' || featureKey === 'svg_export') && this.exportCount < this.maxFreeExports) {
+            this.exportCount++;
+            try {
+                localStorage.setItem('browsercad_export_count', this.exportCount.toString());
+            } catch (e) { /* ignore */ }
+            UI.log(`Export ${this.exportCount}/${this.maxFreeExports} free exports used. Upgrade to Pro for unlimited exports.`);
+            return false;  // Allow it
+        }
+
+        // Show upgrade modal
+        this.showUpgradeModal();
+        return true;
+    },
+
+    showUpgradeModal() {
+        const overlay = document.getElementById('proGateOverlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+        }
+    },
+
+    hideUpgradeModal() {
+        const overlay = document.getElementById('proGateOverlay');
+        if (overlay) {
+            overlay.classList.remove('visible');
+        }
+    },
+
+    handleUpgrade() {
+        // In production, this would redirect to a payment page (Stripe, Paddle, etc.)
+        // For now, show a message about where to set up payments
+        UI.log('Pro upgrade flow would connect to your payment provider (Stripe, Paddle, LemonSqueezy, etc.)');
+        UI.log('Set up at: https://stripe.com or https://www.lemonsqueezy.com');
+
+        // For demo/development, allow toggling pro
+        if (confirm('DEVELOPMENT MODE: Activate Pro features for testing?\n\nIn production, this would redirect to your payment page.')) {
+            this.isPro = true;
+            try {
+                localStorage.setItem('browsercad_pro', 'true');
+            } catch (e) { /* ignore */ }
+            this.updateUI();
+            UI.log('Pro features activated (development mode).');
+        }
+        this.hideUpgradeModal();
+    },
+
+    // Add watermark to exported files
+    getExportWatermark() {
+        if (this.isPro) return null;
+        return 'Created with BrowserCAD Free - browsercad.com';
+    }
+};
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
+    MobileUI.init();
+    ProFeatures.init();
 });
 
 // Export for module usage

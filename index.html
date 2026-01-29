@@ -21,6 +21,7 @@
             </div>
             <div class="spacer"></div>
             <div class="file-name" id="fileName">Untitled.dxf</div>
+            <button class="mobile-menu-btn" onclick="MobileUI.toggleMenu()" title="Menu">&#9776;</button>
         </div>
 
         <!-- Ribbon Toolbar -->
@@ -526,6 +527,16 @@
                 <div class="viewport" id="viewport">
                     <canvas id="canvas"></canvas>
 
+                    <!-- Mobile quick action buttons (undo/redo/cancel) -->
+                    <div class="mobile-quick-actions" id="mobileQuickActions">
+                        <button class="mobile-quick-btn" onclick="Commands.undo()" title="Undo">&#8630;</button>
+                        <button class="mobile-quick-btn" onclick="Commands.redo()" title="Redo">&#8631;</button>
+                        <button class="mobile-quick-btn" onclick="Commands.cancelCommand()" title="Cancel">&#10005;</button>
+                    </div>
+
+                    <!-- Free tier watermark -->
+                    <div class="watermark" id="watermark">BrowserCAD Free</div>
+
                     <!-- Floating Canvas Selection Toolbar -->
                     <div class="canvas-selection-toolbar" id="canvasSelectionToolbar" style="display: none;">
                         <div class="cst-title">Select Objects:</div>
@@ -581,6 +592,78 @@
         </div>
         <input type="file" id="imageAttachInput" accept="image/*" style="display: none;">
         <input type="file" id="lispScriptInput" accept=".lsp,.lisp,.vlx,.txt" style="display: none;">
+
+        <!-- Mobile Bottom Toolbar -->
+        <div class="mobile-toolbar" id="mobileToolbar">
+            <div class="mobile-toolbar-tabs">
+                <button class="mobile-tab active" data-mtab="draw" onclick="MobileUI.switchTab('draw')">Draw</button>
+                <button class="mobile-tab" data-mtab="modify" onclick="MobileUI.switchTab('modify')">Modify</button>
+                <button class="mobile-tab" data-mtab="dims" onclick="MobileUI.switchTab('dims')">Dims</button>
+                <button class="mobile-tab" data-mtab="view" onclick="MobileUI.switchTab('view')">View</button>
+                <button class="mobile-tab" data-mtab="snap" onclick="MobileUI.switchTab('snap')">Snap</button>
+            </div>
+            <!-- Draw tools -->
+            <div class="mobile-tool-row active" data-mtab="draw">
+                <button class="mobile-tool-btn" onclick="App.executeCommand('line')"><i class="m-icon">/</i><span class="m-label">Line</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('polyline')"><i class="m-icon">~</i><span class="m-label">Pline</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('circle')"><i class="m-icon">&#9675;</i><span class="m-label">Circle</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('arc')"><i class="m-icon">&#8978;</i><span class="m-label">Arc</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('rect')"><i class="m-icon">&#9633;</i><span class="m-label">Rect</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('ellipse')"><i class="m-icon">&#11053;</i><span class="m-label">Ellipse</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('polygon')"><i class="m-icon">&#11039;</i><span class="m-label">Polygon</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('text')"><i class="m-icon">A</i><span class="m-label">Text</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('hatch')"><i class="m-icon">&#9618;</i><span class="m-label">Hatch</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('donut')"><i class="m-icon">&#9678;</i><span class="m-label">Donut</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('spline')"><i class="m-icon">&#8767;</i><span class="m-label">Spline</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('point')"><i class="m-icon">&#8226;</i><span class="m-label">Point</span></button>
+            </div>
+            <!-- Modify tools -->
+            <div class="mobile-tool-row" data-mtab="modify">
+                <button class="mobile-tool-btn" onclick="App.executeCommand('move')"><i class="m-icon">&#8680;</i><span class="m-label">Move</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('copy')"><i class="m-icon">&#8658;</i><span class="m-label">Copy</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('rotate')"><i class="m-icon">&#8635;</i><span class="m-label">Rotate</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('mirror')"><i class="m-icon">&#8696;</i><span class="m-label">Mirror</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('scale')"><i class="m-icon">&#8690;</i><span class="m-label">Scale</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('trim')"><i class="m-icon">&#9986;</i><span class="m-label">Trim</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('offset')"><i class="m-icon">&#8741;</i><span class="m-label">Offset</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('fillet')"><i class="m-icon">&#8735;</i><span class="m-label">Fillet</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('chamfer')"><i class="m-icon">&#9699;</i><span class="m-label">Chamfer</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('erase')"><i class="m-icon">&#10005;</i><span class="m-label">Erase</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('explode')"><i class="m-icon">&#10043;</i><span class="m-label">Explode</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('array')"><i class="m-icon">&#9638;</i><span class="m-label">Array</span></button>
+            </div>
+            <!-- Dimension tools -->
+            <div class="mobile-tool-row" data-mtab="dims">
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimlinear')"><i class="m-icon">&#8596;</i><span class="m-label">Linear</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimaligned')"><i class="m-icon">&#8598;</i><span class="m-label">Aligned</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimangular')"><i class="m-icon">&#8736;</i><span class="m-label">Angular</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimradius')"><i class="m-icon">R</i><span class="m-label">Radius</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimdiameter')"><i class="m-icon">&#8960;</i><span class="m-label">Diameter</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('dimordinate')"><i class="m-icon">&#8614;</i><span class="m-label">Ordinate</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('qdim')"><i class="m-icon">&#9889;</i><span class="m-label">QDim</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('leader')"><i class="m-icon">&#10145;</i><span class="m-label">Leader</span></button>
+            </div>
+            <!-- View tools -->
+            <div class="mobile-tool-row" data-mtab="view">
+                <button class="mobile-tool-btn" onclick="Commands.zoomExtents()"><i class="m-icon">&#8703;</i><span class="m-label">Extents</span></button>
+                <button class="mobile-tool-btn" onclick="CAD.zoomIn(); Renderer.draw();"><i class="m-icon">+</i><span class="m-label">Zoom In</span></button>
+                <button class="mobile-tool-btn" onclick="CAD.zoomOut(); Renderer.draw();"><i class="m-icon">-</i><span class="m-label">Zoom Out</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('distance')"><i class="m-icon">&#8614;</i><span class="m-label">Distance</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('area')"><i class="m-icon">&#9633;</i><span class="m-label">Area</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('list')"><i class="m-icon">&#9776;</i><span class="m-label">List</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('layer')"><i class="m-icon">&#9783;</i><span class="m-label">Layer</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('help')"><i class="m-icon">?</i><span class="m-label">Help</span></button>
+            </div>
+            <!-- Snap controls -->
+            <div class="mobile-tool-row" data-mtab="snap">
+                <button class="mobile-tool-btn" id="mSnapOsnap" onclick="MobileUI.toggleSnap('osnap')"><i class="m-icon">&#9678;</i><span class="m-label">OSNAP</span></button>
+                <button class="mobile-tool-btn" id="mSnapGrid" onclick="MobileUI.toggleSnap('grid')"><i class="m-icon">#</i><span class="m-label">Grid</span></button>
+                <button class="mobile-tool-btn" id="mSnapOrtho" onclick="MobileUI.toggleSnap('ortho')"><i class="m-icon">&#9482;</i><span class="m-label">Ortho</span></button>
+                <button class="mobile-tool-btn" id="mSnapPolar" onclick="MobileUI.toggleSnap('polar')"><i class="m-icon">&#8737;</i><span class="m-label">Polar</span></button>
+                <button class="mobile-tool-btn" onclick="MobileUI.togglePanMode()"><i class="m-icon">&#9995;</i><span class="m-label">Pan</span></button>
+                <button class="mobile-tool-btn" onclick="App.executeCommand('osnap')"><i class="m-icon">&#9881;</i><span class="m-label">Settings</span></button>
+            </div>
+        </div>
 
         <!-- Status Bar -->
         <div class="status-bar">
@@ -685,6 +768,73 @@
             <div class="modal-footer">
                 <button class="btn" onclick="UI.hideModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="UI.hideModal()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Menu Drawer -->
+    <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="MobileUI.closeMenu(event)">
+        <div class="mobile-menu-drawer" id="mobileMenuDrawer">
+            <div class="mobile-menu-header">
+                <div class="logo">Browser<span>CAD</span></div>
+                <button class="mobile-menu-close" onclick="MobileUI.closeMenu()">&times;</button>
+            </div>
+            <div class="mobile-menu-section">
+                <div class="mobile-menu-section-title">File</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('new')"><i class="m-icon">&#128196;</i> New Drawing</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('open')"><i class="m-icon">&#128194;</i> Open</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('save')"><i class="m-icon">&#128190;</i> Save</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('exportdxf')"><i class="m-icon">&#128229;</i> Export DXF</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('exportsvg')"><i class="m-icon">&#128229;</i> Export SVG</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('exportjson')"><i class="m-icon">&#128229;</i> Export JSON</div>
+            </div>
+            <div class="mobile-menu-section">
+                <div class="mobile-menu-section-title">Selection</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('selectall')"><i class="m-icon">&#9745;</i> Select All</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('filter')"><i class="m-icon">&#9782;</i> Filter Select</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('qselect')"><i class="m-icon">&#9744;</i> Quick Select</div>
+            </div>
+            <div class="mobile-menu-section">
+                <div class="mobile-menu-section-title">Tools</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('block')"><i class="m-icon">&#9638;</i> Create Block</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('insert')"><i class="m-icon">&#10010;</i> Insert Block</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('matchprop')"><i class="m-icon">&#9898;</i> Match Properties</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('overkill')"><i class="m-icon">&#10060;</i> Overkill</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('purge')"><i class="m-icon">&#128465;</i> Purge</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('find')"><i class="m-icon">&#128269;</i> Find & Replace</div>
+            </div>
+            <div class="mobile-menu-section">
+                <div class="mobile-menu-section-title">Settings</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('settings')"><i class="m-icon">&#9881;</i> Drawing Settings</div>
+                <div class="mobile-menu-item" onclick="MobileUI.menuAction('help')"><i class="m-icon">?</i> Help</div>
+            </div>
+            <div class="mobile-menu-section" id="mobileUpgradeSection">
+                <div class="upgrade-banner visible" onclick="ProFeatures.showUpgradeModal()">
+                    <div class="upgrade-title">Upgrade to Pro</div>
+                    <div class="upgrade-text">Unlock DXF export, no watermarks, and more</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pro Feature Gate Modal -->
+    <div class="pro-gate-overlay" id="proGateOverlay">
+        <div class="pro-gate-modal">
+            <div class="pro-gate-header">
+                <h2>BrowserCAD Pro</h2>
+                <p>Unlock the full power of professional CAD</p>
+            </div>
+            <div class="pro-gate-features">
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> Unlimited DXF/SVG exports</div>
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> No watermark on canvas</div>
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> AutoLISP scripting engine</div>
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> Advanced dimensions (Baseline, Continue, Arc)</div>
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> Block library management</div>
+                <div class="pro-gate-feature"><span class="check">&#10003;</span> Priority support</div>
+            </div>
+            <div class="pro-gate-actions">
+                <button class="btn-upgrade" onclick="ProFeatures.handleUpgrade()">Upgrade to Pro - $9.99/month</button>
+                <button class="btn-dismiss" onclick="ProFeatures.hideUpgradeModal()">Continue with Free</button>
             </div>
         </div>
     </div>
