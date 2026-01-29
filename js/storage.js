@@ -128,22 +128,14 @@ const Storage = {
     configureGoogleDrive() {
         const current = this.getDriveConfig() || {};
         const content = `
-            <p>Enter your Google Drive API credentials. These are stored locally in this browser.</p>
+            <p>Enter your Google Client ID to enable Google Drive sign-in. This is stored locally in this browser.</p>
             <div class="property-row">
                 <label class="property-label" for="driveClientId">Client ID</label>
                 <input id="driveClientId" class="property-input" type="text" value="${current.clientId || ''}" />
             </div>
-            <div class="property-row">
-                <label class="property-label" for="driveApiKey">API Key</label>
-                <input id="driveApiKey" class="property-input" type="text" value="${current.apiKey || ''}" />
-            </div>
-            <div class="property-row">
-                <label class="property-label" for="driveAppId">App ID (Project Number)</label>
-                <input id="driveAppId" class="property-input" type="text" value="${current.appId || ''}" />
-            </div>
         `;
 
-        UI.showModal('Google Drive Settings', content, [
+        UI.showModal('Google Drive Sign-In', content, [
             {
                 label: 'Cancel',
                 action: () => {}
@@ -153,13 +145,11 @@ const Storage = {
                 primary: true,
                 action: () => {
                     const clientId = document.getElementById('driveClientId')?.value.trim();
-                    const apiKey = document.getElementById('driveApiKey')?.value.trim();
-                    const appId = document.getElementById('driveAppId')?.value.trim();
-                    if (!clientId || !apiKey || !appId) {
-                        UI.log('Google Drive: Please provide Client ID, API Key, and App ID.', 'error');
+                    if (!clientId) {
+                        UI.log('Google Drive: Please provide a Client ID.', 'error');
                         return;
                     }
-                    this.saveDriveConfig({ clientId, apiKey, appId });
+                    this.saveDriveConfig({ clientId });
                     UI.log('Google Drive settings saved.', 'success');
                 }
             }
@@ -168,34 +158,14 @@ const Storage = {
 
     ensureDriveConfig() {
         const config = this.getDriveConfig();
-        if (!config || !config.clientId || !config.apiKey || !config.appId) {
+        if (!config || !config.clientId) {
             this.configureGoogleDrive();
             return null;
         }
         return config;
     },
 
-    ensureDriveClient(config) {
-        return new Promise((resolve, reject) => {
-            if (!window.gapi) {
-                reject(new Error('Google API client not loaded.'));
-                return;
-            }
-            window.gapi.load('client:picker', async () => {
-                try {
-                    await window.gapi.client.init({
-                        apiKey: config.apiKey,
-                        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-                    });
-                    resolve();
-                } catch (err) {
-                    reject(err);
-                }
-            });
-        });
-    },
-
-    ensureDriveToken(config) {
+    ensureDriveToken(config, prompt = '') {
         return new Promise((resolve, reject) => {
             const now = Date.now();
             if (this.driveState.token && this.driveState.tokenExpiry && now < this.driveState.tokenExpiry) {
@@ -222,7 +192,7 @@ const Storage = {
                 }
             });
 
-            tokenClient.requestAccessToken({ prompt: '' });
+            tokenClient.requestAccessToken({ prompt });
         });
     },
 
@@ -231,29 +201,53 @@ const Storage = {
         if (!config) return;
 
         try {
-            await this.ensureDriveClient(config);
-            const token = await this.ensureDriveToken(config);
-            const picker = new google.picker.PickerBuilder()
-                .setAppId(config.appId)
-                .setOAuthToken(token)
-                .setDeveloperKey(config.apiKey)
-                .addView(google.picker.ViewId.DOCS)
-                .setCallback((data) => this.handleDrivePicker(data))
-                .build();
-            picker.setVisible(true);
+            const token = await this.ensureDriveToken(config, 'select_account');
+            const files = await this.fetchDriveFiles(token);
+            this.showDriveFilePicker(files);
         } catch (err) {
             console.error('Google Drive load error:', err);
-            UI.log('Google Drive: Unable to open picker. Check settings and console for details.', 'error');
+            UI.log('Google Drive: Unable to load files. Check settings and console for details.', 'error');
         }
     },
 
-    async handleDrivePicker(data) {
-        if (data.action !== google.picker.Action.PICKED) return;
-        const doc = data.docs?.[0];
-        if (!doc) return;
+    async fetchDriveFiles(token) {
+        const params = new URLSearchParams({
+            pageSize: '50',
+            fields: 'files(id,name,mimeType,modifiedTime)',
+            orderBy: 'modifiedTime desc',
+            q: 'trashed=false'
+        });
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+        if (!response.ok) {
+            throw new Error(`Drive list failed: ${response.status}`);
+        }
+        const data = await response.json();
+        return data.files || [];
+    },
 
-        const fileId = doc.id;
-        const fileName = doc.name || 'drive-file';
+    showDriveFilePicker(files) {
+        const supported = files.filter((file) => {
+            const name = (file.name || '').toLowerCase();
+            return name.endsWith('.dxf') || name.endsWith('.svg') || name.endsWith('.json') || name.endsWith('.htmlcad');
+        });
+
+        const items = supported.map((file) => `
+            <div class="property-row">
+                <button class="btn btn-primary" onclick="Storage.loadDriveFile('${file.id}', '${file.name?.replace(/'/g, '&#39;') || 'drive-file'}')">Open</button>
+                <span class="property-value">${file.name || 'Untitled'}</span>
+            </div>
+        `).join('') || '<p>No supported files found in Drive.</p>';
+
+        UI.showModal('Google Drive Files', `<div class="drive-file-list">${items}</div>`, [
+            { label: 'Close', action: () => {} }
+        ]);
+    },
+
+    async loadDriveFile(fileId, fileName) {
         const config = this.getDriveConfig();
         if (!config) return;
 
@@ -293,14 +287,48 @@ const Storage = {
         }
     },
 
+    promptDriveFilename(defaultName) {
+        return new Promise((resolve) => {
+            const content = `
+                <div class="property-row">
+                    <label class="property-label" for="driveFileName">File name</label>
+                    <input id="driveFileName" class="property-input" type="text" value="${defaultName}" />
+                </div>
+            `;
+            UI.showModal('Save to Google Drive', content, [
+                {
+                    label: 'Cancel',
+                    action: () => resolve(null)
+                },
+                {
+                    label: 'Save',
+                    primary: true,
+                    action: () => {
+                        const name = document.getElementById('driveFileName')?.value.trim();
+                        if (!name) {
+                            UI.log('Google Drive: Please enter a file name.', 'error');
+                            resolve(null);
+                            return;
+                        }
+                        resolve(name);
+                    }
+                }
+            ]);
+        });
+    },
+
     async saveToGoogleDrive() {
         const config = this.ensureDriveConfig();
         if (!config) return;
 
         try {
-            await this.ensureDriveClient(config);
-            const token = await this.ensureDriveToken(config);
-            const fileName = this.driveState.fileName || `${CAD.drawingName || 'drawing'}.json`;
+            const token = await this.ensureDriveToken(config, 'select_account');
+            let fileName = this.driveState.fileName || `${CAD.drawingName || 'drawing'}.json`;
+            if (!this.driveState.fileId) {
+                const chosen = await this.promptDriveFilename(fileName);
+                if (!chosen) return;
+                fileName = chosen;
+            }
             const metadata = {
                 name: fileName,
                 mimeType: 'application/json'
