@@ -1422,21 +1422,31 @@ const Storage = {
     },
 
     /**
-     * Update the sign-in button UI.
+     * Update the sign-in button UI (desktop + mobile).
      */
     _updateSignInUI(signedIn) {
         const btn = document.getElementById('googleSignInBtn');
         const text = document.getElementById('googleSignInText');
-        if (!btn || !text) return;
+        if (btn && text) {
+            if (signedIn) {
+                text.textContent = 'Sign Out';
+                btn.classList.add('signed-in');
+                btn.title = 'Sign out of Google';
+            } else {
+                text.textContent = 'Sign In';
+                btn.classList.remove('signed-in');
+                btn.title = 'Sign in with Google';
+            }
+        }
 
-        if (signedIn) {
-            text.textContent = 'Sign Out';
-            btn.classList.add('signed-in');
-            btn.title = 'Sign out of Google';
-        } else {
-            text.textContent = 'Sign In';
-            btn.classList.remove('signed-in');
-            btn.title = 'Sign in with Google';
+        // Update mobile menu sign-in label
+        const mobileLabel = document.getElementById('mobileSignInLabel');
+        const mobileItem = document.getElementById('mobileGoogleSignIn');
+        if (mobileLabel) {
+            mobileLabel.textContent = signedIn ? 'Sign Out of Google' : 'Sign In to Google';
+        }
+        if (mobileItem) {
+            mobileItem.classList.toggle('drive-signed-in', signedIn);
         }
     },
 
@@ -1495,12 +1505,26 @@ const Storage = {
         UI.log(`Loading "${fileName}" from Google Drive...`);
 
         try {
-            const response = await gapi.client.drive.files.get({
-                fileId: fileId,
-                alt: 'media'
+            // Use fetch API directly for reliable text content retrieval.
+            // gapi.client.drive.files.get with alt=media can mangle non-standard
+            // MIME types or binary-encode the response body.
+            const token = this._accessToken;
+            const fetchUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            const fetchResponse = await fetch(fetchUrl, {
+                headers: { 'Authorization': 'Bearer ' + token }
             });
 
-            const content = response.body;
+            if (!fetchResponse.ok) {
+                const errText = await fetchResponse.text();
+                throw new Error(`HTTP ${fetchResponse.status}: ${errText}`);
+            }
+
+            const content = await fetchResponse.text();
+            console.log(`Drive file loaded: ${content.length} bytes, ext: .${ext}`);
+
+            if (!content || content.length === 0) {
+                throw new Error('File appears to be empty.');
+            }
 
             if (ext === 'json' || ext === 'htmlcad') {
                 const jsonData = JSON.parse(content);
@@ -1594,9 +1618,16 @@ const Storage = {
             content = this.generateSVG();
             mimeType = 'image/svg+xml';
         } else {
-            // Default to DXF
+            // Default to DXF — use text/plain so Google Drive stores it as
+            // readable text. 'application/dxf' is non-standard and some
+            // Drive/browser combos drop or mangle the content.
             content = this.generateDXF();
-            mimeType = 'application/dxf';
+            mimeType = 'text/plain';
+        }
+
+        if (!content || content.length === 0) {
+            UI.log('Error: No content to save. Draw something first.', 'error');
+            return;
         }
 
         this.saveToDrive(content, filename, mimeType);
@@ -1606,7 +1637,7 @@ const Storage = {
      * Save (create or update) a file on Google Drive.
      * @param {string} fileData - The file content string.
      * @param {string} filename - The filename to use.
-     * @param {string} [mimeType='application/dxf'] - MIME type of the file.
+     * @param {string} [mimeType='text/plain'] - MIME type of the file.
      */
     async saveToDrive(fileData, filename, mimeType) {
         try {
@@ -1615,24 +1646,39 @@ const Storage = {
 
             UI.log(`Saving "${filename}" to Google Drive...`);
 
+            const effectiveMime = mimeType || 'text/plain';
             const fileContent = fileData;
             const metadata = {
                 name: filename,
-                mimeType: mimeType || 'application/dxf'
+                mimeType: effectiveMime
             };
 
-            const boundary = '-------browsercad_boundary';
-            const delimiter = '\r\n--' + boundary + '\r\n';
-            const closeDelimiter = '\r\n--' + boundary + '--';
+            // Use Blob-based multipart upload for reliable encoding.
+            // String concatenation can break on certain characters.
+            const metadataBlob = new Blob(
+                [JSON.stringify(metadata)],
+                { type: 'application/json; charset=UTF-8' }
+            );
+            const contentBlob = new Blob(
+                [fileContent],
+                { type: effectiveMime + '; charset=UTF-8' }
+            );
 
-            const multipartBody =
-                delimiter +
-                'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-                JSON.stringify(metadata) +
-                delimiter +
-                'Content-Type: ' + (mimeType || 'application/dxf') + '\r\n\r\n' +
-                fileContent +
-                closeDelimiter;
+            const boundary = '-------browsercad_boundary_' + Date.now();
+            const CRLF = '\r\n';
+
+            // Build multipart body using Blob parts for correct encoding
+            const bodyParts = [
+                '--' + boundary + CRLF,
+                'Content-Type: application/json; charset=UTF-8' + CRLF + CRLF,
+                metadataBlob,
+                CRLF + '--' + boundary + CRLF,
+                'Content-Type: ' + effectiveMime + '; charset=UTF-8' + CRLF,
+                'Content-Transfer-Encoding: 8bit' + CRLF + CRLF,
+                contentBlob,
+                CRLF + '--' + boundary + '--'
+            ];
+            const multipartBody = new Blob(bodyParts);
 
             let url, method;
 
@@ -1646,6 +1692,8 @@ const Storage = {
                 method = 'POST';
             }
 
+            console.log(`Drive save: ${method} ${url}, size=${multipartBody.size}, mime=${effectiveMime}`);
+
             const response = await fetch(url, {
                 method: method,
                 headers: {
@@ -1657,6 +1705,12 @@ const Storage = {
 
             if (!response.ok) {
                 const errText = await response.text();
+                // If we got a 404 on PATCH (file deleted), retry as new file
+                if (response.status === 404 && method === 'PATCH') {
+                    console.warn('Drive file not found for update, creating new file...');
+                    this._currentDriveFileId = null;
+                    return this.saveToDrive(fileData, filename, mimeType);
+                }
                 throw new Error(`HTTP ${response.status}: ${errText}`);
             }
 

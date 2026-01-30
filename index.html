@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="BrowserCAD - Professional CAD application in pure HTML/CSS/JavaScript with AutoCAD-like interface">
     <title>BrowserCAD - Web-Based CAD Application</title>
     <link rel="stylesheet" href="css/style.css">
@@ -605,6 +605,9 @@
                         <button class="mobile-quick-btn" onclick="Commands.cancelCommand()" title="Cancel">&#10005;</button>
                     </div>
 
+                    <!-- Mobile coordinate display -->
+                    <div class="mobile-coords-overlay" id="mobileCoordsOverlay">0.00, 0.00</div>
+
                     <!-- Floating Canvas Selection Toolbar -->
                     <div class="canvas-selection-toolbar" id="canvasSelectionToolbar" style="display: none;">
                         <div class="cst-title">Select Objects:</div>
@@ -856,9 +859,10 @@
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('exportsvg')"><i class="m-icon">&#128229;</i> Export SVG</div>
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('exportjson')"><i class="m-icon">&#128229;</i> Export JSON</div>
                 <div class="mobile-menu-divider"></div>
+                <div class="mobile-menu-section-title">Google Drive</div>
+                <div class="mobile-menu-item" id="mobileGoogleSignIn" onclick="MobileUI.menuAction('googlesignin')"><i class="m-icon">&#128100;</i> <span id="mobileSignInLabel">Sign In to Google</span></div>
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('driveopen')"><i class="m-icon">&#9729;</i> Open from Drive</div>
                 <div class="mobile-menu-item" onclick="MobileUI.menuAction('drivesave')"><i class="m-icon">&#9729;</i> Save to Drive</div>
-                <div class="mobile-menu-item" onclick="MobileUI.menuAction('googlesignin')"><i class="m-icon">&#128100;</i> Google Sign In</div>
             </div>
             <div class="mobile-menu-section">
                 <div class="mobile-menu-section-title">Selection</div>
