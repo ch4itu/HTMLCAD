@@ -900,28 +900,38 @@
         </div>
     </div>
 
-    <!-- Mobile Layer Panel -->
-    <div class="mobile-layer-overlay" id="mobileLayerOverlay" onclick="MobileUI.closeLayerPanel(event)">
-        <div class="mobile-layer-panel" id="mobileLayerPanel">
-            <div class="mobile-layer-header">
-                <span class="mobile-layer-title">Layers</span>
-                <button class="mobile-layer-close" onclick="MobileUI.closeLayerPanel()">&times;</button>
+    <!-- Layer Manager Panel (AutoCAD-style) -->
+    <div class="layer-mgr-overlay" id="layerMgrOverlay" onclick="MobileUI.closeLayerPanel(event)">
+        <div class="layer-mgr-panel" id="layerMgrPanel">
+            <div class="layer-mgr-header">
+                <span class="layer-mgr-title">Layer Properties Manager</span>
+                <button class="layer-mgr-close" onclick="MobileUI.closeLayerPanel()">&times;</button>
             </div>
-            <div class="mobile-layer-current">
-                <label>Current Layer</label>
-                <select id="mobileLayerSelect" onchange="MobileUI.onLayerSelect()"></select>
+            <div class="layer-mgr-toolbar">
+                <button class="layer-mgr-tool" onclick="MobileUI.addLayer()" title="New Layer">+ New</button>
+                <button class="layer-mgr-tool layer-mgr-tool-danger" onclick="MobileUI.deleteLayer()" title="Delete Layer">Delete</button>
+                <button class="layer-mgr-tool" onclick="MobileUI.setCurrentFromSelected()" title="Set Current">Set Current</button>
             </div>
-            <div class="mobile-layer-color-row">
-                <label>Color</label>
-                <input type="color" id="mobileLayerColor" onchange="MobileUI.onLayerColorChange()">
-                <span id="mobileLayerColorName"></span>
+            <div class="layer-mgr-current">
+                Current: <strong id="layerMgrCurrent">0</strong>
             </div>
-            <div class="mobile-layer-actions">
-                <button class="mobile-layer-btn" onclick="MobileUI.addLayer()">+ New Layer</button>
-                <button class="mobile-layer-btn" onclick="MobileUI.toggleLayerVisibility()">Toggle Visible</button>
-                <button class="mobile-layer-btn mobile-layer-btn-danger" onclick="MobileUI.deleteLayer()">Delete</button>
+            <div class="layer-mgr-table-wrap">
+                <table class="layer-mgr-table">
+                    <thead>
+                        <tr>
+                            <th class="lm-col-status"></th>
+                            <th class="lm-col-name">Name</th>
+                            <th class="lm-col-on" title="On/Off">On</th>
+                            <th class="lm-col-freeze" title="Freeze/Thaw">Frz</th>
+                            <th class="lm-col-lock" title="Lock/Unlock">Lock</th>
+                            <th class="lm-col-color">Color</th>
+                            <th class="lm-col-ltype">Linetype</th>
+                            <th class="lm-col-lw">LW</th>
+                        </tr>
+                    </thead>
+                    <tbody id="layerMgrBody"></tbody>
+                </table>
             </div>
-            <div class="mobile-layer-list" id="mobileLayerList"></div>
         </div>
     </div>
 

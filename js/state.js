@@ -96,7 +96,7 @@ class StateManager {
 
         // Layers
         this.layers = [
-            { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }
+            { name: '0', color: '#ffffff', visible: true, locked: false, frozen: false, lineType: 'Continuous', lineWeight: 'Default' }
         ];
         this.currentLayer = '0';
 
@@ -411,6 +411,8 @@ class StateManager {
             color,
             visible: true,
             locked: false,
+            frozen: false,
+            lineType: 'Continuous',
             lineWeight: 'Default'
         };
 
@@ -970,7 +972,7 @@ class StateManager {
         this.blocks = {};
         this.namedViews = {};
         this.layers = [
-            { name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }
+            { name: '0', color: '#ffffff', visible: true, locked: false, frozen: false, lineType: 'Continuous', lineWeight: 'Default' }
         ];
         this.currentLayer = '0';
         this.pan = { x: 0, y: 0 };

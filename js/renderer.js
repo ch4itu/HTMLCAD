@@ -359,12 +359,57 @@ const Renderer = {
 
         switch (pattern) {
             case 'diagonal':
+            case 'ansi31':
                 ctx.beginPath();
                 ctx.moveTo(0, size);
                 ctx.lineTo(size, 0);
                 ctx.stroke();
                 break;
+            case 'ansi32': // Double diagonal
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(size * 0.5, 0);
+                ctx.moveTo(size * 0.5, size);
+                ctx.lineTo(size, size * 0.5);
+                ctx.stroke();
+                break;
+            case 'ansi33': // Diagonal sparse
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+                break;
+            case 'ansi34': // Diagonal thick
+                ctx.lineWidth = Math.max(1, 2 / CAD.zoom);
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.stroke();
+                break;
+            case 'ansi35': // Reverse diagonal
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(size, size);
+                ctx.stroke();
+                break;
+            case 'ansi36': // Horizontal lines
+                ctx.beginPath();
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(size, size * 0.5);
+                ctx.stroke();
+                break;
+            case 'ansi38': // Diagonal + horizontal
+                ctx.beginPath();
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(size, size * 0.5);
+                ctx.stroke();
+                break;
             case 'cross':
+            case 'ansi37':
                 ctx.beginPath();
                 ctx.moveTo(0, size);
                 ctx.lineTo(size, 0);
@@ -377,6 +422,122 @@ const Renderer = {
                 ctx.arc(size / 2, size / 2, Math.max(0.5, size / 6), 0, Math.PI * 2);
                 ctx.fill();
                 break;
+            case 'brick': {
+                ctx.beginPath();
+                // Horizontal lines
+                ctx.moveTo(0, 0);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(size, size * 0.5);
+                // Staggered verticals
+                ctx.moveTo(size * 0.5, 0);
+                ctx.lineTo(size * 0.5, size * 0.5);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(0, size);
+                ctx.stroke();
+                break;
+            }
+            case 'honey': {
+                const s = size * 0.5;
+                ctx.beginPath();
+                // Hexagon pattern
+                ctx.moveTo(s * 0.5, 0);
+                ctx.lineTo(s * 1.5, 0);
+                ctx.lineTo(s * 2, s * 0.87);
+                ctx.lineTo(s * 1.5, s * 1.73);
+                ctx.lineTo(s * 0.5, s * 1.73);
+                ctx.lineTo(0, s * 0.87);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            }
+            case 'earth': {
+                ctx.beginPath();
+                // Random-looking short dashes
+                for (let i = 0; i < 6; i++) {
+                    const x1 = (i * 37 + 7) % size;
+                    const y1 = (i * 23 + 11) % size;
+                    const len = size * 0.2;
+                    const ang = (i * 50) * Math.PI / 180;
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x1 + Math.cos(ang) * len, y1 + Math.sin(ang) * len);
+                }
+                ctx.stroke();
+                break;
+            }
+            case 'grass': {
+                ctx.beginPath();
+                // Short upward strokes
+                const gs = size / 3;
+                for (let gy = 0; gy < 3; gy++) {
+                    for (let gx = 0; gx < 3; gx++) {
+                        if ((gx + gy) % 2 === 0) {
+                            const bx = gx * gs + gs * 0.5;
+                            const by = gy * gs + gs;
+                            ctx.moveTo(bx, by);
+                            ctx.lineTo(bx, by - gs * 0.6);
+                        }
+                    }
+                }
+                ctx.stroke();
+                break;
+            }
+            case 'steel': {
+                ctx.beginPath();
+                // Steel - diagonal with perpendicular ticks
+                ctx.moveTo(0, size);
+                ctx.lineTo(size, 0);
+                const mid = size * 0.5;
+                ctx.moveTo(mid - size * 0.15, mid - size * 0.15);
+                ctx.lineTo(mid + size * 0.15, mid + size * 0.15);
+                ctx.stroke();
+                break;
+            }
+            case 'insul': {
+                ctx.beginPath();
+                // Insulation - wavy pattern
+                const step = size / 4;
+                ctx.moveTo(0, size * 0.5);
+                for (let x = 0; x <= size; x += step) {
+                    const y = size * 0.5 + Math.sin((x / size) * Math.PI * 2) * size * 0.3;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                break;
+            }
+            case 'net':
+            case 'net3': {
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(size, 0);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, size);
+                ctx.stroke();
+                break;
+            }
+            case 'dash': {
+                ctx.beginPath();
+                ctx.moveTo(size * 0.1, size * 0.5);
+                ctx.lineTo(size * 0.4, size * 0.5);
+                ctx.moveTo(size * 0.6, size * 0.5);
+                ctx.lineTo(size * 0.9, size * 0.5);
+                ctx.stroke();
+                break;
+            }
+            case 'square': {
+                ctx.strokeRect(size * 0.1, size * 0.1, size * 0.8, size * 0.8);
+                break;
+            }
+            case 'zigzag': {
+                ctx.beginPath();
+                ctx.moveTo(0, size * 0.75);
+                ctx.lineTo(size * 0.25, size * 0.25);
+                ctx.lineTo(size * 0.5, size * 0.75);
+                ctx.lineTo(size * 0.75, size * 0.25);
+                ctx.lineTo(size, size * 0.75);
+                ctx.stroke();
+                break;
+            }
             default:
                 ctx.beginPath();
                 ctx.moveTo(0, size);
