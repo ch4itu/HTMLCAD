@@ -3025,10 +3025,23 @@ const Commands = {
             state.points.push({ ...state.points[0] });
             CAD.addEntity({
                 type: 'polyline',
-                points: [...state.points]
+                points: [...state.points],
+                closed: true
             });
             UI.log('Polyline closed.');
             this.finishCommand();
+        } else if (state.activeCmd === 'spline' && state.points.length >= 2) {
+            // Close spline: add closing segment back to first point
+            state.points.push({ ...state.points[0] });
+            CAD.addEntity({
+                type: 'polyline',
+                points: [...state.points],
+                isSpline: true,
+                closed: true
+            });
+            UI.log('Spline closed.');
+            this.finishCommand();
+            Renderer.draw();
         } else if (state.activeCmd === 'line' && state.lineChainStart && state.points.length >= 1) {
             CAD.addEntity({
                 type: 'line',
@@ -3430,7 +3443,7 @@ const Commands = {
         const state = CAD;
         state.points.push(point);
 
-        UI.log(`SPLINE: Specify point ${state.points.length + 1} or press Enter to finish:`, 'prompt');
+        UI.log(`SPLINE: Specify point ${state.points.length + 1} or [Close/Enter to finish]:`, 'prompt');
     },
 
     handleDonutClick(point) {

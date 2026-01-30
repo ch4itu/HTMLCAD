@@ -369,6 +369,8 @@ const App = {
                 const y = this.touchState.startY;
                 const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
                 CAD.cursor = world;
+                CAD.cursorWorld = world;
+                CAD.tempEnd = world;
                 Commands.handleClick(world);
                 UI.updatePropertiesPanel();
                 Renderer.draw();
@@ -775,6 +777,129 @@ const MobileUI = {
         if (gridBtn) gridBtn.classList.toggle('active', CAD.showGrid);
         if (orthoBtn) orthoBtn.classList.toggle('active', CAD.orthoEnabled);
         if (polarBtn) polarBtn.classList.toggle('active', CAD.polarEnabled);
+    },
+
+    // ==========================================
+    // LAYER MANAGEMENT PANEL
+    // ==========================================
+
+    showLayerPanel() {
+        const overlay = document.getElementById('mobileLayerOverlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+            this._refreshLayerPanel();
+        }
+    },
+
+    closeLayerPanel(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const overlay = document.getElementById('mobileLayerOverlay');
+        if (overlay) overlay.classList.remove('visible');
+    },
+
+    _refreshLayerPanel() {
+        const select = document.getElementById('mobileLayerSelect');
+        const colorInput = document.getElementById('mobileLayerColor');
+        const colorName = document.getElementById('mobileLayerColorName');
+        const list = document.getElementById('mobileLayerList');
+        if (!select || !list) return;
+
+        // Populate select
+        select.innerHTML = '';
+        CAD.layers.forEach(layer => {
+            const opt = document.createElement('option');
+            opt.value = layer.name;
+            opt.textContent = layer.name;
+            opt.style.color = layer.color;
+            select.appendChild(opt);
+        });
+        select.value = CAD.currentLayer;
+
+        // Update color picker
+        const currentLayer = CAD.getLayer(CAD.currentLayer);
+        if (currentLayer && colorInput) {
+            colorInput.value = currentLayer.color;
+            if (colorName) colorName.textContent = currentLayer.color;
+        }
+
+        // Build layer list
+        list.innerHTML = '';
+        CAD.layers.forEach(layer => {
+            const item = document.createElement('div');
+            item.className = 'mobile-layer-item' + (layer.name === CAD.currentLayer ? ' active' : '');
+            item.innerHTML =
+                `<div class="mobile-layer-item-swatch" style="background:${layer.color}"></div>` +
+                `<div class="mobile-layer-item-name">${layer.name}</div>` +
+                `<div class="mobile-layer-item-vis${layer.visible === false ? ' hidden' : ''}">${layer.visible === false ? '&#9711;' : '&#9679;'}</div>`;
+            item.addEventListener('click', () => {
+                CAD.setCurrentLayer(layer.name);
+                UI.updateLayerUI();
+                this._refreshLayerPanel();
+            });
+            list.appendChild(item);
+        });
+    },
+
+    onLayerSelect() {
+        const select = document.getElementById('mobileLayerSelect');
+        if (select) {
+            CAD.setCurrentLayer(select.value);
+            UI.updateLayerUI();
+            this._refreshLayerPanel();
+        }
+    },
+
+    onLayerColorChange() {
+        const colorInput = document.getElementById('mobileLayerColor');
+        if (colorInput) {
+            CAD.updateLayerColor(CAD.currentLayer, colorInput.value);
+            UI.updateLayerUI();
+            Renderer.draw();
+            this._refreshLayerPanel();
+        }
+    },
+
+    addLayer() {
+        const name = prompt('Enter layer name:', `Layer${CAD.layers.length}`);
+        if (name) {
+            if (CAD.addLayer(name)) {
+                CAD.setCurrentLayer(name);
+                UI.updateLayerUI();
+                this._refreshLayerPanel();
+                UI.log(`Layer "${name}" created.`);
+            } else {
+                UI.log(`Layer "${name}" already exists.`, 'error');
+            }
+        }
+    },
+
+    toggleLayerVisibility() {
+        const layer = CAD.getLayer(CAD.currentLayer);
+        if (layer) {
+            layer.visible = layer.visible === false ? true : false;
+            Renderer.draw();
+            this._refreshLayerPanel();
+        }
+    },
+
+    deleteLayer() {
+        if (CAD.currentLayer === '0') {
+            UI.log('Cannot delete layer 0.', 'error');
+            return;
+        }
+        if (confirm(`Delete layer "${CAD.currentLayer}"?`)) {
+            const layerName = CAD.currentLayer;
+            // Move entities on this layer to layer 0
+            CAD.entities.forEach(e => {
+                if (e.layer === layerName) e.layer = '0';
+            });
+            CAD.layers = CAD.layers.filter(l => l.name !== layerName);
+            CAD.setCurrentLayer('0');
+            UI.updateLayerUI();
+            Renderer.draw();
+            this._refreshLayerPanel();
+            UI.log(`Layer "${layerName}" deleted. Entities moved to layer 0.`);
+        }
     },
 
     // ==========================================

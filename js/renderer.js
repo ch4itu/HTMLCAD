@@ -99,6 +99,9 @@ const Renderer = {
         // Draw crosshair cursor
         this.drawCursor();
 
+        // Draw mobile touch target indicator
+        this.drawMobileTouchTarget();
+
         // Draw snap indicator
         this.drawSnapIndicator();
 
@@ -491,6 +494,9 @@ const Renderer = {
                         for (let i = 1; i < entity.points.length; i++) {
                             ctx.lineTo(entity.points[i].x, entity.points[i].y);
                         }
+                    }
+                    if (entity.closed || Utils.isPolygonClosed(entity.points)) {
+                        ctx.closePath();
                     }
                 }
                 break;
@@ -1234,6 +1240,37 @@ const Renderer = {
 
         // Small box at center (pick aperture)
         ctx.strokeRect(screen.x - 3, screen.y - 3, 6, 6);
+    },
+
+    /**
+     * Draw a larger touch target indicator on mobile devices.
+     * Shows a prominent circle at cursor position during active drawing commands.
+     */
+    drawMobileTouchTarget() {
+        // Only show on touch devices with an active drawing command
+        if (!('ontouchstart' in window) || !CAD.activeCmd || CAD.points.length === 0) return;
+
+        const ctx = this.ctx;
+        const state = CAD;
+        const end = state.tempEnd || state.cursor;
+        if (!end) return;
+
+        const screen = Utils.worldToScreen(end.x, end.y, state.pan, state.zoom);
+
+        // Draw a larger, semi-transparent target circle
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 160, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 18, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner dot
+        ctx.fillStyle = 'rgba(0, 160, 255, 0.4)';
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     },
 
     // ==========================================

@@ -779,7 +779,7 @@
                 <button class="mobile-tool-btn" onclick="App.executeCommand('distance')"><i class="m-icon">&#8614;</i><span class="m-label">Distance</span></button>
                 <button class="mobile-tool-btn" onclick="App.executeCommand('area')"><i class="m-icon">&#9633;</i><span class="m-label">Area</span></button>
                 <button class="mobile-tool-btn" onclick="App.executeCommand('list')"><i class="m-icon">&#9776;</i><span class="m-label">List</span></button>
-                <button class="mobile-tool-btn" onclick="App.executeCommand('layer')"><i class="m-icon">&#9783;</i><span class="m-label">Layer</span></button>
+                <button class="mobile-tool-btn" onclick="MobileUI.showLayerPanel()"><i class="m-icon">&#9783;</i><span class="m-label">Layer</span></button>
                 <button class="mobile-tool-btn" onclick="App.executeCommand('help')"><i class="m-icon">?</i><span class="m-label">Help</span></button>
             </div>
             <!-- Snap controls -->
@@ -897,6 +897,31 @@
                 <button class="btn" onclick="UI.hideModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="UI.hideModal()">OK</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Mobile Layer Panel -->
+    <div class="mobile-layer-overlay" id="mobileLayerOverlay" onclick="MobileUI.closeLayerPanel(event)">
+        <div class="mobile-layer-panel" id="mobileLayerPanel">
+            <div class="mobile-layer-header">
+                <span class="mobile-layer-title">Layers</span>
+                <button class="mobile-layer-close" onclick="MobileUI.closeLayerPanel()">&times;</button>
+            </div>
+            <div class="mobile-layer-current">
+                <label>Current Layer</label>
+                <select id="mobileLayerSelect" onchange="MobileUI.onLayerSelect()"></select>
+            </div>
+            <div class="mobile-layer-color-row">
+                <label>Color</label>
+                <input type="color" id="mobileLayerColor" onchange="MobileUI.onLayerColorChange()">
+                <span id="mobileLayerColorName"></span>
+            </div>
+            <div class="mobile-layer-actions">
+                <button class="mobile-layer-btn" onclick="MobileUI.addLayer()">+ New Layer</button>
+                <button class="mobile-layer-btn" onclick="MobileUI.toggleLayerVisibility()">Toggle Visible</button>
+                <button class="mobile-layer-btn mobile-layer-btn-danger" onclick="MobileUI.deleteLayer()">Delete</button>
+            </div>
+            <div class="mobile-layer-list" id="mobileLayerList"></div>
         </div>
     </div>
 
