@@ -2701,118 +2701,226 @@ const Commands = {
         }
     },
 
+    // ==========================================
+    // IMPROVED HATCH BOUNDARY DETECTION
+    // ==========================================
+
     findLineLoopContainingPoint(point) {
-        const segments = [];
+        // 1. Collect all potential boundary segments from visible entities
+        let segments = [];
         const entities = CAD.getVisibleEntities();
 
         entities.forEach(entity => {
+            // Decompose entities into simple line segments
             if (entity.type === 'line') {
                 segments.push({ p1: entity.p1, p2: entity.p2 });
-            } else if (entity.type === 'polyline' && entity.points.length > 1) {
+            } else if (entity.type === 'polyline') {
                 for (let i = 0; i < entity.points.length - 1; i++) {
                     segments.push({ p1: entity.points[i], p2: entity.points[i + 1] });
                 }
-                if (entity.closed || Utils.isPolygonClosed(entity.points)) {
+                // Handle closed polylines or visually closed ones
+                if (entity.closed || (entity.points.length > 2 && Utils.dist(entity.points[0], entity.points[entity.points.length - 1]) < 0.001)) {
                     segments.push({ p1: entity.points[entity.points.length - 1], p2: entity.points[0] });
                 }
+            } else if (entity.type === 'rect') {
+                const p1 = entity.p1;
+                const p2 = entity.p2;
+                const p3 = { x: p2.x, y: p1.y };
+                const p4 = { x: p1.x, y: p2.y };
+                segments.push({ p1: p1, p2: p3 });
+                segments.push({ p1: p3, p2: p2 });
+                segments.push({ p1: p2, p2: p4 });
+                segments.push({ p1: p4, p2: p1 });
             }
         });
 
-        if (segments.length === 0) {
-            return null;
-        }
+        // 2. Shatter segments at intersections
+        // This is crucial: turns a "tic-tac-toe" board into individual small segments
+        segments = this.shatterSegments(segments);
 
-        const loops = this.buildLineLoops(segments);
-        for (const loop of loops) {
-            if (Utils.pointInPolygon(point, loop)) {
-                return loop;
-            }
-        }
-
-        return null;
+        // 3. Find the smallest cycle containing the point
+        return this.findSmallestCycleContainingPoint(segments, point);
     },
 
-    buildLineLoops(segments) {
-        const tolerance = 0.001;
-        const keyFor = (p) => `${Math.round(p.x / tolerance)}:${Math.round(p.y / tolerance)}`;
-        const pointForKey = new Map();
-        const adjacency = new Map();
+    shatterSegments(segments) {
+        // Helper to check if point is on segment
+        let intersectionFound = true;
+        let limit = 0;
 
-        const addAdjacency = (key, segmentIndex) => {
-            if (!adjacency.has(key)) {
-                adjacency.set(key, []);
-            }
-            adjacency.get(key).push(segmentIndex);
-        };
+        // Iteratively split segments until no intersections remain
+        // (Limit iterations to prevent infinite loops with float precision issues)
+        while (intersectionFound && limit++ < 5) {
+            intersectionFound = false;
+            const newSegments = [];
 
-        segments.forEach((segment, index) => {
-            const key1 = keyFor(segment.p1);
-            const key2 = keyFor(segment.p2);
-            if (!pointForKey.has(key1)) pointForKey.set(key1, segment.p1);
-            if (!pointForKey.has(key2)) pointForKey.set(key2, segment.p2);
-            addAdjacency(key1, index);
-            addAdjacency(key2, index);
-        });
+            for (let i = 0; i < segments.length; i++) {
+                let s1 = segments[i];
+                let splitPoints = [];
 
-        const used = new Set();
-        const loops = [];
+                for (let j = 0; j < segments.length; j++) {
+                    if (i === j) continue;
+                    const s2 = segments[j];
 
-        const followLoop = (startIndex) => {
-            const startSeg = segments[startIndex];
-            const startKey = keyFor(startSeg.p1);
-            const nextKey = keyFor(startSeg.p2);
-            const loop = [pointForKey.get(startKey)];
-            let currentKey = nextKey;
-            let prevKey = startKey;
+                    // Use Geometry module to find intersection
+                    const int = Geometry.segmentSegmentIntersection(s1.p1, s1.p2, s2.p1, s2.p2);
 
-            used.add(startIndex);
-            loop.push(pointForKey.get(currentKey));
-
-            let guard = 0;
-            while (currentKey !== startKey && guard < segments.length + 5) {
-                guard += 1;
-                const options = (adjacency.get(currentKey) || []).filter(idx => !used.has(idx));
-                if (options.length === 0) {
-                    return null;
+                    if (int) {
+                        // Check if intersection is strictly interior (not at endpoints)
+                        const isEndP1 = Utils.dist(int, s1.p1) < 0.001 || Utils.dist(int, s1.p2) < 0.001;
+                        if (!isEndP1) {
+                            splitPoints.push(int);
+                        }
+                    }
                 }
 
-                let nextIndex = options[0];
-                if (options.length > 1) {
-                    nextIndex = options.find(idx => {
-                        const seg = segments[idx];
-                        const keyA = keyFor(seg.p1);
-                        const keyB = keyFor(seg.p2);
-                        return keyA !== prevKey && keyB !== prevKey;
-                    }) ?? options[0];
+                if (splitPoints.length > 0) {
+                    intersectionFound = true;
+                    // Sort split points by distance from p1
+                    splitPoints.sort((a, b) => Utils.dist(s1.p1, a) - Utils.dist(s1.p1, b));
+
+                    // Filter duplicates manually if Utils.uniquePoints isn't available or specific enough
+                    const uniqueSplits = [];
+                    if (splitPoints.length > 0) uniqueSplits.push(splitPoints[0]);
+                    for (let k = 1; k < splitPoints.length; k++) {
+                        if (Utils.dist(splitPoints[k], splitPoints[k - 1]) > 0.001) {
+                            uniqueSplits.push(splitPoints[k]);
+                        }
+                    }
+
+                    let curr = s1.p1;
+                    uniqueSplits.forEach(sp => {
+                        newSegments.push({ p1: curr, p2: sp });
+                        curr = sp;
+                    });
+                    newSegments.push({ p1: curr, p2: s1.p2 });
+                } else {
+                    newSegments.push(s1);
                 }
-
-                used.add(nextIndex);
-                const seg = segments[nextIndex];
-                const keyA = keyFor(seg.p1);
-                const keyB = keyFor(seg.p2);
-                const nextKeyCandidate = keyA === currentKey ? keyB : keyA;
-
-                prevKey = currentKey;
-                currentKey = nextKeyCandidate;
-                loop.push(pointForKey.get(currentKey));
             }
+            segments = newSegments;
+        }
+        return segments;
+    },
 
-            if (currentKey === startKey && loop.length >= 4) {
-                return loop;
-            }
+    findSmallestCycleContainingPoint(segments, point) {
+        // Cast a ray to find the nearest segment to the right
+        let closestSeg = null;
+        let minDist = Infinity;
 
-            return null;
-        };
+        // Ray: from point to (Infinity, point.y)
+        const rayEnd = { x: point.x + 100000, y: point.y };
 
-        segments.forEach((segment, index) => {
-            if (used.has(index)) return;
-            const loop = followLoop(index);
-            if (loop) {
-                loops.push(loop);
+        segments.forEach(seg => {
+            const int = Geometry.segmentSegmentIntersection(point, rayEnd, seg.p1, seg.p2);
+            if (int) {
+                const d = Utils.dist(point, int);
+                if (d < minDist && d > 0.001) { // 0.001 to ignore if we clicked exactly on a line
+                    minDist = d;
+                    closestSeg = seg;
+                }
             }
         });
 
-        return loops;
+        if (!closestSeg) return null;
+
+        // We found the nearest wall. Now traverse the graph to find the loop.
+        // We will walk "Left" (Counter-Clockwise) at every junction relative to the incoming vector.
+
+        let startNode;
+        let currNode;
+
+        // Determine orientation: We want to walk along the wall such that the interior is to the LEFT.
+        // Since we cast a ray to the RIGHT, we hit a wall.
+        // If the wall goes UP, the interior is to the Left.
+        // If the wall goes DOWN, the interior is to the Right (so we'd be outside).
+        // Standard ray casting logic: If we hit a wall, we want to traverse it CCW around the empty space.
+
+        if (closestSeg.p1.y > closestSeg.p2.y) {
+            // Segment goes "Down"
+            startNode = closestSeg.p2;
+            currNode = closestSeg.p1;
+        } else {
+            // Segment goes "Up"
+            startNode = closestSeg.p1;
+            currNode = closestSeg.p2;
+        }
+
+        // Build adjacency map for graph traversal
+        const adj = {};
+        const key = p => `${p.x.toFixed(4)},${p.y.toFixed(4)}`;
+
+        segments.forEach(s => {
+            const k1 = key(s.p1);
+            const k2 = key(s.p2);
+            if (!adj[k1]) adj[k1] = [];
+            if (!adj[k2]) adj[k2] = [];
+            adj[k1].push(s.p2);
+            adj[k2].push(s.p1);
+        });
+
+        const path = [startNode, currNode];
+        let steps = 0;
+
+        // Wall follower loop
+        while (steps++ < 1000) {
+            const kCurr = key(currNode);
+            const kPrev = key(path[path.length - 2]);
+
+            // Check closure
+            if (Utils.dist(currNode, startNode) < 0.001 && path.length > 2) {
+                return path;
+            }
+
+            const neighbors = adj[kCurr];
+            if (!neighbors) return null; // Dead end
+
+            // Filter out the node we just came from (unless it's the only option, i.e., dead end)
+            let candidates = neighbors.filter(n => key(n) !== kPrev);
+            if (candidates.length === 0) return null;
+
+            // Incoming vector: Prev -> Curr
+            const vIn = { x: currNode.x - path[path.length - 2].x, y: currNode.y - path[path.length - 2].y };
+            const angIn = Math.atan2(vIn.y, vIn.x);
+
+            let bestCand = null;
+            let minAngleDiff = Infinity;
+
+            // Find the candidate that represents the sharpest LEFT turn
+            candidates.forEach(cand => {
+                const vOut = { x: cand.x - currNode.x, y: cand.y - currNode.y };
+                const angOut = Math.atan2(vOut.y, vOut.x);
+
+                // Calculate relative angle
+                let diff = angOut - angIn;
+
+                // Normalize to [-PI, PI]
+                while (diff <= -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+
+                // We want the smallest angle starting from 0 and going CCW (0 to 2PI)
+                // Actually, "Left most" means we treat the backward vector as 0?
+                // Let's stick to standard convex hull logic: smallest relative angle change.
+                // We want to turn LEFT.
+                if (diff < 0) diff += Math.PI * 2; // Normalize to [0, 2PI]
+
+                // We want the turn that is "most left" / "least right"?
+                // Actually, to enclose the point on the left, we want the *widest* left turn (closest to PI)
+                // OR simpler: just minimize the angle in CCW direction.
+
+                if (diff < minAngleDiff) {
+                    minAngleDiff = diff;
+                    bestCand = cand;
+                }
+            });
+
+            if (bestCand) {
+                path.push(bestCand);
+                currNode = bestCand;
+            } else {
+                return null;
+            }
+        }
+        return null;
     },
 
     handleDistanceClick(point) {
