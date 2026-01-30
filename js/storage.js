@@ -622,6 +622,51 @@ const Storage = {
         return map[pattern] || pattern.toUpperCase();
     },
 
+    _getInternalHatchPattern(pattern) {
+        if (!pattern) return 'solid';
+        const normalized = pattern.toLowerCase();
+        const map = {
+            'solid': 'solid',
+            'ansi31': 'diagonal',
+            'ansi32': 'ansi32',
+            'ansi33': 'ansi33',
+            'ansi34': 'ansi34',
+            'ansi35': 'ansi35',
+            'ansi36': 'ansi36',
+            'ansi37': 'cross',
+            'ansi38': 'ansi38',
+            'brick': 'brick',
+            'earth': 'earth',
+            'grass': 'grass',
+            'honey': 'honey',
+            'hound': 'hound',
+            'insul': 'insul',
+            'net': 'net',
+            'net3': 'net3',
+            'dash': 'dash',
+            'dots': 'dots',
+            'square': 'square',
+            'steel': 'steel',
+            'swamp': 'swamp',
+            'trans': 'trans',
+            'zigzag': 'zigzag'
+        };
+        return map[normalized] || normalized;
+    },
+
+    _sampleArcPoints(center, radius, start, end, segments = 32) {
+        const points = [];
+        const sweep = end - start;
+        for (let i = 0; i <= segments; i++) {
+            const angle = start + (sweep * i) / segments;
+            points.push({
+                x: center.x + Math.cos(angle) * radius,
+                y: center.y + Math.sin(angle) * radius
+            });
+        }
+        return points;
+    },
+
     /**
      * Generate DXF pattern definition lines for non-solid hatches.
      */
@@ -1466,10 +1511,13 @@ const Storage = {
                         i = result.nextIndex;
                     }
                 } else if (entityType === 'HATCH') {
-                    // Skip past HATCH entity data (complex format)
-                    // We don't import hatches as they depend on boundary entities
-                    const { nextIndex } = this.readDXFEntity(lines, i);
-                    i = nextIndex;
+                    const result = this.parseDXFHatch(lines, i);
+                    if (result && result.entity) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    } else if (result) {
+                        i = result.nextIndex;
+                    }
                 } else if (entityType === 'INSERT') {
                     const result = this.parseDXFInsert(lines, i);
                     if (result) {
@@ -1549,6 +1597,146 @@ const Storage = {
         if (data[6]) entity.lineType = data[6].toLowerCase();
 
         return { entity, nextIndex };
+    },
+
+    parseDXFHatch(lines, startIndex) {
+        let i = startIndex;
+        let layer = '0';
+        let patternName = 'solid';
+        let solidFlag = 0;
+        let boundaryPaths = [];
+
+        const readPair = () => {
+            const code = parseInt(lines[i], 10);
+            const value = lines[i + 1];
+            i += 2;
+            return { code, value };
+        };
+
+        while (i < lines.length - 1) {
+            const code = parseInt(lines[i], 10);
+            if (code === 0) break;
+
+            const { code: group, value } = readPair();
+            if (group === 8) layer = value || '0';
+            if (group === 2) patternName = value || patternName;
+            if (group === 70) solidFlag = parseInt(value, 10) || 0;
+
+            if (group === 91) {
+                const numPaths = parseInt(value, 10) || 0;
+                for (let p = 0; p < numPaths; p++) {
+                    const pathHeader = readPair();
+                    if (pathHeader.code !== 92) continue;
+                    const pathType = parseInt(pathHeader.value, 10) || 0;
+                    const isPolyline = (pathType & 2) !== 0;
+                    const points = [];
+
+                    if (isPolyline) {
+                        let vertexCount = 0;
+                        while (i < lines.length - 1) {
+                            const nextCode = parseInt(lines[i], 10);
+                            if (nextCode === 92 || nextCode === 0) break;
+                            const pair = readPair();
+                            if (pair.code === 93) {
+                                vertexCount = parseInt(pair.value, 10) || 0;
+                                for (let v = 0; v < vertexCount; v++) {
+                                    const xPair = readPair();
+                                    const yPair = readPair();
+                                    if (xPair.code === 10 && yPair.code === 20) {
+                                        const x = parseFloat(xPair.value);
+                                        const y = parseFloat(yPair.value);
+                                        if (!Number.isNaN(x) && !Number.isNaN(y)) {
+                                            points.push({ x, y: -y });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        let edgeCount = 0;
+                        while (i < lines.length - 1) {
+                            const nextCode = parseInt(lines[i], 10);
+                            if (nextCode === 92 || nextCode === 0) break;
+                            const pair = readPair();
+                            if (pair.code === 93) {
+                                edgeCount = parseInt(pair.value, 10) || 0;
+                                for (let e = 0; e < edgeCount; e++) {
+                                    const edgeTypePair = readPair();
+                                    const edgeType = parseInt(edgeTypePair.value, 10) || 0;
+                                    if (edgeType === 1) {
+                                        const startX = readPair();
+                                        const startY = readPair();
+                                        const endX = readPair();
+                                        const endY = readPair();
+                                        if (startX.code === 10 && startY.code === 20 && endX.code === 11 && endY.code === 21) {
+                                            const sx = parseFloat(startX.value);
+                                            const sy = parseFloat(startY.value);
+                                            const ex = parseFloat(endX.value);
+                                            const ey = parseFloat(endY.value);
+                                            if (points.length === 0) {
+                                                points.push({ x: sx, y: -sy });
+                                            }
+                                            points.push({ x: ex, y: -ey });
+                                        }
+                                    } else if (edgeType === 2) {
+                                        const centerX = readPair();
+                                        const centerY = readPair();
+                                        const radius = readPair();
+                                        const startAngle = readPair();
+                                        const endAngle = readPair();
+                                        const clockwise = readPair();
+                                        if (centerX.code === 10 && centerY.code === 20 && radius.code === 40) {
+                                            const cx = parseFloat(centerX.value);
+                                            const cy = parseFloat(centerY.value);
+                                            const r = parseFloat(radius.value);
+                                            const start = Utils.degToRad(parseFloat(startAngle.value) || 0);
+                                            const end = Utils.degToRad(parseFloat(endAngle.value) || 360);
+                                            const ccw = parseInt(clockwise.value, 10) === 0;
+                                            const arcPoints = this._sampleArcPoints(
+                                                { x: cx, y: -cy },
+                                                r,
+                                                ccw ? start : end,
+                                                ccw ? end : start
+                                            );
+                                            arcPoints.forEach((pt, idx) => {
+                                                if (points.length === 0 || idx > 0) {
+                                                    points.push(pt);
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        // Skip unsupported edge types (ellipse/spline)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (points.length > 2) {
+                        if (!Utils.isPolygonClosed(points)) {
+                            points.push({ ...points[0] });
+                        }
+                        boundaryPaths.push(points);
+                    }
+                }
+            }
+        }
+
+        if (boundaryPaths.length === 0) {
+            return { entity: null, nextIndex: i };
+        }
+
+        const pattern = solidFlag === 1 ? 'solid' : this._getInternalHatchPattern(patternName);
+        const entity = {
+            type: 'polyline',
+            points: boundaryPaths[0],
+            closed: true,
+            hatch: { pattern },
+            noStroke: solidFlag === 1,
+            layer
+        };
+
+        return { entity, nextIndex: i };
     },
 
     parseDXFCircle(lines, startIndex) {
