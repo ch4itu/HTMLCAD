@@ -193,6 +193,9 @@ body {
     padding: 6px 10px;
     gap: 4px;
     min-height: 85px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
 }
 
 .ribbon-panel {
@@ -200,6 +203,7 @@ body {
     flex-direction: column;
     padding: 4px 8px;
     border-right: 1px solid var(--border-medium);
+    flex: 0 0 auto;
 }
 
 .ribbon-panel:last-child {
@@ -2287,4 +2291,3 @@ body {
         .mobile-menu-drawer { padding-bottom: env(safe-area-inset-bottom); }
     }
 }
-

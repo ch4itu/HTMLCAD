@@ -506,7 +506,7 @@ const Storage = {
         }
 
         // Add hatch if entity has it (for entities with inline hatch property)
-        if (entity.hatch && entity.type !== 'hatch') {
+        if (entity.hatch && entity.type !== 'hatch' && entity.type !== 'donut') {
             dxf += this.generateHatchDXF(entity, colorInt);
         }
 
@@ -515,8 +515,8 @@ const Storage = {
 
     generateHatchDXF(entity, colorInt) {
         let dxf = '';
-        const hatchData = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
-        const pattern = (hatchData.pattern || 'solid').toLowerCase();
+        const hatchData = entity.hatch;
+        const pattern = (typeof hatchData === 'string' ? hatchData : hatchData?.pattern || 'solid').toLowerCase();
         const isSolid = pattern === 'solid';
 
         // Map internal pattern names to DXF pattern names
@@ -563,6 +563,9 @@ const Storage = {
                     { x: entity.p1.x, y: -entity.p2.y }
                 ];
             } else if (entity.type === 'polyline') {
+                if (!entity.points || !Utils.isPolygonClosed(entity.points)) {
+                    return '';
+                }
                 pts = entity.points.map(p => ({ x: p.x, y: -p.y }));
             }
 
@@ -721,8 +724,8 @@ const Storage = {
         const clipIds = entity.clipIds || [];
         if (clipIds.length === 0) return '';
 
-        const hatchData = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
-        const pattern = (hatchData.pattern || 'solid').toLowerCase();
+        const hatchData = entity.hatch;
+        const pattern = (typeof hatchData === 'string' ? hatchData : hatchData?.pattern || 'solid').toLowerCase();
         const isSolid = pattern === 'solid';
         const dxfPatternName = this._getDXFPatternName(pattern);
 
