@@ -1566,6 +1566,37 @@ const Commands = {
             point = Utils.applyOrtho(state.points[state.points.length - 1], point);
         }
 
+        if (typeof AutoLISP !== 'undefined' && AutoLISP.pendingInput) {
+            const lispType = CAD.lispInputType;
+            if (lispType === 'point' || lispType === 'corner') {
+                AutoLISP.handleUserInput(point);
+                Renderer.draw();
+                return;
+            }
+            if (lispType === 'entsel') {
+                const hit = this.hitTest(point);
+                if (hit) {
+                    AutoLISP.handleUserInput({ entity: hit, point });
+                } else {
+                    UI.log('No object found for selection.', 'error');
+                }
+                Renderer.draw();
+                return;
+            }
+            if (lispType === 'ssget') {
+                const hits = this.hitTestAll(point);
+                if (hits.length > 0) {
+                    AutoLISP.handleUserInput({ ids: hits.map(hit => hit.id) });
+                } else if (CAD.selectedIds.length > 0) {
+                    AutoLISP.handleUserInput({ ids: [...CAD.selectedIds] });
+                } else {
+                    UI.log('No objects selected.', 'error');
+                }
+                Renderer.draw();
+                return;
+            }
+        }
+
         // Handle selection mode FIRST (window/crossing selection in progress)
         // This must come before needSelection check to properly finish selection box
         if (state.selectionMode && state.selectStart) {
@@ -5751,6 +5782,46 @@ const Commands = {
     handleInput(input) {
         const state = CAD;
         input = input.trim();
+
+        if (typeof AutoLISP !== 'undefined' && AutoLISP.pendingInput) {
+            const lispType = CAD.lispInputType;
+            if (lispType === 'point' || lispType === 'corner') {
+                const basePoint = AutoLISP.inputBasePoint || null;
+                const coord = Utils.parseCoordInput(input, basePoint);
+                if (coord) {
+                    AutoLISP.handleUserInput(coord);
+                } else {
+                    UI.log('Invalid point. Use x,y format.', 'error');
+                }
+                return true;
+            }
+            if (lispType === 'dist' || lispType === 'angle' || lispType === 'real') {
+                const value = parseFloat(input);
+                if (Number.isNaN(value)) {
+                    UI.log('Invalid number.', 'error');
+                } else {
+                    AutoLISP.handleUserInput(value);
+                }
+                return true;
+            }
+            if (lispType === 'int') {
+                const value = parseInt(input, 10);
+                if (Number.isNaN(value)) {
+                    UI.log('Invalid integer.', 'error');
+                } else {
+                    AutoLISP.handleUserInput(value);
+                }
+                return true;
+            }
+            if (lispType === 'string' || lispType === 'keyword') {
+                AutoLISP.handleUserInput(input);
+                return true;
+            }
+            if (lispType === 'entsel' || lispType === 'ssget') {
+                UI.log('Select object(s) on the canvas.', 'prompt');
+                return true;
+            }
+        }
 
         if (!input) {
             // Enter pressed with empty input

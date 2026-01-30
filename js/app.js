@@ -9,7 +9,7 @@ const App = {
 
     init() {
         // Initialize modules
-        Renderer.init('canvas', 'viewport');
+        Renderer.init('cad-canvas', 'webgl-canvas', 'viewport');
         UI.init();
 
         // Load saved settings

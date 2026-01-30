@@ -5,6 +5,11 @@
 const Renderer = {
     canvas: null,
     ctx: null,
+    webglCanvas: null,
+    glRenderer: null,
+    scene: null,
+    camera: null,
+    worldGroup: null,
     viewport: null,
 
     // Colors
@@ -41,10 +46,21 @@ const Renderer = {
     // INITIALIZATION
     // ==========================================
 
-    init(canvasId, viewportId) {
+    init(canvasId, webglCanvasId, viewportId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
+        this.webglCanvas = document.getElementById(webglCanvasId);
         this.viewport = document.getElementById(viewportId);
+
+        if (window.THREE) {
+            this.initWebGL();
+        } else {
+            window.addEventListener('threejs:ready', () => {
+                this.initWebGL();
+                this.resize();
+                this.draw();
+            }, { once: true });
+        }
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -52,11 +68,49 @@ const Renderer = {
         return this;
     },
 
+    initWebGL() {
+        if (!this.webglCanvas || !window.THREE) return;
+
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.OrthographicCamera(0, 1, 0, 1, -1000, 1000);
+        this.camera.position.set(0, 0, 10);
+        this.camera.lookAt(0, 0, 0);
+
+        this.worldGroup = new THREE.Group();
+        this.scene.add(this.worldGroup);
+
+        this.glRenderer = new THREE.WebGLRenderer({
+            canvas: this.webglCanvas,
+            antialias: true,
+            alpha: false,
+            preserveDrawingBuffer: false
+        });
+        this.glRenderer.setPixelRatio(window.devicePixelRatio || 1);
+        this.glRenderer.setClearColor(this.colors.background, 1);
+    },
+
     resize() {
         if (!this.viewport || !this.canvas) return;
 
         this.canvas.width = this.viewport.clientWidth;
         this.canvas.height = this.viewport.clientHeight;
+
+        if (this.webglCanvas) {
+            this.webglCanvas.width = this.viewport.clientWidth;
+            this.webglCanvas.height = this.viewport.clientHeight;
+        }
+
+        if (this.camera) {
+            this.camera.left = 0;
+            this.camera.right = this.viewport.clientWidth;
+            this.camera.top = 0;
+            this.camera.bottom = this.viewport.clientHeight;
+            this.camera.updateProjectionMatrix();
+        }
+
+        if (this.glRenderer) {
+            this.glRenderer.setSize(this.viewport.clientWidth, this.viewport.clientHeight, false);
+        }
         this.draw();
     },
 
@@ -70,10 +124,15 @@ const Renderer = {
         const ctx = this.ctx;
         const state = CAD;
 
+        this.updateWebGLScene();
+
         // Clear canvas
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = this.colors.background;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (!this.glRenderer) {
+            ctx.fillStyle = this.colors.background;
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
 
         // Apply view transformation
         ctx.translate(state.pan.x, state.pan.y);
@@ -110,6 +169,111 @@ const Renderer = {
 
         // Draw UCS icon
         this.drawUCSIcon();
+    },
+
+    updateWebGLScene() {
+        if (!this.glRenderer || !this.worldGroup) return;
+
+        this.worldGroup.position.set(CAD.pan.x, CAD.pan.y, 0);
+        this.worldGroup.scale.set(CAD.zoom, CAD.zoom, 1);
+
+        this.clearWebGLObjects();
+        this.buildWebGLEntities();
+        this.glRenderer.render(this.scene, this.camera);
+    },
+
+    clearWebGLObjects() {
+        if (!this.worldGroup) return;
+        while (this.worldGroup.children.length > 0) {
+            const child = this.worldGroup.children.pop();
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        }
+    },
+
+    buildWebGLEntities() {
+        const state = CAD;
+
+        state.entities.forEach(entity => {
+            if (entity._hidden) return;
+            const layer = state.getLayer(entity.layer);
+            if (!layer || !layer.visible) return;
+
+            if (!['line', 'circle', 'arc', 'polyline'].includes(entity.type)) {
+                return;
+            }
+
+            const isSelected = state.isSelected(entity.id);
+            const isHovered = state.hoveredId === entity.id && !isSelected;
+            let color;
+            if (isSelected) {
+                color = this.colors.selection;
+            } else if (isHovered) {
+                color = this.colors.hover;
+            } else {
+                color = state.getEntityColor(entity);
+            }
+
+            const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
+            const geometry = this.buildGeometryForEntity(entity);
+            if (!geometry) return;
+
+            const line = new THREE.Line(geometry, material);
+            this.worldGroup.add(line);
+        });
+    },
+
+    buildGeometryForEntity(entity) {
+        switch (entity.type) {
+            case 'line':
+                return this.buildLineGeometry([entity.p1, entity.p2]);
+            case 'circle':
+                return this.buildCircleGeometry(entity.center, entity.r);
+            case 'arc':
+                return this.buildArcGeometry(entity.center, entity.r, entity.start, entity.end);
+            case 'polyline': {
+                const points = entity.points || [];
+                if (points.length < 2) return null;
+                const finalPoints = [...points];
+                if (entity.closed || Utils.isPolygonClosed(points)) {
+                    finalPoints.push(points[0]);
+                }
+                return this.buildLineGeometry(finalPoints);
+            }
+            default:
+                return null;
+        }
+    },
+
+    buildLineGeometry(points) {
+        const vertices = points.map(p => new THREE.Vector3(p.x, p.y, 0));
+        const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+        return geometry;
+    },
+
+    buildCircleGeometry(center, radius, segments = 64) {
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            points.push({
+                x: center.x + Math.cos(angle) * radius,
+                y: center.y + Math.sin(angle) * radius
+            });
+        }
+        return this.buildLineGeometry(points);
+    },
+
+    buildArcGeometry(center, radius, start, end, segments = 48) {
+        const points = [];
+        const sweep = end - start;
+        for (let i = 0; i <= segments; i++) {
+            const angle = start + (sweep * i) / segments;
+            points.push({
+                x: center.x + Math.cos(angle) * radius,
+                y: center.y + Math.sin(angle) * radius
+            });
+        }
+        return this.buildLineGeometry(points);
     },
 
     // ==========================================
@@ -203,6 +367,7 @@ const Renderer = {
     drawEntities() {
         const ctx = this.ctx;
         const state = CAD;
+        const useWebGL = Boolean(this.glRenderer);
 
         state.entities.forEach(entity => {
             if (entity._hidden) return;
@@ -220,6 +385,10 @@ const Renderer = {
                 color = this.colors.hover;
             } else {
                 color = state.getEntityColor(entity);
+            }
+
+            if (useWebGL && ['line', 'circle', 'arc', 'polyline'].includes(entity.type)) {
+                return;
             }
 
             if (entity.type === 'hatch') {
