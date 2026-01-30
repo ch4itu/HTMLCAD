@@ -596,7 +596,8 @@
 
                 <!-- Canvas Viewport -->
                 <div class="viewport" id="viewport">
-                    <canvas id="canvas"></canvas>
+                    <canvas id="webgl-canvas"></canvas>
+                    <canvas id="cad-canvas"></canvas>
 
                     <!-- Mobile quick action buttons (undo/redo/cancel) -->
                     <div class="mobile-quick-actions" id="mobileQuickActions">
@@ -980,6 +981,7 @@
     </div>
 
     <!-- Load JavaScript Modules -->
+    <script src="js/three.min.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/state.js"></script>
     <script src="js/geometry.js"></script>

@@ -193,6 +193,9 @@ body {
     padding: 6px 10px;
     gap: 4px;
     min-height: 85px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
 }
 
 .ribbon-panel {
@@ -200,6 +203,7 @@ body {
     flex-direction: column;
     padding: 4px 8px;
     border-right: 1px solid var(--border-medium);
+    flex: 0 0 auto;
 }
 
 .ribbon-panel:last-child {
@@ -699,6 +703,18 @@ body {
     position: absolute;
     top: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#webgl-canvas {
+    z-index: 0;
+    pointer-events: none;
+}
+
+#cad-canvas {
+    z-index: 1;
+    pointer-events: auto;
 }
 
 /* Viewport tabs (for multiple drawings) */
@@ -2287,4 +2303,3 @@ body {
         .mobile-menu-drawer { padding-bottom: env(safe-area-inset-bottom); }
     }
 }
-
