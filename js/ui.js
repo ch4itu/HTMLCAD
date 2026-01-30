@@ -499,6 +499,10 @@ AUTOLISP:
         // If it's a prompt, also show in input placeholder (AutoCAD-like)
         if (type === 'prompt') {
             this.setPrompt(message);
+            // Feed mobile draw bar with prompt text
+            if (typeof MobileUI !== 'undefined' && MobileUI.updatePrompt) {
+                MobileUI.updatePrompt(message);
+            }
         }
     },
 
@@ -515,6 +519,10 @@ AUTOLISP:
             this.elements.cmdPrompt.textContent = `Command [${activeCommand.toUpperCase()}]:`;
         } else {
             this.elements.cmdPrompt.textContent = 'Command:';
+        }
+        // Sync mobile draw bar state
+        if (typeof MobileUI !== 'undefined' && MobileUI.updateCommandState) {
+            MobileUI.updateCommandState();
         }
     },
 

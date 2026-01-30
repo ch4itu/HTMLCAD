@@ -649,7 +649,7 @@
             </div>
         </div>
 
-        <!-- Command Line Panel -->
+        <!-- Command Line Panel (desktop primary, hidden on mobile) -->
         <div class="command-panel">
             <div class="command-history" id="cmdHistory">
                 <div class="line">Welcome to BrowserCAD - A Web-Based CAD Application</div>
@@ -661,6 +661,63 @@
                        placeholder="Type command here..." autocomplete="off" autofocus>
             </div>
         </div>
+
+        <!-- Mobile Drawing Interface -->
+        <div class="mobile-draw-bar" id="mobileDrawBar">
+            <div class="mdb-prompt-row" id="mdbPromptRow">
+                <span class="mdb-tool-badge" id="mdbToolBadge"></span>
+                <span class="mdb-prompt-text" id="mdbPromptText">Tap a tool to begin</span>
+            </div>
+            <div class="mdb-input-row" id="mdbInputRow">
+                <input type="text" class="mdb-input" id="mdbInput" readonly
+                       placeholder="Tap keys or canvas...">
+                <button class="mdb-input-clear" id="mdbInputClear" onclick="MobileUI.numpadClear()">&#10005;</button>
+            </div>
+            <div class="mdb-actions" id="mdbActions">
+                <button class="mdb-btn mdb-done" id="mdbDone" onclick="MobileUI.submitInput()">
+                    &#10003; Done
+                </button>
+                <button class="mdb-btn mdb-close" id="mdbClose" onclick="MobileUI.submitValue('C')">
+                    &#9634; Close
+                </button>
+                <button class="mdb-btn mdb-undo" onclick="Commands.undo(); Renderer.draw();">
+                    &#8630; Undo
+                </button>
+                <button class="mdb-btn mdb-cancel" onclick="MobileUI.cancelCommand()">
+                    &#10005; Cancel
+                </button>
+                <div class="mdb-spacer"></div>
+                <button class="mdb-btn mdb-numpad-toggle" id="mdbNumpadBtn" onclick="MobileUI.toggleNumpad()">
+                    #
+                </button>
+                <button class="mdb-btn mdb-kbd-toggle" onclick="MobileUI.showKeyboard()">
+                    Aa
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Numeric Keypad -->
+        <div class="mobile-numpad" id="mobileNumpad">
+            <div class="numpad-grid">
+                <button class="nk" onclick="MobileUI.numpadPress('7')">7</button>
+                <button class="nk" onclick="MobileUI.numpadPress('8')">8</button>
+                <button class="nk" onclick="MobileUI.numpadPress('9')">9</button>
+                <button class="nk nk-func" onclick="MobileUI.numpadPress('backspace')">&#9003;</button>
+                <button class="nk" onclick="MobileUI.numpadPress('4')">4</button>
+                <button class="nk" onclick="MobileUI.numpadPress('5')">5</button>
+                <button class="nk" onclick="MobileUI.numpadPress('6')">6</button>
+                <button class="nk nk-op" onclick="MobileUI.numpadPress('-')">&#8722;</button>
+                <button class="nk" onclick="MobileUI.numpadPress('1')">1</button>
+                <button class="nk" onclick="MobileUI.numpadPress('2')">2</button>
+                <button class="nk" onclick="MobileUI.numpadPress('3')">3</button>
+                <button class="nk nk-op" onclick="MobileUI.numpadPress(',')">,</button>
+                <button class="nk nk-zero" onclick="MobileUI.numpadPress('0')">0</button>
+                <button class="nk nk-op" onclick="MobileUI.numpadPress('.')">.</button>
+                <button class="nk nk-op" onclick="MobileUI.numpadPress('@')">@</button>
+                <button class="nk nk-enter" onclick="MobileUI.submitInput()">&#9166;</button>
+            </div>
+        </div>
+
         <input type="file" id="imageAttachInput" accept="image/*" style="display: none;">
         <input type="file" id="lispScriptInput" accept=".lsp,.lisp,.vlx,.txt" style="display: none;">
 
