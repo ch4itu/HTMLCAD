@@ -285,6 +285,9 @@ const Storage = {
                 dxf += '0\nLINE\n';
                 dxf += '8\n' + entity.layer + '\n';
                 dxf += '420\n' + colorInt + '\n';
+                if (entity.lineType && entity.lineType !== 'continuous') {
+                    dxf += '6\n' + entity.lineType.toUpperCase() + '\n';
+                }
                 dxf += '10\n' + entity.p1.x + '\n';
                 dxf += '20\n' + (-entity.p1.y) + '\n';
                 dxf += '30\n0.0\n';
@@ -297,6 +300,9 @@ const Storage = {
                 dxf += '0\nCIRCLE\n';
                 dxf += '8\n' + entity.layer + '\n';
                 dxf += '420\n' + colorInt + '\n';
+                if (entity.lineType && entity.lineType !== 'continuous') {
+                    dxf += '6\n' + entity.lineType.toUpperCase() + '\n';
+                }
                 dxf += '10\n' + entity.center.x + '\n';
                 dxf += '20\n' + (-entity.center.y) + '\n';
                 dxf += '30\n0.0\n';
@@ -307,6 +313,9 @@ const Storage = {
                 dxf += '0\nARC\n';
                 dxf += '8\n' + entity.layer + '\n';
                 dxf += '420\n' + colorInt + '\n';
+                if (entity.lineType && entity.lineType !== 'continuous') {
+                    dxf += '6\n' + entity.lineType.toUpperCase() + '\n';
+                }
                 dxf += '10\n' + entity.center.x + '\n';
                 dxf += '20\n' + (-entity.center.y) + '\n';
                 dxf += '30\n0.0\n';
@@ -336,8 +345,11 @@ const Storage = {
                     dxf += '0\nLWPOLYLINE\n';
                     dxf += '8\n' + entity.layer + '\n';
                     dxf += '420\n' + colorInt + '\n';
+                    if (entity.lineType && entity.lineType !== 'continuous') {
+                        dxf += '6\n' + entity.lineType.toUpperCase() + '\n';
+                    }
                     dxf += '90\n' + entity.points.length + '\n';
-                    dxf += '70\n' + (Utils.isPolygonClosed(entity.points) ? 1 : 0) + '\n';
+                    dxf += '70\n' + (entity.closed || Utils.isPolygonClosed(entity.points) ? 1 : 0) + '\n';
                     entity.points.forEach(p => {
                         dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
                     });
@@ -476,6 +488,21 @@ const Storage = {
                     });
                 }
                 break;
+
+            case 'image':
+                // Export image boundary as a rectangle LWPOLYLINE
+                if (entity.p1 && entity.p2) {
+                    dxf += '0\nLWPOLYLINE\n';
+                    dxf += '8\n' + (entity.layer || '0') + '\n';
+                    dxf += '420\n' + colorInt + '\n';
+                    dxf += '90\n4\n';
+                    dxf += '70\n1\n'; // Closed
+                    dxf += '10\n' + entity.p1.x + '\n20\n' + (-entity.p1.y) + '\n';
+                    dxf += '10\n' + entity.p2.x + '\n20\n' + (-entity.p1.y) + '\n';
+                    dxf += '10\n' + entity.p2.x + '\n20\n' + (-entity.p2.y) + '\n';
+                    dxf += '10\n' + entity.p1.x + '\n20\n' + (-entity.p2.y) + '\n';
+                }
+                break;
         }
 
         // Add hatch if entity has it (for entities with inline hatch property)
@@ -537,11 +564,14 @@ const Storage = {
     splineToDXF(entity, colorInt) {
         let dxf = '';
         const pts = entity.points;
-        const isClosed = Utils.isPolygonClosed(pts);
+        const isClosed = entity.closed || Utils.isPolygonClosed(pts);
 
         dxf += '0\nSPLINE\n';
         dxf += '8\n' + (entity.layer || '0') + '\n';
         dxf += '420\n' + colorInt + '\n';
+        if (entity.lineType && entity.lineType !== 'continuous') {
+            dxf += '6\n' + entity.lineType.toUpperCase() + '\n';
+        }
         dxf += '210\n0.0\n220\n0.0\n230\n1.0\n'; // Normal vector
         dxf += '70\n' + (8 + (isClosed ? 1 : 0)) + '\n'; // Flags: 8=planar, 1=closed
         dxf += '71\n3\n'; // Degree: cubic
@@ -1335,8 +1365,18 @@ const Storage = {
                     // Skip DIMENSION entities (complex format requiring block defs)
                     const { nextIndex } = this.readDXFEntity(lines, i);
                     i = nextIndex;
+                } else if (entityType === 'SOLID') {
+                    // DXF SOLID is a filled triangle/quad - import as closed polyline
+                    const result = this.parseDXFSolid(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    }
+                } else {
+                    // Unknown entity type — skip its data safely
+                    const { nextIndex } = this.readDXFEntity(lines, i);
+                    i = nextIndex;
                 }
-                // Skip other unknown entity types - they'll be skipped in next iteration
             } else {
                 i++;
             }
@@ -1385,6 +1425,7 @@ const Storage = {
             },
             layer: data[8] || '0'
         };
+        if (data[6]) entity.lineType = data[6].toLowerCase();
 
         return { entity, nextIndex };
     },
@@ -1448,6 +1489,7 @@ const Storage = {
             closed: closed,
             layer: data[8] || '0'
         };
+        if (data[6]) entity.lineType = data[6].toLowerCase();
 
         return { entity, nextIndex };
     },
@@ -1519,6 +1561,7 @@ const Storage = {
             closed: (flags & 1) !== 0,
             layer: data[8] || '0'
         };
+        if (data[6]) entity.lineType = data[6].toLowerCase();
 
         return { entity, nextIndex };
     },
@@ -1591,6 +1634,35 @@ const Storage = {
             type: 'leader',
             points: points,
             text: data[3] || '',
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
+    },
+
+    parseDXFSolid(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        // DXF SOLID has 4 corner points (codes 10/20, 11/21, 12/22, 13/23)
+        const points = [];
+        for (const pair of [[10,20],[11,21],[12,22],[13,23]]) {
+            const x = parseFloat(data[pair[0]]);
+            const y = parseFloat(data[pair[1]]);
+            if (!isNaN(x) && !isNaN(y)) {
+                points.push({ x, y: -y });
+            }
+        }
+        if (points.length < 3) return null;
+
+        // Close the polygon
+        points.push({ ...points[0] });
+
+        const entity = {
+            type: 'polyline',
+            points: points,
+            closed: true,
+            isSolid: true,
+            hatch: 'solid',
             layer: data[8] || '0'
         };
 
