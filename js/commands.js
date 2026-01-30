@@ -2580,13 +2580,31 @@ const Commands = {
             underline('solid', 's'),
             underline('diagonal', 'd'),
             underline('cross', 'c'),
-            underline('dots', 'o')
+            underline('dots', 'o'),
+            'ANSI31-38',
+            'brick', 'honey', 'earth', 'grass',
+            'steel', 'insul', 'net', 'dash',
+            'square', 'zigzag'
         ].join('/');
     },
 
+    hatchPatterns: [
+        'solid', 'diagonal', 'cross', 'dots',
+        'ansi31', 'ansi32', 'ansi33', 'ansi34', 'ansi35', 'ansi36', 'ansi37', 'ansi38',
+        'brick', 'earth', 'grass', 'honey',
+        'steel', 'insul', 'net', 'net3',
+        'dash', 'square', 'zigzag'
+    ],
+
     setHatchPattern(pattern) {
-        CAD.hatchPattern = pattern;
-        UI.log(`HATCH: Pattern set to ${pattern.toUpperCase()}.`, 'prompt');
+        const p = pattern.toLowerCase();
+        // Check if valid pattern
+        if (this.hatchPatterns.includes(p)) {
+            CAD.hatchPattern = p;
+        } else {
+            CAD.hatchPattern = p; // Allow custom pattern names
+        }
+        UI.log(`HATCH: Pattern set to ${p.toUpperCase()}.`, 'prompt');
     },
 
     entitySupportsHatch(entity) {
@@ -6738,18 +6756,11 @@ const Commands = {
 
         if (state.activeCmd === 'hatch') {
             const pattern = input.toLowerCase();
-            const validPatterns = {
-                solid: 'solid',
+            const shortcuts = {
                 s: 'solid',
-                diagonal: 'diagonal',
                 d: 'diagonal',
-                cross: 'cross',
                 c: 'cross',
-                dots: 'dots',
-                o: 'dots',
-                ansi31: 'diagonal',
-                ansi32: 'cross',
-                ansi37: 'dots'
+                o: 'dots'
             };
 
             if (pattern === 'list') {
@@ -6757,8 +6768,10 @@ const Commands = {
                 return true;
             }
 
-            if (validPatterns[pattern]) {
-                this.setHatchPattern(validPatterns[pattern]);
+            // Check shortcut first, then direct pattern name
+            const resolved = shortcuts[pattern] || pattern;
+            if (this.hatchPatterns.includes(resolved)) {
+                this.setHatchPattern(resolved);
                 return true;
             }
         }

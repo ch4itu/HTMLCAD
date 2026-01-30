@@ -515,16 +515,22 @@ const Storage = {
 
     generateHatchDXF(entity, colorInt) {
         let dxf = '';
+        const hatchData = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const pattern = (hatchData.pattern || 'solid').toLowerCase();
+        const isSolid = pattern === 'solid';
+
+        // Map internal pattern names to DXF pattern names
+        const dxfPatternName = this._getDXFPatternName(pattern);
 
         dxf += '0\nHATCH\n';
-        dxf += '8\n' + entity.layer + '\n';
+        dxf += '8\n' + (entity.layer || '0') + '\n';
         dxf += '420\n' + colorInt + '\n';
         dxf += '10\n0.0\n20\n0.0\n30\n0.0\n';
         dxf += '210\n0.0\n220\n0.0\n230\n1.0\n';
-        dxf += '2\nSOLID\n';
-        dxf += '70\n1\n';
-        dxf += '71\n0\n';
-        dxf += '91\n1\n';
+        dxf += '2\n' + dxfPatternName + '\n';
+        dxf += '70\n' + (isSolid ? 1 : 0) + '\n'; // Solid fill flag
+        dxf += '71\n0\n'; // Non-associative
+        dxf += '91\n1\n'; // 1 boundary path
 
         if (entity.type === 'circle') {
             dxf += '92\n1\n';
@@ -534,6 +540,19 @@ const Storage = {
             dxf += '20\n' + (-entity.center.y) + '\n';
             dxf += '40\n' + entity.r + '\n';
             dxf += '50\n0.0\n51\n360.0\n73\n1\n97\n0\n';
+        } else if (entity.type === 'ellipse') {
+            // Approximate ellipse boundary as polyline
+            const numPts = 36;
+            dxf += '92\n2\n72\n0\n73\n1\n';
+            dxf += '93\n' + numPts + '\n';
+            for (let j = 0; j < numPts; j++) {
+                const angle = (j / numPts) * Math.PI * 2;
+                const rot = entity.rotation || 0;
+                const ex = entity.center.x + entity.rx * Math.cos(angle) * Math.cos(rot) - entity.ry * Math.sin(angle) * Math.sin(rot);
+                const ey = entity.center.y + entity.rx * Math.cos(angle) * Math.sin(rot) + entity.ry * Math.sin(angle) * Math.cos(rot);
+                dxf += '10\n' + ex + '\n20\n' + (-ey) + '\n';
+            }
+            dxf += '97\n0\n';
         } else {
             let pts = [];
             if (entity.type === 'rect') {
@@ -547,12 +566,118 @@ const Storage = {
                 pts = entity.points.map(p => ({ x: p.x, y: -p.y }));
             }
 
-            dxf += '92\n2\n72\n0\n73\n1\n';
-            dxf += '93\n' + pts.length + '\n';
-            pts.forEach(p => {
-                dxf += '10\n' + p.x + '\n20\n' + p.y + '\n';
-            });
-            dxf += '97\n0\n';
+            if (pts.length > 0) {
+                dxf += '92\n2\n72\n0\n73\n1\n';
+                dxf += '93\n' + pts.length + '\n';
+                pts.forEach(p => {
+                    dxf += '10\n' + p.x + '\n20\n' + p.y + '\n';
+                });
+                dxf += '97\n0\n';
+            }
+        }
+
+        // Pattern definition for non-solid hatches
+        if (!isSolid) {
+            dxf += this._getDXFPatternDef(pattern);
+        }
+
+        return dxf;
+    },
+
+    /**
+     * Map internal pattern name to DXF pattern name.
+     */
+    _getDXFPatternName(pattern) {
+        const map = {
+            'solid': 'SOLID',
+            'diagonal': 'ANSI31',
+            'cross': 'ANSI37',
+            'dots': 'DOTS',
+            'ansi31': 'ANSI31',
+            'ansi32': 'ANSI32',
+            'ansi33': 'ANSI33',
+            'ansi34': 'ANSI34',
+            'ansi35': 'ANSI35',
+            'ansi36': 'ANSI36',
+            'ansi37': 'ANSI37',
+            'ansi38': 'ANSI38',
+            'brick': 'BRICK',
+            'earth': 'EARTH',
+            'grass': 'GRASS',
+            'honey': 'HONEY',
+            'hound': 'HOUND',
+            'insul': 'INSUL',
+            'net': 'NET',
+            'net3': 'NET3',
+            'dash': 'DASH',
+            'square': 'SQUARE',
+            'steel': 'STEEL',
+            'swamp': 'SWAMP',
+            'trans': 'TRANS',
+            'zigzag': 'ZIGZAG'
+        };
+        return map[pattern] || pattern.toUpperCase();
+    },
+
+    /**
+     * Generate DXF pattern definition lines for non-solid hatches.
+     */
+    _getDXFPatternDef(pattern) {
+        let dxf = '';
+        dxf += '75\n0\n'; // Hatch style: normal
+        dxf += '76\n1\n'; // Pattern type: predefined
+
+        switch (pattern) {
+            case 'diagonal':
+            case 'ansi31':
+                dxf += '52\n0.0\n41\n3.175\n';  // Pattern angle=0, scale
+                dxf += '78\n1\n';       // 1 pattern line
+                dxf += '53\n45.0\n';    // Line angle 45 deg
+                dxf += '43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'cross':
+            case 'ansi37':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';       // 2 pattern lines
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                dxf += '53\n135.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'dots':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n2\n';
+                dxf += '49\n0.0\n49\n-3.175\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n2\n';
+                dxf += '49\n0.0\n49\n-3.175\n';
+                break;
+            case 'ansi32':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                dxf += '53\n45.0\n43\n0.5\n44\n0.5\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'brick':
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n2\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n0\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n2\n';
+                dxf += '49\n3.175\n49\n-3.175\n';
+                break;
+            case 'honey':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n3\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n5.5\n46\n3.175\n79\n2\n';
+                dxf += '49\n3.175\n49\n-2.325\n';
+                dxf += '53\n120.0\n43\n0.0\n44\n0.0\n45\n5.5\n46\n3.175\n79\n2\n';
+                dxf += '49\n3.175\n49\n-2.325\n';
+                dxf += '53\n60.0\n43\n0.0\n44\n0.0\n45\n5.5\n46\n3.175\n79\n2\n';
+                dxf += '49\n3.175\n49\n-2.325\n';
+                break;
+            default:
+                // Generic diagonal hatch fallback
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n1\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
         }
 
         return dxf;
@@ -597,15 +722,16 @@ const Storage = {
         if (clipIds.length === 0) return '';
 
         const hatchData = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
-        const patternName = (hatchData.pattern || 'solid').toUpperCase();
-        const isSolid = patternName === 'SOLID';
+        const pattern = (hatchData.pattern || 'solid').toLowerCase();
+        const isSolid = pattern === 'solid';
+        const dxfPatternName = this._getDXFPatternName(pattern);
 
         dxf += '0\nHATCH\n';
         dxf += '8\n' + (entity.layer || '0') + '\n';
         dxf += '420\n' + colorInt + '\n';
         dxf += '10\n0.0\n20\n0.0\n30\n0.0\n'; // Elevation
         dxf += '210\n0.0\n220\n0.0\n230\n1.0\n'; // Normal
-        dxf += '2\n' + (isSolid ? 'SOLID' : 'ANSI31') + '\n'; // Pattern name
+        dxf += '2\n' + dxfPatternName + '\n'; // Pattern name
         dxf += '70\n' + (isSolid ? 1 : 0) + '\n'; // Solid fill flag
         dxf += '71\n0\n'; // Non-associative
         dxf += '91\n' + clipIds.length + '\n'; // Number of boundary paths
@@ -618,15 +744,7 @@ const Storage = {
 
         // Pattern definition for non-solid
         if (!isSolid) {
-            dxf += '75\n0\n'; // Hatch style: normal
-            dxf += '76\n1\n'; // Pattern type: predefined
-            dxf += '52\n0.0\n'; // Pattern angle
-            dxf += '41\n1.0\n'; // Pattern scale
-            dxf += '78\n1\n'; // Number of pattern lines
-            dxf += '53\n45.0\n'; // Line angle
-            dxf += '43\n0.0\n44\n0.0\n'; // Base point
-            dxf += '45\n-1.0\n46\n1.0\n'; // Offset
-            dxf += '79\n0\n'; // Dash items
+            dxf += this._getDXFPatternDef(pattern);
         }
 
         return dxf;

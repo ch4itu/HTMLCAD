@@ -780,81 +780,182 @@ const MobileUI = {
     },
 
     // ==========================================
-    // LAYER MANAGEMENT PANEL
+    // LAYER PROPERTIES MANAGER (AutoCAD-style)
     // ==========================================
 
+    _selectedLayer: null,
+
     showLayerPanel() {
-        const overlay = document.getElementById('mobileLayerOverlay');
+        const overlay = document.getElementById('layerMgrOverlay');
         if (overlay) {
             overlay.classList.add('visible');
+            this._selectedLayer = CAD.currentLayer;
             this._refreshLayerPanel();
         }
     },
 
     closeLayerPanel(event) {
         if (event && event.target !== event.currentTarget) return;
-        const overlay = document.getElementById('mobileLayerOverlay');
+        const overlay = document.getElementById('layerMgrOverlay');
         if (overlay) overlay.classList.remove('visible');
     },
 
     _refreshLayerPanel() {
-        const select = document.getElementById('mobileLayerSelect');
-        const colorInput = document.getElementById('mobileLayerColor');
-        const colorName = document.getElementById('mobileLayerColorName');
-        const list = document.getElementById('mobileLayerList');
-        if (!select || !list) return;
+        const tbody = document.getElementById('layerMgrBody');
+        const currentLabel = document.getElementById('layerMgrCurrent');
+        if (!tbody) return;
 
-        // Populate select
-        select.innerHTML = '';
+        if (currentLabel) currentLabel.textContent = CAD.currentLayer;
+
+        tbody.innerHTML = '';
         CAD.layers.forEach(layer => {
-            const opt = document.createElement('option');
-            opt.value = layer.name;
-            opt.textContent = layer.name;
-            opt.style.color = layer.color;
-            select.appendChild(opt);
-        });
-        select.value = CAD.currentLayer;
+            const tr = document.createElement('tr');
+            const isCurrent = layer.name === CAD.currentLayer;
+            const isSelected = layer.name === this._selectedLayer;
+            tr.className = (isCurrent ? 'lm-current ' : '') + (isSelected ? 'lm-selected' : '');
+            tr.dataset.layer = layer.name;
 
-        // Update color picker
-        const currentLayer = CAD.getLayer(CAD.currentLayer);
-        if (currentLayer && colorInput) {
-            colorInput.value = currentLayer.color;
-            if (colorName) colorName.textContent = currentLayer.color;
-        }
+            // Status column
+            const tdStatus = document.createElement('td');
+            tdStatus.innerHTML = isCurrent ? '<span style="color:var(--accent-blue)">&#9658;</span>' : '';
+            tr.appendChild(tdStatus);
 
-        // Build layer list
-        list.innerHTML = '';
-        CAD.layers.forEach(layer => {
-            const item = document.createElement('div');
-            item.className = 'mobile-layer-item' + (layer.name === CAD.currentLayer ? ' active' : '');
-            item.innerHTML =
-                `<div class="mobile-layer-item-swatch" style="background:${layer.color}"></div>` +
-                `<div class="mobile-layer-item-name">${layer.name}</div>` +
-                `<div class="mobile-layer-item-vis${layer.visible === false ? ' hidden' : ''}">${layer.visible === false ? '&#9711;' : '&#9679;'}</div>`;
-            item.addEventListener('click', () => {
-                CAD.setCurrentLayer(layer.name);
-                UI.updateLayerUI();
+            // Name column
+            const tdName = document.createElement('td');
+            tdName.textContent = layer.name;
+            tdName.addEventListener('dblclick', () => {
+                if (layer.name === '0') return;
+                const input = document.createElement('input');
+                input.className = 'lm-name-input';
+                input.value = layer.name;
+                tdName.textContent = '';
+                tdName.appendChild(input);
+                input.focus();
+                input.select();
+                const finish = () => {
+                    const newName = input.value.trim();
+                    if (newName && newName !== layer.name && !CAD.getLayer(newName)) {
+                        CAD.entities.forEach(e => { if (e.layer === layer.name) e.layer = newName; });
+                        if (CAD.currentLayer === layer.name) CAD.currentLayer = newName;
+                        layer.name = newName;
+                        UI.updateLayerUI();
+                    }
+                    this._refreshLayerPanel();
+                };
+                input.addEventListener('blur', finish, { once: true });
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+            });
+            tr.appendChild(tdName);
+
+            // On/Off toggle
+            const tdOn = document.createElement('td');
+            tdOn.style.textAlign = 'center';
+            const onToggle = document.createElement('span');
+            onToggle.className = 'lm-toggle' + (layer.visible === false ? ' off' : '');
+            onToggle.innerHTML = layer.visible === false ? '&#9711;' : '&#9679;';
+            onToggle.title = layer.visible === false ? 'Off' : 'On';
+            onToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                layer.visible = layer.visible === false ? true : false;
+                Renderer.draw();
                 this._refreshLayerPanel();
             });
-            list.appendChild(item);
+            tdOn.appendChild(onToggle);
+            tr.appendChild(tdOn);
+
+            // Freeze toggle
+            const tdFreeze = document.createElement('td');
+            tdFreeze.style.textAlign = 'center';
+            const frzToggle = document.createElement('span');
+            frzToggle.className = 'lm-toggle' + (layer.frozen ? '' : ' off');
+            frzToggle.innerHTML = '&#10052;';
+            frzToggle.title = layer.frozen ? 'Frozen' : 'Thawed';
+            frzToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                layer.frozen = !layer.frozen;
+                Renderer.draw();
+                this._refreshLayerPanel();
+            });
+            tdFreeze.appendChild(frzToggle);
+            tr.appendChild(tdFreeze);
+
+            // Lock toggle
+            const tdLock = document.createElement('td');
+            tdLock.style.textAlign = 'center';
+            const lockToggle = document.createElement('span');
+            lockToggle.className = 'lm-toggle' + (layer.locked ? '' : ' off');
+            lockToggle.innerHTML = layer.locked ? '&#128274;' : '&#128275;';
+            lockToggle.title = layer.locked ? 'Locked' : 'Unlocked';
+            lockToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                layer.locked = !layer.locked;
+                this._refreshLayerPanel();
+            });
+            tdLock.appendChild(lockToggle);
+            tr.appendChild(tdLock);
+
+            // Color column
+            const tdColor = document.createElement('td');
+            const swatch = document.createElement('span');
+            swatch.className = 'lm-color-swatch';
+            swatch.style.background = layer.color;
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'lm-color-input';
+            colorInput.value = layer.color;
+            colorInput.addEventListener('input', (e) => {
+                layer.color = e.target.value;
+                swatch.style.background = e.target.value;
+                UI.updateLayerUI();
+                Renderer.draw();
+            });
+            swatch.addEventListener('click', (e) => {
+                e.stopPropagation();
+                colorInput.click();
+            });
+            tdColor.appendChild(swatch);
+            tdColor.appendChild(colorInput);
+            tr.appendChild(tdColor);
+
+            // Linetype column
+            const tdLtype = document.createElement('td');
+            tdLtype.textContent = layer.lineType || 'Continuous';
+            tdLtype.addEventListener('dblclick', () => {
+                const types = ['Continuous', 'Dashed', 'Dotted', 'DashDot', 'Center', 'Phantom', 'Hidden'];
+                const currentIdx = types.indexOf(layer.lineType || 'Continuous');
+                const nextIdx = (currentIdx + 1) % types.length;
+                layer.lineType = types[nextIdx];
+                Renderer.draw();
+                this._refreshLayerPanel();
+            });
+            tr.appendChild(tdLtype);
+
+            // Line weight column
+            const tdLw = document.createElement('td');
+            tdLw.textContent = layer.lineWeight || 'Default';
+            tdLw.addEventListener('dblclick', () => {
+                const weights = ['Default', '0.05', '0.09', '0.13', '0.15', '0.18', '0.20', '0.25', '0.30', '0.35', '0.40', '0.50', '0.60', '0.70', '0.80', '0.90', '1.00', '1.20', '1.40', '2.00'];
+                const currentIdx = weights.indexOf(layer.lineWeight || 'Default');
+                const nextIdx = (currentIdx + 1) % weights.length;
+                layer.lineWeight = weights[nextIdx];
+                this._refreshLayerPanel();
+            });
+            tr.appendChild(tdLw);
+
+            // Row click = select
+            tr.addEventListener('click', () => {
+                this._selectedLayer = layer.name;
+                this._refreshLayerPanel();
+            });
+
+            tbody.appendChild(tr);
         });
     },
 
-    onLayerSelect() {
-        const select = document.getElementById('mobileLayerSelect');
-        if (select) {
-            CAD.setCurrentLayer(select.value);
+    setCurrentFromSelected() {
+        if (this._selectedLayer) {
+            CAD.setCurrentLayer(this._selectedLayer);
             UI.updateLayerUI();
-            this._refreshLayerPanel();
-        }
-    },
-
-    onLayerColorChange() {
-        const colorInput = document.getElementById('mobileLayerColor');
-        if (colorInput) {
-            CAD.updateLayerColor(CAD.currentLayer, colorInput.value);
-            UI.updateLayerUI();
-            Renderer.draw();
             this._refreshLayerPanel();
         }
     },
@@ -864,6 +965,7 @@ const MobileUI = {
         if (name) {
             if (CAD.addLayer(name)) {
                 CAD.setCurrentLayer(name);
+                this._selectedLayer = name;
                 UI.updateLayerUI();
                 this._refreshLayerPanel();
                 UI.log(`Layer "${name}" created.`);
@@ -873,32 +975,23 @@ const MobileUI = {
         }
     },
 
-    toggleLayerVisibility() {
-        const layer = CAD.getLayer(CAD.currentLayer);
-        if (layer) {
-            layer.visible = layer.visible === false ? true : false;
-            Renderer.draw();
-            this._refreshLayerPanel();
-        }
-    },
-
     deleteLayer() {
-        if (CAD.currentLayer === '0') {
+        const target = this._selectedLayer || CAD.currentLayer;
+        if (target === '0') {
             UI.log('Cannot delete layer 0.', 'error');
             return;
         }
-        if (confirm(`Delete layer "${CAD.currentLayer}"?`)) {
-            const layerName = CAD.currentLayer;
-            // Move entities on this layer to layer 0
+        if (confirm(`Delete layer "${target}"? Entities will move to layer 0.`)) {
             CAD.entities.forEach(e => {
-                if (e.layer === layerName) e.layer = '0';
+                if (e.layer === target) e.layer = '0';
             });
-            CAD.layers = CAD.layers.filter(l => l.name !== layerName);
-            CAD.setCurrentLayer('0');
+            CAD.layers = CAD.layers.filter(l => l.name !== target);
+            if (CAD.currentLayer === target) CAD.setCurrentLayer('0');
+            this._selectedLayer = CAD.currentLayer;
             UI.updateLayerUI();
             Renderer.draw();
             this._refreshLayerPanel();
-            UI.log(`Layer "${layerName}" deleted. Entities moved to layer 0.`);
+            UI.log(`Layer "${target}" deleted. Entities moved to layer 0.`);
         }
     },
 
