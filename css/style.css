@@ -1366,40 +1366,18 @@ body {
    ============================================ */
 
 @media (max-width: 768px) {
-    /* Hide desktop elements */
-    .title-bar .menu-bar {
-        display: none;
-    }
+    /* Hide desktop-only elements */
+    .title-bar .menu-bar { display: none; }
+    .title-bar .file-name { display: none; }
+    .ribbon { display: none !important; }
+    .panel-left { display: none !important; }
+    .viewport-tabs { display: none; }
+    .status-bar { display: none; }
 
-    .title-bar .file-name {
-        display: none;
-    }
+    /* CRITICAL: Hide command panel, replaced by mobile draw bar */
+    .command-panel { display: none !important; }
 
-    .ribbon {
-        display: none !important;
-    }
-
-    .panel-left {
-        display: none !important;
-    }
-
-    .selection-ribbon {
-        flex-wrap: wrap;
-        padding: 6px 10px;
-        gap: 6px;
-    }
-
-    .selection-ribbon .sel-btn {
-        padding: 8px 12px;
-        font-size: 12px;
-        min-height: 36px;
-    }
-
-    .selection-ribbon .sel-separator {
-        display: none;
-    }
-
-    /* Title bar - taller for easier mobile touch */
+    /* Title bar */
     .title-bar {
         height: 44px;
         padding: 0 10px;
@@ -1411,7 +1389,6 @@ body {
         margin-right: 0;
     }
 
-    /* Google Sign-In compact on mobile */
     .google-signin-btn {
         padding: 4px 10px;
         font-size: 11px;
@@ -1425,59 +1402,36 @@ body {
         height: 12px;
     }
 
-    /* Viewport full screen */
-    .viewport-tabs {
-        display: none;
-    }
-
-    /* Command panel mobile - collapsible with toggle */
-    .command-panel {
-        height: auto;
-        max-height: 120px;
-        transition: max-height 0.3s ease;
-        border-top: 2px solid var(--accent-blue);
-    }
-
-    .command-panel.mobile-collapsed {
-        max-height: 44px;
-        overflow: hidden;
-    }
-
-    .command-panel.mobile-collapsed .command-history {
-        display: none;
-    }
-
-    .command-history {
-        max-height: 60px;
-        font-size: 12px;
-        padding: 4px 10px;
-    }
-
-    .command-input-row {
+    /* Selection ribbon mobile */
+    .selection-ribbon {
+        flex-wrap: wrap;
         padding: 6px 10px;
-        min-height: 44px;
         gap: 6px;
     }
 
-    .command-prompt {
+    .selection-ribbon .sel-btn {
+        padding: 8px 12px;
         font-size: 12px;
-        white-space: nowrap;
+        min-height: 36px;
     }
 
-    .command-input {
-        font-size: 16px; /* Prevents iOS zoom on focus */
-        padding: 6px 4px;
+    .selection-ribbon .sel-separator { display: none; }
+
+    /* Workspace fills all available space */
+    .workspace {
+        flex: 1;
+        min-height: 0;
     }
 
-    /* Status bar - hidden on mobile (snap controls in toolbar) */
-    .status-bar {
-        display: none;
+    .viewport-container {
+        flex: 1;
+        min-height: 0;
     }
 
-    /* Context menu mobile */
+    /* Context menu */
     .context-menu {
         min-width: 220px;
-        border-radius: 8px;
+        border-radius: 10px;
     }
 
     .context-menu-item {
@@ -1485,11 +1439,9 @@ body {
         font-size: 15px;
     }
 
-    .context-menu-separator {
-        margin: 4px 12px;
-    }
+    .context-menu-separator { margin: 4px 12px; }
 
-    /* Modal mobile */
+    /* Modal / Color picker */
     .modal {
         min-width: auto;
         width: 95vw;
@@ -1497,7 +1449,6 @@ body {
         border-radius: 10px;
     }
 
-    /* Color picker mobile */
     .color-picker-content {
         width: 95vw;
         max-height: 85vh;
@@ -1505,7 +1456,7 @@ body {
         border-radius: 10px;
     }
 
-    /* Canvas selection toolbar mobile */
+    /* Canvas selection toolbar */
     .canvas-selection-toolbar {
         min-width: auto;
         width: calc(100vw - 20px);
@@ -1516,14 +1467,277 @@ body {
         border-radius: 10px;
     }
 
-    .cst-buttons {
-        flex-wrap: wrap;
-    }
-
+    .cst-buttons { flex-wrap: wrap; }
     .cst-btn {
         min-width: 54px;
         padding: 8px 10px;
         font-size: 12px;
+    }
+}
+
+/* ============================================
+   MOBILE DRAWING BAR (replaces command line)
+   ============================================ */
+
+.mobile-draw-bar {
+    display: none;
+    flex-direction: column;
+    background: var(--bg-dark);
+    border-top: 2px solid var(--accent-blue);
+    z-index: 200;
+}
+
+@media (max-width: 768px) {
+    .mobile-draw-bar {
+        display: flex;
+    }
+}
+
+/* Prompt row */
+.mdb-prompt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 4px;
+    min-height: 32px;
+}
+
+.mdb-tool-badge {
+    display: none;
+    background: var(--accent-blue);
+    color: var(--text-bright);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mdb-tool-badge.visible {
+    display: inline-block;
+}
+
+.mdb-prompt-text {
+    color: var(--text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mdb-prompt-text.active {
+    color: var(--cmd-text);
+}
+
+/* Input row (visible when numpad is open) */
+.mdb-input-row {
+    display: none;
+    align-items: center;
+    padding: 4px 12px 6px;
+    gap: 6px;
+}
+
+.mdb-input-row.visible {
+    display: flex;
+}
+
+.mdb-input {
+    flex: 1;
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    color: var(--text-bright);
+    font-size: 18px;
+    font-family: 'Courier New', monospace;
+    padding: 8px 12px;
+    outline: none;
+    caret-color: var(--accent-blue);
+}
+
+.mdb-input:focus {
+    border-color: var(--accent-blue);
+}
+
+.mdb-input-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    padding: 8px;
+    cursor: pointer;
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Action buttons */
+.mdb-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.mdb-actions::-webkit-scrollbar { display: none; }
+
+.mdb-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.1s ease;
+    min-height: 38px;
+}
+
+.mdb-btn:active {
+    transform: scale(0.95);
+    opacity: 0.85;
+}
+
+.mdb-done {
+    background: #10b981;
+    color: #fff;
+}
+
+.mdb-close {
+    display: none; /* shown by JS for polyline/polygon */
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.mdb-close.visible {
+    display: flex;
+}
+
+.mdb-undo {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+.mdb-cancel {
+    background: #dc2626;
+    color: #fff;
+}
+
+.mdb-spacer {
+    flex: 1;
+    min-width: 4px;
+}
+
+.mdb-numpad-toggle {
+    background: var(--bg-lighter);
+    color: var(--text-bright);
+    font-size: 16px;
+    font-weight: 700;
+    min-width: 44px;
+    justify-content: center;
+}
+
+.mdb-numpad-toggle.active {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.mdb-kbd-toggle {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+    min-width: 44px;
+    justify-content: center;
+}
+
+/* ============================================
+   MOBILE NUMERIC KEYPAD
+   ============================================ */
+
+.mobile-numpad {
+    display: none;
+    background: var(--bg-dark);
+    padding: 6px 10px 10px;
+    z-index: 200;
+}
+
+.mobile-numpad.visible {
+    display: block;
+}
+
+.numpad-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.nk {
+    background: var(--bg-light);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    color: var(--text-bright);
+    font-size: 22px;
+    font-family: inherit;
+    font-weight: 500;
+    padding: 14px 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.08s ease;
+    text-align: center;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nk:active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue-hover);
+    transform: scale(0.96);
+}
+
+.nk-func {
+    background: var(--bg-lighter);
+    color: var(--text-secondary);
+    font-size: 24px;
+}
+
+.nk-op {
+    background: #2a3040;
+    color: var(--accent-blue-hover);
+    font-weight: 700;
+}
+
+.nk-enter {
+    background: #10b981;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.nk-enter:active {
+    background: #059669;
+}
+
+/* When numpad is open, hide the toolbar */
+@media (max-width: 768px) {
+    .mobile-toolbar.numpad-open {
+        display: none;
     }
 }
 
@@ -1534,8 +1748,7 @@ body {
 .mobile-toolbar {
     display: none;
     background: var(--bg-medium);
-    border-top: 2px solid var(--accent-blue);
-    padding: 0;
+    border-top: 1px solid var(--border-dark);
     z-index: 200;
 }
 
@@ -1582,15 +1795,11 @@ body {
     padding: 6px 8px;
     gap: 4px;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
 }
 
-.mobile-tool-row::-webkit-scrollbar {
-    display: none;
-}
-
-.mobile-tool-row.active {
-    display: flex;
-}
+.mobile-tool-row::-webkit-scrollbar { display: none; }
+.mobile-tool-row.active { display: flex; }
 
 .mobile-tool-btn {
     display: flex;
@@ -1607,6 +1816,7 @@ body {
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.1s ease;
+    scroll-snap-align: start;
 }
 
 .mobile-tool-btn:active {
@@ -1635,7 +1845,10 @@ body {
     font-weight: 500;
 }
 
-/* Mobile hamburger menu button */
+/* ============================================
+   MOBILE HAMBURGER MENU
+   ============================================ */
+
 .mobile-menu-btn {
     display: none;
     background: transparent;
@@ -1653,26 +1866,19 @@ body {
 }
 
 @media (max-width: 768px) {
-    .mobile-menu-btn {
-        display: flex;
-    }
+    .mobile-menu-btn { display: flex; }
 }
 
-/* Mobile menu overlay */
+/* Menu overlay & drawer */
 .mobile-menu-overlay {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.7);
     z-index: 3000;
 }
 
-.mobile-menu-overlay.visible {
-    display: block;
-}
+.mobile-menu-overlay.visible { display: block; }
 
 .mobile-menu-drawer {
     position: absolute;
@@ -1703,14 +1909,9 @@ body {
 }
 
 .mobile-menu-header .logo {
-    font-weight: 600;
-    font-size: 17px;
-    color: var(--text-bright);
+    font-weight: 600; font-size: 17px; color: var(--text-bright);
 }
-
-.mobile-menu-header .logo span {
-    color: var(--accent-blue);
-}
+.mobile-menu-header .logo span { color: var(--accent-blue); }
 
 .mobile-menu-close {
     background: transparent;
@@ -1719,11 +1920,8 @@ body {
     font-size: 28px;
     cursor: pointer;
     padding: 4px 8px;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
 }
 
 .mobile-menu-section {
@@ -1759,31 +1957,23 @@ body {
 }
 
 .mobile-menu-item .m-icon {
-    font-size: 20px;
-    font-style: normal;
-    width: 28px;
-    text-align: center;
-    flex-shrink: 0;
+    font-size: 20px; font-style: normal;
+    width: 28px; text-align: center; flex-shrink: 0;
 }
 
-/* Drive signed-in indicator in mobile menu */
-.mobile-menu-item.drive-signed-in {
-    color: var(--accent-green);
+.mobile-menu-item.drive-signed-in { color: var(--accent-green); }
+
+.mobile-menu-divider {
+    height: 1px;
+    background: var(--border-medium);
+    margin: 4px 0;
 }
 
-.mobile-menu-item .drive-status {
-    margin-left: auto;
-    font-size: 10px;
-    color: var(--accent-green);
-    background: rgba(16, 185, 129, 0.15);
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
+/* ============================================
+   MOBILE FLOATING ELEMENTS
+   ============================================ */
 
-/* Mobile undo/redo floating buttons */
+/* Undo/redo/cancel floating on canvas */
 .mobile-quick-actions {
     display: none;
     position: absolute;
@@ -1794,9 +1984,7 @@ body {
 }
 
 @media (max-width: 768px) {
-    .mobile-quick-actions {
-        display: flex;
-    }
+    .mobile-quick-actions { display: flex; }
 }
 
 .mobile-quick-btn {
@@ -1807,9 +1995,7 @@ body {
     border: 1px solid var(--border-medium);
     color: var(--text-primary);
     font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     backdrop-filter: blur(6px);
@@ -1822,28 +2008,26 @@ body {
     transform: scale(0.9);
 }
 
-/* Mobile command toggle */
-.mobile-cmd-toggle {
+/* Coordinate overlay */
+.mobile-coords-overlay {
     display: none;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 18px;
-    padding: 8px 12px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    min-width: 44px;
-    min-height: 44px;
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    z-index: 50;
+    background: rgba(30, 30, 30, 0.88);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    padding: 5px 10px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: none;
 }
 
 @media (max-width: 768px) {
-    .mobile-cmd-toggle {
-        display: block;
-    }
-
-    .command-input-row {
-        position: relative;
-    }
+    .mobile-coords-overlay { display: block; }
 }
 
 /* ============================================
@@ -1851,35 +2035,22 @@ body {
    ============================================ */
 
 .menu-separator {
-    width: 1px;
-    height: 16px;
+    width: 1px; height: 16px;
     background: var(--border-medium);
-    align-self: center;
-    margin: 0 4px;
+    align-self: center; margin: 0 4px;
 }
 
-.drive-menu {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.drive-menu.drive-ready {
-    opacity: 1;
-    pointer-events: auto;
-}
+.drive-menu { opacity: 0.5; pointer-events: none; }
+.drive-menu.drive-ready { opacity: 1; pointer-events: auto; }
 
 .google-signin-btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    display: flex; align-items: center; gap: 5px;
     background: transparent;
     border: 1px solid var(--border-medium);
     color: var(--text-secondary);
     padding: 2px 8px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 11px;
-    font-family: inherit;
+    border-radius: 3px; cursor: pointer;
+    font-size: 11px; font-family: inherit;
     margin-right: 10px;
     transition: all 0.15s ease;
 }
@@ -1899,180 +2070,53 @@ body {
     background: rgba(16, 185, 129, 0.1);
 }
 
-.google-signin-btn svg {
-    flex-shrink: 0;
-}
-
-.mobile-menu-divider {
-    height: 1px;
-    background: var(--border-medium);
-    margin: 4px 0;
-}
+.google-signin-btn svg { flex-shrink: 0; }
 
 /* ============================================
-   ADDITIONAL MOBILE ENHANCEMENTS
+   RESPONSIVE BREAKPOINTS
    ============================================ */
 
-/* Mobile coordinate display floating overlay */
-.mobile-coords-overlay {
-    display: none;
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    z-index: 50;
-    background: rgba(30, 30, 30, 0.88);
-    color: var(--text-secondary);
-    font-size: 10px;
-    font-family: 'Courier New', monospace;
-    padding: 4px 8px;
-    border-radius: 4px;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    pointer-events: none;
-}
-
-@media (max-width: 768px) {
-    .mobile-coords-overlay {
-        display: block;
-    }
-}
-
-/* Small phone optimizations (< 380px) */
+/* Small phones (<380px) */
 @media (max-width: 380px) {
-    .title-bar {
-        height: 40px;
-        padding: 0 6px;
-    }
+    .title-bar { height: 40px; padding: 0 6px; }
+    .title-bar .logo { font-size: 13px; }
 
-    .title-bar .logo {
-        font-size: 13px;
-    }
+    .google-signin-btn { padding: 3px 6px; font-size: 10px; }
+    .google-signin-btn #googleSignInText { display: none; }
 
-    .google-signin-btn {
-        padding: 3px 6px;
-        font-size: 10px;
-    }
+    .mobile-tab { padding: 8px 2px; font-size: 9px; letter-spacing: 0; }
+    .mobile-tool-btn { min-width: 50px; padding: 6px 4px; }
+    .mobile-tool-btn .m-icon { font-size: 18px; }
+    .mobile-tool-btn .m-label { font-size: 8px; }
+    .mobile-menu-drawer { width: 260px; }
+    .mobile-quick-btn { width: 38px; height: 38px; font-size: 17px; }
 
-    .google-signin-btn #googleSignInText {
-        display: none;
-    }
-
-    .mobile-tab {
-        padding: 8px 2px;
-        font-size: 9px;
-        letter-spacing: 0;
-    }
-
-    .mobile-tool-btn {
-        min-width: 50px;
-        padding: 6px 4px;
-    }
-
-    .mobile-tool-btn .m-icon {
-        font-size: 18px;
-    }
-
-    .mobile-tool-btn .m-label {
-        font-size: 8px;
-    }
-
-    .mobile-menu-drawer {
-        width: 260px;
-    }
-
-    .mobile-quick-btn {
-        width: 38px;
-        height: 38px;
-        font-size: 17px;
-    }
-
-    .command-panel {
-        max-height: 100px;
-    }
-
-    .command-history {
-        max-height: 40px;
-        font-size: 10px;
-    }
+    .mdb-btn { padding: 6px 10px; font-size: 12px; min-height: 34px; }
+    .nk { padding: 10px 6px; font-size: 20px; min-height: 44px; }
 }
 
-/* Landscape phone optimization */
+/* Landscape phones */
 @media (max-width: 768px) and (max-height: 450px) {
-    .title-bar {
-        height: 32px;
-    }
+    .title-bar { height: 32px; }
+    .mobile-toolbar-tabs { display: none; }
+    .mobile-tool-row { display: flex !important; flex-wrap: nowrap; }
+    .mobile-quick-actions { top: 4px; right: 4px; gap: 4px; }
+    .mobile-quick-btn { width: 34px; height: 34px; font-size: 16px; }
 
-    .mobile-toolbar-tabs {
-        display: none;
-    }
-
-    .mobile-tool-row {
-        display: flex !important;
-        flex-wrap: nowrap;
-    }
-
-    .command-panel {
-        max-height: 80px;
-    }
-
-    .command-history {
-        display: none;
-    }
-
-    .mobile-quick-actions {
-        top: 4px;
-        right: 4px;
-        gap: 4px;
-    }
-
-    .mobile-quick-btn {
-        width: 34px;
-        height: 34px;
-        font-size: 16px;
-    }
+    .mdb-prompt-row { padding: 4px 10px 2px; }
+    .mdb-actions { padding: 2px 8px 4px; }
+    .mdb-btn { padding: 4px 10px; min-height: 30px; font-size: 11px; }
+    .nk { padding: 8px 4px; font-size: 18px; min-height: 38px; }
+    .numpad-grid { gap: 4px; }
 }
 
-/* Safe area support for notched phones */
+/* Safe area for notched phones */
 @supports (padding: env(safe-area-inset-bottom)) {
     @media (max-width: 768px) {
-        .mobile-toolbar {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        .status-bar {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        .title-bar {
-            padding-top: env(safe-area-inset-top);
-        }
-
-        .mobile-menu-drawer {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-    }
-}
-
-/* Improve touch scrolling in mobile tool rows */
-@media (max-width: 768px) {
-    .mobile-tool-row {
-        scroll-snap-type: x proximity;
-    }
-
-    .mobile-tool-btn {
-        scroll-snap-align: start;
-    }
-
-    /* Ensure viewport fills available space */
-    .viewport-container {
-        flex: 1;
-        min-height: 0;
-    }
-
-    /* Make workspace take max space */
-    .workspace {
-        flex: 1;
-        min-height: 0;
+        .mobile-toolbar { padding-bottom: env(safe-area-inset-bottom); }
+        .mobile-numpad { padding-bottom: env(safe-area-inset-bottom); }
+        .title-bar { padding-top: env(safe-area-inset-top); }
+        .mobile-menu-drawer { padding-bottom: env(safe-area-inset-bottom); }
     }
 }
 

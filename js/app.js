@@ -404,13 +404,292 @@ const App = {
 // ============================================
 
 const MobileUI = {
+    _numpadOpen: false,
+    _numpadValue: '',
+    _lastPrompt: '',
+    _lastToolName: '',
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+
     init() {
-        // Update mobile snap button states on load
         this.updateSnapButtons();
+        this._cacheElements();
     },
 
+    _cacheElements() {
+        this._els = {
+            drawBar:      document.getElementById('mobileDrawBar'),
+            toolBadge:    document.getElementById('mdbToolBadge'),
+            promptText:   document.getElementById('mdbPromptText'),
+            inputRow:     document.getElementById('mdbInputRow'),
+            input:        document.getElementById('mdbInput'),
+            actions:      document.getElementById('mdbActions'),
+            doneBtn:      document.getElementById('mdbDone'),
+            closeBtn:     document.getElementById('mdbClose'),
+            numpadBtn:    document.getElementById('mdbNumpadBtn'),
+            numpad:       document.getElementById('mobileNumpad'),
+            toolbar:      document.getElementById('mobileToolbar'),
+            cmdInput:     document.getElementById('cmdInput')
+        };
+    },
+
+    // ==========================================
+    // DRAW BAR — prompt & action management
+    // ==========================================
+
+    /**
+     * Called by UI.log() when a prompt message arrives.
+     * Parses the prompt to extract tool name and message text.
+     * e.g. "LINE: Specify first point:" → tool="LINE", text="Specify first point"
+     */
+    updatePrompt(message) {
+        if (!this._els) return;
+
+        const colonIdx = message.indexOf(':');
+        let toolName = '';
+        let promptText = message;
+
+        if (colonIdx > 0 && colonIdx < 20) {
+            toolName = message.substring(0, colonIdx).trim().toUpperCase();
+            promptText = message.substring(colonIdx + 1).trim();
+            // Remove trailing colon
+            if (promptText.endsWith(':')) {
+                promptText = promptText.slice(0, -1).trim();
+            }
+        }
+
+        this._lastPrompt = promptText;
+        this._lastToolName = toolName;
+
+        // Update badge
+        if (toolName) {
+            this._els.toolBadge.textContent = toolName;
+            this._els.toolBadge.classList.add('visible');
+        }
+
+        // Update prompt text
+        this._els.promptText.textContent = promptText || message;
+        this._els.promptText.classList.toggle('active', !!CAD.activeCmd);
+
+        // Show/hide Close button for polyline-like commands
+        const closable = ['polyline', 'polygon', 'spline'].includes(CAD.activeCmd);
+        const hasPoints = CAD.points && CAD.points.length >= 2;
+        if (this._els.closeBtn) {
+            this._els.closeBtn.classList.toggle('visible', closable && hasPoints);
+        }
+    },
+
+    /**
+     * Called when command state changes (active/inactive).
+     */
+    updateCommandState() {
+        if (!this._els) return;
+
+        if (CAD.activeCmd) {
+            // Tool is active — show contextual badge
+            const name = CAD.activeCmd.toUpperCase();
+            this._els.toolBadge.textContent = name;
+            this._els.toolBadge.classList.add('visible');
+            this._els.promptText.classList.add('active');
+        } else {
+            // Idle
+            this._els.toolBadge.classList.remove('visible');
+            this._els.promptText.textContent = 'Tap a tool to begin';
+            this._els.promptText.classList.remove('active');
+            this._lastToolName = '';
+            this._lastPrompt = '';
+
+            // Auto-close numpad when command ends
+            if (this._numpadOpen) {
+                this.hideNumpad();
+            }
+        }
+    },
+
+    // ==========================================
+    // NUMERIC KEYPAD
+    // ==========================================
+
+    toggleNumpad() {
+        if (this._numpadOpen) {
+            this.hideNumpad();
+        } else {
+            this.showNumpad();
+        }
+    },
+
+    showNumpad() {
+        if (!this._els) return;
+        this._numpadOpen = true;
+        this._numpadValue = '';
+
+        this._els.numpad.classList.add('visible');
+        this._els.inputRow.classList.add('visible');
+        this._els.numpadBtn.classList.add('active');
+        this._els.toolbar.classList.add('numpad-open');
+
+        this._els.input.value = '';
+        this._els.input.focus();
+    },
+
+    hideNumpad() {
+        if (!this._els) return;
+        this._numpadOpen = false;
+        this._numpadValue = '';
+
+        this._els.numpad.classList.remove('visible');
+        this._els.inputRow.classList.remove('visible');
+        this._els.numpadBtn.classList.remove('active');
+        this._els.toolbar.classList.remove('numpad-open');
+
+        this._els.input.value = '';
+    },
+
+    /**
+     * Handle a key press from the on-screen numpad.
+     */
+    numpadPress(key) {
+        if (!this._els) return;
+
+        if (key === 'backspace') {
+            this._numpadValue = this._numpadValue.slice(0, -1);
+        } else {
+            this._numpadValue += key;
+        }
+
+        this._els.input.value = this._numpadValue;
+
+        // Brief visual flash on input to confirm key registration
+        this._els.input.style.borderColor = 'var(--accent-blue)';
+        setTimeout(() => {
+            if (this._els.input) {
+                this._els.input.style.borderColor = '';
+            }
+        }, 120);
+    },
+
+    numpadClear() {
+        this._numpadValue = '';
+        if (this._els && this._els.input) {
+            this._els.input.value = '';
+        }
+    },
+
+    // ==========================================
+    // INPUT SUBMISSION
+    // ==========================================
+
+    /**
+     * Submit the current numpad/input value to the command system.
+     * Routes through the existing cmdInput → handleCommandInput flow.
+     */
+    submitInput() {
+        if (!this._els) return;
+
+        const value = this._numpadValue || '';
+
+        // Route through the main command input system
+        if (this._els.cmdInput) {
+            this._els.cmdInput.value = value;
+            // Dispatch Enter keydown to trigger UI.handleCommandInput
+            const event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true,
+                cancelable: true
+            });
+            this._els.cmdInput.dispatchEvent(event);
+        }
+
+        // Clear numpad value but keep numpad open for next input
+        this._numpadValue = '';
+        if (this._els.input) {
+            this._els.input.value = '';
+        }
+    },
+
+    /**
+     * Submit a specific string value (e.g., "C" for Close).
+     */
+    submitValue(val) {
+        if (!this._els) return;
+        this._numpadValue = val;
+        this.submitInput();
+    },
+
+    /**
+     * Cancel the current command and reset mobile UI state.
+     */
+    cancelCommand() {
+        Commands.cancelCommand();
+        this.hideNumpad();
+        Renderer.draw();
+    },
+
+    /**
+     * Show the system keyboard by focusing the hidden cmdInput.
+     * The command panel is display:none on mobile, but the input still
+     * exists in the DOM. We temporarily make it visible in a floating
+     * overlay style, then hide it again after input.
+     */
+    showKeyboard() {
+        if (!this._els || !this._els.cmdInput) return;
+
+        // Temporarily show the command panel as a floating input
+        const panel = document.querySelector('.command-panel');
+        if (panel) {
+            panel.style.display = 'block';
+            panel.style.position = 'fixed';
+            panel.style.bottom = '0';
+            panel.style.left = '0';
+            panel.style.right = '0';
+            panel.style.zIndex = '9999';
+            panel.style.maxHeight = 'none';
+            panel.style.borderTop = '2px solid var(--accent-blue)';
+
+            // Hide history, show only input
+            const history = panel.querySelector('.command-history');
+            if (history) history.style.display = 'none';
+
+            this._els.cmdInput.style.fontSize = '16px';
+            this._els.cmdInput.focus();
+
+            // Close on Enter or blur
+            const closeKeyboard = () => {
+                panel.style.display = '';
+                panel.style.position = '';
+                panel.style.bottom = '';
+                panel.style.left = '';
+                panel.style.right = '';
+                panel.style.zIndex = '';
+                panel.style.maxHeight = '';
+                panel.style.borderTop = '';
+                if (history) history.style.display = '';
+                this._els.cmdInput.removeEventListener('blur', closeKeyboard);
+            };
+
+            this._els.cmdInput.addEventListener('blur', closeKeyboard, { once: true });
+
+            // Also close on Enter key (after command processes)
+            const onEnter = (e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    setTimeout(closeKeyboard, 50);
+                    this._els.cmdInput.removeEventListener('keydown', onEnter);
+                }
+            };
+            this._els.cmdInput.addEventListener('keydown', onEnter);
+        }
+    },
+
+    // ==========================================
+    // TOOLBAR TABS
+    // ==========================================
+
     switchTab(tabName) {
-        // Switch mobile toolbar tabs
         document.querySelectorAll('.mobile-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.mtab === tabName);
         });
@@ -418,6 +697,10 @@ const MobileUI = {
             row.classList.toggle('active', row.dataset.mtab === tabName);
         });
     },
+
+    // ==========================================
+    // MENU DRAWER
+    // ==========================================
 
     toggleMenu() {
         const overlay = document.getElementById('mobileMenuOverlay');
@@ -441,80 +724,40 @@ const MobileUI = {
                     UI.updateLayerUI();
                 }
                 break;
-            case 'open':
-                Storage.openFile();
-                break;
-            case 'save':
-                Storage.saveToLocalStorage();
-                break;
-            case 'exportdxf':
-                Storage.exportDXF();
-                break;
-            case 'exportsvg':
-                Storage.exportSVG();
-                break;
-            case 'exportjson':
-                Storage.exportJSON();
-                break;
-            case 'selectall':
-                Commands.execute('selectall');
-                break;
-            case 'filter':
-                Commands.execute('filter');
-                break;
-            case 'qselect':
-                Commands.execute('qselect');
-                break;
-            case 'block':
-                App.executeCommand('block');
-                break;
-            case 'insert':
-                App.executeCommand('insert');
-                break;
-            case 'matchprop':
-                App.executeCommand('matchprop');
-                break;
-            case 'overkill':
-                App.executeCommand('overkill');
-                break;
-            case 'purge':
-                App.executeCommand('purge');
-                break;
-            case 'find':
-                App.executeCommand('find');
-                break;
+            case 'open':        Storage.openFile(); break;
+            case 'save':        Storage.saveToLocalStorage(); break;
+            case 'exportdxf':   Storage.exportDXF(); break;
+            case 'exportsvg':   Storage.exportSVG(); break;
+            case 'exportjson':  Storage.exportJSON(); break;
+            case 'selectall':   Commands.execute('selectall'); break;
+            case 'filter':      Commands.execute('filter'); break;
+            case 'qselect':     Commands.execute('qselect'); break;
+            case 'block':       App.executeCommand('block'); break;
+            case 'insert':      App.executeCommand('insert'); break;
+            case 'matchprop':   App.executeCommand('matchprop'); break;
+            case 'overkill':    App.executeCommand('overkill'); break;
+            case 'purge':       App.executeCommand('purge'); break;
+            case 'find':        App.executeCommand('find'); break;
             case 'settings':
                 UI.log('Settings: Use command line for GRID, SNAP, ORTHO, OSNAP, POLAR, LTSCALE, DIMSCALE');
                 break;
-            case 'help':
-                App.executeCommand('help');
-                break;
-            case 'driveopen':
-                Storage.openFromDrive();
-                break;
-            case 'drivesave':
-                Storage.saveToDrivePrompt();
-                break;
-            case 'googlesignin':
-                Storage.handleGoogleSignIn();
-                break;
+            case 'help':        App.executeCommand('help'); break;
+            case 'driveopen':   Storage.openFromDrive(); break;
+            case 'drivesave':   Storage.saveToDrivePrompt(); break;
+            case 'googlesignin': Storage.handleGoogleSignIn(); break;
         }
     },
 
+    // ==========================================
+    // SNAP CONTROLS
+    // ==========================================
+
     toggleSnap(type) {
         switch (type) {
-            case 'osnap':
-                UI.toggleOsnap();
-                break;
-            case 'grid':
-                UI.toggleGrid();
-                break;
-            case 'ortho':
-                UI.toggleOrtho();
-                break;
-            case 'polar':
-                UI.togglePolar();
-                break;
+            case 'osnap': UI.toggleOsnap(); break;
+            case 'grid':  UI.toggleGrid(); break;
+            case 'ortho': UI.toggleOrtho(); break;
+            case 'polar': UI.togglePolar(); break;
         }
         this.updateSnapButtons();
     },
@@ -531,6 +774,10 @@ const MobileUI = {
         if (polarBtn) polarBtn.classList.toggle('active', CAD.polarEnabled);
     },
 
+    // ==========================================
+    // PAN MODE
+    // ==========================================
+
     togglePanMode() {
         App.touchState.panModeActive = !App.touchState.panModeActive;
         const viewport = document.getElementById('viewport');
@@ -540,14 +787,6 @@ const MobileUI = {
         } else {
             viewport.style.cursor = 'crosshair';
             UI.log('Pan mode: OFF (tap to draw/select)');
-        }
-    },
-
-    // Collapse/expand command panel on mobile
-    toggleCommandPanel() {
-        const panel = document.querySelector('.command-panel');
-        if (panel) {
-            panel.classList.toggle('mobile-collapsed');
         }
     }
 };
