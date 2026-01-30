@@ -1441,8 +1441,8 @@ const Storage = {
     },
 
     /**
-     * Open the Google Drive Picker to select a .json file.
-     * Loads the file content and imports it into BrowserCAD.
+     * Open the Google Drive Picker to select a CAD file.
+     * Supports .dxf, .json, and .svg files.
      */
     async openFromDrive() {
         try {
@@ -1450,8 +1450,8 @@ const Storage = {
             const token = await this._getAccessToken(true);
             this._updateSignInUI(true);
 
+            // Show all files — DXF has no standard MIME type in Drive
             const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-                .setMimeTypes('application/json')
                 .setMode(google.picker.DocsViewMode.LIST);
 
             // NOTE: Do NOT pass setDeveloperKey here. The Picker iframe runs
@@ -1463,7 +1463,7 @@ const Storage = {
                 .setAppId(window.CAD_CONFIG.appId)
                 .addView(view)
                 .addView(new google.picker.DocsUploadView())
-                .setTitle('Open BrowserCAD Drawing from Google Drive')
+                .setTitle('Open Drawing from Google Drive (.dxf, .json, .svg)')
                 .setCallback((data) => this._pickerOpenCallback(data))
                 .setOrigin(window.location.protocol + '//' + window.location.host)
                 .build();
@@ -1477,6 +1477,7 @@ const Storage = {
 
     /**
      * Picker callback for opening a file.
+     * Detects format by extension and routes to the right parser.
      */
     async _pickerOpenCallback(data) {
         if (data.action !== google.picker.Action.PICKED) return;
@@ -1484,6 +1485,12 @@ const Storage = {
         const file = data[google.picker.Response.DOCUMENTS][0];
         const fileId = file[google.picker.Document.ID];
         const fileName = file[google.picker.Document.NAME];
+        const ext = fileName.split('.').pop().toLowerCase();
+
+        if (!['dxf', 'json', 'svg', 'htmlcad'].includes(ext)) {
+            UI.log(`Unsupported file format: .${ext}. Use .dxf, .json, or .svg`, 'error');
+            return;
+        }
 
         UI.log(`Loading "${fileName}" from Google Drive...`);
 
@@ -1494,15 +1501,22 @@ const Storage = {
             });
 
             const content = response.body;
-            const jsonData = JSON.parse(content);
 
-            CAD.fromJSON(jsonData);
+            if (ext === 'json' || ext === 'htmlcad') {
+                const jsonData = JSON.parse(content);
+                CAD.fromJSON(jsonData);
+            } else if (ext === 'dxf') {
+                this._importDXFFromString(content);
+            } else if (ext === 'svg') {
+                this._importSVGFromString(content);
+            }
+
             UI.updateLayerUI();
             Renderer.draw();
 
             // Remember the file ID so we can update it later
             this._currentDriveFileId = fileId;
-            CAD.drawingName = fileName.replace(/\.json$/i, '');
+            CAD.drawingName = fileName.replace(/\.(dxf|json|svg|htmlcad)$/i, '');
 
             const fileNameEl = document.getElementById('fileName');
             if (fileNameEl) fileNameEl.textContent = fileName;
@@ -1515,32 +1529,96 @@ const Storage = {
     },
 
     /**
-     * Prompt for filename and save to Drive.
+     * Import DXF from a raw string (used by Drive open).
      */
-    saveToDrivePrompt() {
-        const defaultName = (CAD.drawingName || 'drawing') + '.json';
-        const filename = prompt('Save to Google Drive as:', defaultName);
-        if (filename) {
-            this.saveToDrive(JSON.stringify(CAD.toJSON(), null, 2), filename);
+    _importDXFFromString(content) {
+        const layers = this.parseDXFLayers(content);
+        const entities = this.parseDXF(content);
+
+        CAD.entities = [];
+        CAD.layers = [{ name: '0', color: '#ffffff', visible: true, locked: false, lineWeight: 'Default' }];
+        layers.forEach(layer => {
+            if (layer.name !== '0') {
+                CAD.layers.push(layer);
+            } else {
+                CAD.layers[0].color = layer.color;
+            }
+        });
+
+        entities.forEach(entity => {
+            if (!CAD.getLayer(entity.layer)) {
+                CAD.layers.push({
+                    name: entity.layer,
+                    color: '#ffffff',
+                    visible: true,
+                    locked: false,
+                    lineWeight: 'Default'
+                });
+            }
+            CAD.addEntity(entity, true);
+        });
+
+        if (entities.length > 0) {
+            Commands.zoomExtents();
         }
     },
 
     /**
-     * Save (create or update) a file on Google Drive.
-     * @param {string} jsonData - The JSON string to save.
-     * @param {string} filename - The filename to use.
+     * Import SVG from a raw string (used by Drive open).
      */
-    async saveToDrive(jsonData, filename) {
+    _importSVGFromString(content) {
+        const entities = this.parseSVG(content);
+        if (entities.length > 0) {
+            CAD.entities = [];
+            entities.forEach(entity => CAD.addEntity(entity, true));
+            Commands.zoomExtents();
+        }
+    },
+
+    /**
+     * Prompt for filename and save to Drive.
+     * Defaults to .dxf format.
+     */
+    saveToDrivePrompt() {
+        const defaultName = (CAD.drawingName || 'drawing') + '.dxf';
+        const filename = prompt('Save to Google Drive as:', defaultName);
+        if (!filename) return;
+
+        const ext = filename.split('.').pop().toLowerCase();
+        let content, mimeType;
+
+        if (ext === 'json' || ext === 'htmlcad') {
+            content = JSON.stringify(CAD.toJSON(), null, 2);
+            mimeType = 'application/json';
+        } else if (ext === 'svg') {
+            content = this.generateSVG();
+            mimeType = 'image/svg+xml';
+        } else {
+            // Default to DXF
+            content = this.generateDXF();
+            mimeType = 'application/dxf';
+        }
+
+        this.saveToDrive(content, filename, mimeType);
+    },
+
+    /**
+     * Save (create or update) a file on Google Drive.
+     * @param {string} fileData - The file content string.
+     * @param {string} filename - The filename to use.
+     * @param {string} [mimeType='application/dxf'] - MIME type of the file.
+     */
+    async saveToDrive(fileData, filename, mimeType) {
         try {
             const token = await this._getAccessToken();
             this._updateSignInUI(true);
 
             UI.log(`Saving "${filename}" to Google Drive...`);
 
-            const fileContent = jsonData;
+            const fileContent = fileData;
             const metadata = {
                 name: filename,
-                mimeType: 'application/json'
+                mimeType: mimeType || 'application/dxf'
             };
 
             const boundary = '-------browsercad_boundary';
@@ -1552,7 +1630,7 @@ const Storage = {
                 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
                 JSON.stringify(metadata) +
                 delimiter +
-                'Content-Type: application/json\r\n\r\n' +
+                'Content-Type: ' + (mimeType || 'application/dxf') + '\r\n\r\n' +
                 fileContent +
                 closeDelimiter;
 
@@ -1585,7 +1663,7 @@ const Storage = {
             const result = await response.json();
             this._currentDriveFileId = result.id;
 
-            CAD.drawingName = filename.replace(/\.json$/i, '');
+            CAD.drawingName = filename.replace(/\.(dxf|json|svg|htmlcad)$/i, '');
             const fileNameEl = document.getElementById('fileName');
             if (fileNameEl) fileNameEl.textContent = filename;
 
