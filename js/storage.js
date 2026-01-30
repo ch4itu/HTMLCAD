@@ -1450,27 +1450,23 @@ const Storage = {
             const token = await this._getAccessToken(true);
             this._updateSignInUI(true);
 
-            const config = window.CAD_CONFIG;
-
             const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
                 .setMimeTypes('application/json')
                 .setMode(google.picker.DocsViewMode.LIST);
 
-            const builder = new google.picker.PickerBuilder()
-                .setDeveloperKey(config.apiKey)
+            // NOTE: Do NOT pass setDeveloperKey here. The Picker iframe runs
+            // on Google's domain, so HTTP-referrer-restricted API keys get
+            // blocked and cause a perpetual "Sign in" screen. The OAuth token
+            // alone is sufficient for authenticated Picker access.
+            const picker = new google.picker.PickerBuilder()
                 .setOAuthToken(token)
                 .addView(view)
                 .addView(new google.picker.DocsUploadView())
                 .setTitle('Open BrowserCAD Drawing from Google Drive')
                 .setCallback((data) => this._pickerOpenCallback(data))
-                .setOrigin(window.location.protocol + '//' + window.location.host);
+                .setOrigin(window.location.protocol + '//' + window.location.host)
+                .build();
 
-            // Only set appId if configured (must match actual GCP project number)
-            if (config.appId) {
-                builder.setAppId(config.appId);
-            }
-
-            const picker = builder.build();
             picker.setVisible(true);
         } catch (err) {
             UI.log('Could not open Drive picker: ' + err.message, 'error');
