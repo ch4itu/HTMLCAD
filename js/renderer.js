@@ -435,9 +435,13 @@ const Renderer = {
                 break;
             case 'polyline': {
                 if (entity.points.length > 0) {
-                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
-                    for (let i = 1; i < entity.points.length; i++) {
-                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    if (entity.isSpline && entity.points.length >= 2) {
+                        this.drawSplineCurve(entity.points, ctx);
+                    } else {
+                        ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                        for (let i = 1; i < entity.points.length; i++) {
+                            ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                        }
                     }
                     if (forceClose || entity.closed || Utils.isPolygonClosed(entity.points)) {
                         ctx.closePath();
@@ -480,9 +484,13 @@ const Renderer = {
 
             case 'polyline':
                 if (entity.points.length > 0) {
-                    ctx.moveTo(entity.points[0].x, entity.points[0].y);
-                    for (let i = 1; i < entity.points.length; i++) {
-                        ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                    if (entity.isSpline && entity.points.length >= 2) {
+                        this.drawSplineCurve(entity.points, ctx);
+                    } else {
+                        ctx.moveTo(entity.points[0].x, entity.points[0].y);
+                        for (let i = 1; i < entity.points.length; i++) {
+                            ctx.lineTo(entity.points[i].x, entity.points[i].y);
+                        }
                     }
                 }
                 break;
@@ -1089,6 +1097,42 @@ const Renderer = {
                 }
                 break;
 
+            case 'spline':
+                // Draw confirmed spline curve solid
+                if (state.points.length >= 2) {
+                    ctx.setLineDash([]);
+                    this.drawSplineCurve(state.points, ctx);
+                    ctx.stroke();
+
+                    // Draw preview extending to cursor - dashed
+                    ctx.beginPath();
+                    ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+                    const allPts = [...state.points, endPoint];
+                    // Draw just the last curve segment with the preview point
+                    const previewPts = state.points.length >= 2
+                        ? [state.points[state.points.length - 2], lastPoint, endPoint]
+                        : [lastPoint, endPoint];
+                    if (previewPts.length >= 3) {
+                        const padded = [previewPts[0], ...previewPts, previewPts[previewPts.length - 1]];
+                        const p0 = padded[padded.length - 4];
+                        const p1 = padded[padded.length - 3];
+                        const p2 = padded[padded.length - 2];
+                        const p3 = padded[padded.length - 1];
+                        ctx.moveTo(p1.x, p1.y);
+                        const cp1 = { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 };
+                        const cp2 = { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 };
+                        ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y);
+                    } else {
+                        ctx.moveTo(lastPoint.x, lastPoint.y);
+                        ctx.lineTo(endPoint.x, endPoint.y);
+                    }
+                } else {
+                    // Only one point - draw a line to cursor
+                    ctx.moveTo(lastPoint.x, lastPoint.y);
+                    ctx.lineTo(endPoint.x, endPoint.y);
+                }
+                break;
+
             case 'imageattach':
                 if (state.cmdOptions.imageInsert) {
                     const insert = state.cmdOptions.imageInsert;
@@ -1449,6 +1493,88 @@ const Renderer = {
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.stroke();
+    },
+
+    // ==========================================
+    // SPLINE CURVE RENDERING
+    // ==========================================
+
+    /**
+     * Draw a smooth Catmull-Rom spline through the given points.
+     * Converts Catmull-Rom segments to cubic Bezier for canvas rendering.
+     */
+    drawSplineCurve(points, ctx) {
+        if (points.length < 2) return;
+
+        if (points.length === 2) {
+            ctx.moveTo(points[0].x, points[0].y);
+            ctx.lineTo(points[1].x, points[1].y);
+            return;
+        }
+
+        // Pad the control points array: duplicate first and last for open curves
+        const pts = [points[0], ...points, points[points.length - 1]];
+
+        ctx.moveTo(points[0].x, points[0].y);
+
+        for (let i = 1; i < pts.length - 2; i++) {
+            const p0 = pts[i - 1];
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const p3 = pts[i + 2];
+
+            // Convert Catmull-Rom to cubic Bezier control points
+            const cp1 = {
+                x: p1.x + (p2.x - p0.x) / 6,
+                y: p1.y + (p2.y - p0.y) / 6
+            };
+            const cp2 = {
+                x: p2.x - (p3.x - p1.x) / 6,
+                y: p2.y - (p3.y - p1.y) / 6
+            };
+
+            ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, p2.x, p2.y);
+        }
+    },
+
+    /**
+     * Generate interpolated points along a Catmull-Rom spline.
+     * Used for DXF export and hit testing.
+     */
+    getSplinePoints(controlPoints, segments) {
+        if (controlPoints.length < 2) return [...controlPoints];
+
+        const segsPerSpan = segments || 20;
+        const result = [];
+        const pts = [controlPoints[0], ...controlPoints, controlPoints[controlPoints.length - 1]];
+
+        for (let i = 1; i < pts.length - 2; i++) {
+            const p0 = pts[i - 1];
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const p3 = pts[i + 2];
+
+            const numSegs = (i === pts.length - 3) ? segsPerSpan : segsPerSpan;
+            for (let j = 0; j <= (i === pts.length - 3 ? numSegs : numSegs - 1); j++) {
+                const t = j / numSegs;
+                const t2 = t * t;
+                const t3 = t2 * t;
+
+                const x = 0.5 * ((2 * p1.x) +
+                    (-p0.x + p2.x) * t +
+                    (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+                    (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+
+                const y = 0.5 * ((2 * p1.y) +
+                    (-p0.y + p2.y) * t +
+                    (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+                    (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+
+                result.push({ x, y });
+            }
+        }
+
+        return result;
     },
 
     // ==========================================

@@ -265,6 +265,8 @@ const App = {
 
             const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
             CAD.cursor = world;
+            CAD.cursorWorld = world;
+            CAD.tempEnd = world;
         } else if (e.touches.length === 2) {
             // Cancel long press and single-touch actions
             clearTimeout(this.touchState.longPressTimer);
@@ -311,6 +313,7 @@ const App = {
                 // Update cursor and temp line for drawing
                 const world = Utils.screenToWorld(x, y, CAD.pan, CAD.zoom);
                 CAD.cursor = world;
+                CAD.cursorWorld = world;
                 CAD.tempEnd = world;
                 UI.updateCoordinates(world.x, world.y);
             }

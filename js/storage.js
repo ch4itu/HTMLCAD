@@ -132,18 +132,80 @@ const Storage = {
     generateDXF() {
         let dxf = '';
 
+        // Calculate actual extents for header
+        let minX = 0, minY = 0, maxX = 1000, maxY = 1000;
+        CAD.entities.forEach(entity => {
+            const ext = CAD.getEntityExtents(entity);
+            if (ext) {
+                minX = Math.min(minX, ext.minX);
+                minY = Math.min(minY, ext.minY);
+                maxX = Math.max(maxX, ext.maxX);
+                maxY = Math.max(maxY, ext.maxY);
+            }
+        });
+
         // Header section
         dxf += '0\nSECTION\n';
         dxf += '2\nHEADER\n';
         dxf += '9\n$ACADVER\n1\nAC1015\n';
         dxf += '9\n$INSBASE\n10\n0.0\n20\n0.0\n30\n0.0\n';
-        dxf += '9\n$EXTMIN\n10\n0.0\n20\n0.0\n30\n0.0\n';
-        dxf += '9\n$EXTMAX\n10\n1000.0\n20\n1000.0\n30\n0.0\n';
+        dxf += '9\n$EXTMIN\n10\n' + minX + '\n20\n' + (-maxY) + '\n30\n0.0\n';
+        dxf += '9\n$EXTMAX\n10\n' + maxX + '\n20\n' + (-minY) + '\n30\n0.0\n';
+        dxf += '9\n$MEASUREMENT\n70\n1\n'; // Metric
+        dxf += '9\n$LUNITS\n70\n2\n'; // Decimal
+        dxf += '9\n$INSUNITS\n70\n4\n'; // Millimeters
         dxf += '0\nENDSEC\n';
 
-        // Tables section (layers)
+        // Tables section
         dxf += '0\nSECTION\n';
         dxf += '2\nTABLES\n';
+
+        // LTYPE table (line types - required by many DXF readers)
+        dxf += '0\nTABLE\n';
+        dxf += '2\nLTYPE\n';
+        dxf += '70\n3\n';
+        // ByBlock
+        dxf += '0\nLTYPE\n';
+        dxf += '2\nByBlock\n';
+        dxf += '70\n0\n';
+        dxf += '3\n\n';
+        dxf += '72\n65\n';
+        dxf += '73\n0\n';
+        dxf += '40\n0.0\n';
+        // ByLayer
+        dxf += '0\nLTYPE\n';
+        dxf += '2\nByLayer\n';
+        dxf += '70\n0\n';
+        dxf += '3\n\n';
+        dxf += '72\n65\n';
+        dxf += '73\n0\n';
+        dxf += '40\n0.0\n';
+        // Continuous
+        dxf += '0\nLTYPE\n';
+        dxf += '2\nCONTINUOUS\n';
+        dxf += '70\n0\n';
+        dxf += '3\nSolid line\n';
+        dxf += '72\n65\n';
+        dxf += '73\n0\n';
+        dxf += '40\n0.0\n';
+        dxf += '0\nENDTAB\n';
+
+        // STYLE table (text styles - required for TEXT/MTEXT entities)
+        dxf += '0\nTABLE\n';
+        dxf += '2\nSTYLE\n';
+        dxf += '70\n1\n';
+        dxf += '0\nSTYLE\n';
+        dxf += '2\nStandard\n';
+        dxf += '70\n0\n';
+        dxf += '40\n0.0\n'; // Fixed height (0 = not fixed)
+        dxf += '41\n1.0\n'; // Width factor
+        dxf += '50\n0.0\n'; // Oblique angle
+        dxf += '71\n0\n'; // Text generation flags
+        dxf += '42\n2.5\n'; // Last height used
+        dxf += '3\ntxt\n'; // Primary font file
+        dxf += '0\nENDTAB\n';
+
+        // LAYER table
         dxf += '0\nTABLE\n';
         dxf += '2\nLAYER\n';
         dxf += '70\n' + CAD.layers.length + '\n';
@@ -267,14 +329,19 @@ const Storage = {
                 break;
 
             case 'polyline':
-                dxf += '0\nLWPOLYLINE\n';
-                dxf += '8\n' + entity.layer + '\n';
-                dxf += '420\n' + colorInt + '\n';
-                dxf += '90\n' + entity.points.length + '\n';
-                dxf += '70\n' + (Utils.isPolygonClosed(entity.points) ? 1 : 0) + '\n';
-                entity.points.forEach(p => {
-                    dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
-                });
+                if (entity.isSpline && entity.points.length >= 2) {
+                    // Export as DXF SPLINE with fit points
+                    dxf += this.splineToDXF(entity, colorInt);
+                } else {
+                    dxf += '0\nLWPOLYLINE\n';
+                    dxf += '8\n' + entity.layer + '\n';
+                    dxf += '420\n' + colorInt + '\n';
+                    dxf += '90\n' + entity.points.length + '\n';
+                    dxf += '70\n' + (Utils.isPolygonClosed(entity.points) ? 1 : 0) + '\n';
+                    entity.points.forEach(p => {
+                        dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
+                    });
+                }
                 break;
 
             case 'ellipse':
@@ -332,10 +399,87 @@ const Storage = {
                 dxf += '43\n1.0\n'; // Z scale
                 dxf += '50\n' + (-Utils.radToDeg(entity.rotation || 0)) + '\n'; // Rotation angle
                 break;
+
+            case 'hatch':
+                dxf += this.hatchEntityToDXF(entity, colorInt);
+                break;
+
+            case 'dimension':
+                dxf += this.dimensionToDXF(entity, colorInt);
+                break;
+
+            case 'leader':
+                dxf += this.leaderToDXF(entity, colorInt);
+                break;
+
+            case 'region':
+                // Export region as a closed LWPOLYLINE
+                if (entity.points && entity.points.length > 0) {
+                    dxf += '0\nLWPOLYLINE\n';
+                    dxf += '8\n' + (entity.layer || '0') + '\n';
+                    dxf += '420\n' + colorInt + '\n';
+                    dxf += '90\n' + entity.points.length + '\n';
+                    dxf += '70\n1\n'; // Closed
+                    entity.points.forEach(p => {
+                        dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
+                    });
+                }
+                break;
+
+            case 'donut':
+                // Export donut as two circles (outer and inner)
+                dxf += '0\nCIRCLE\n';
+                dxf += '8\n' + (entity.layer || '0') + '\n';
+                dxf += '420\n' + colorInt + '\n';
+                dxf += '10\n' + entity.center.x + '\n';
+                dxf += '20\n' + (-entity.center.y) + '\n';
+                dxf += '30\n0.0\n';
+                dxf += '40\n' + entity.outerRadius + '\n';
+                // Inner circle
+                dxf += '0\nCIRCLE\n';
+                dxf += '8\n' + (entity.layer || '0') + '\n';
+                dxf += '420\n' + colorInt + '\n';
+                dxf += '10\n' + entity.center.x + '\n';
+                dxf += '20\n' + (-entity.center.y) + '\n';
+                dxf += '30\n0.0\n';
+                dxf += '40\n' + entity.innerRadius + '\n';
+                // Also export as a solid hatch between the two circles
+                dxf += this.donutHatchToDXF(entity, colorInt);
+                break;
+
+            case 'mtext':
+                dxf += '0\nMTEXT\n';
+                dxf += '8\n' + (entity.layer || '0') + '\n';
+                dxf += '420\n' + colorInt + '\n';
+                dxf += '10\n' + entity.position.x + '\n';
+                dxf += '20\n' + (-entity.position.y) + '\n';
+                dxf += '30\n0.0\n';
+                dxf += '40\n' + (entity.height || 10) + '\n';
+                dxf += '41\n' + (entity.width || 0) + '\n'; // Reference column width
+                dxf += '71\n1\n'; // Attachment point: top left
+                dxf += '1\n' + (entity.text || '') + '\n';
+                if (entity.rotation) {
+                    dxf += '50\n' + entity.rotation + '\n';
+                }
+                break;
+
+            case 'wipeout':
+                // Export wipeout boundary as LWPOLYLINE (DXF WIPEOUT is proprietary)
+                if (entity.points && entity.points.length > 0) {
+                    dxf += '0\nLWPOLYLINE\n';
+                    dxf += '8\n' + (entity.layer || '0') + '\n';
+                    dxf += '420\n' + colorInt + '\n';
+                    dxf += '90\n' + entity.points.length + '\n';
+                    dxf += '70\n1\n'; // Closed
+                    entity.points.forEach(p => {
+                        dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
+                    });
+                }
+                break;
         }
 
-        // Add hatch if entity has it
-        if (entity.hatch) {
+        // Add hatch if entity has it (for entities with inline hatch property)
+        if (entity.hatch && entity.type !== 'hatch') {
             dxf += this.generateHatchDXF(entity, colorInt);
         }
 
@@ -383,6 +527,372 @@ const Storage = {
             });
             dxf += '97\n0\n';
         }
+
+        return dxf;
+    },
+
+    /**
+     * Export a spline polyline as a DXF SPLINE entity with fit points.
+     */
+    splineToDXF(entity, colorInt) {
+        let dxf = '';
+        const pts = entity.points;
+        const isClosed = Utils.isPolygonClosed(pts);
+
+        dxf += '0\nSPLINE\n';
+        dxf += '8\n' + (entity.layer || '0') + '\n';
+        dxf += '420\n' + colorInt + '\n';
+        dxf += '210\n0.0\n220\n0.0\n230\n1.0\n'; // Normal vector
+        dxf += '70\n' + (8 + (isClosed ? 1 : 0)) + '\n'; // Flags: 8=planar, 1=closed
+        dxf += '71\n3\n'; // Degree: cubic
+        dxf += '74\n' + pts.length + '\n'; // Number of fit points
+
+        // Fit points (group codes 11/21/31)
+        pts.forEach(p => {
+            dxf += '11\n' + p.x + '\n';
+            dxf += '21\n' + (-p.y) + '\n';
+            dxf += '31\n0.0\n';
+        });
+
+        return dxf;
+    },
+
+    /**
+     * Export a standalone hatch entity to DXF.
+     * Resolves clip entity IDs to boundary geometry.
+     */
+    hatchEntityToDXF(entity, colorInt) {
+        let dxf = '';
+        const clipIds = entity.clipIds || [];
+        if (clipIds.length === 0) return '';
+
+        const hatchData = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const patternName = (hatchData.pattern || 'solid').toUpperCase();
+        const isSolid = patternName === 'SOLID';
+
+        dxf += '0\nHATCH\n';
+        dxf += '8\n' + (entity.layer || '0') + '\n';
+        dxf += '420\n' + colorInt + '\n';
+        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n'; // Elevation
+        dxf += '210\n0.0\n220\n0.0\n230\n1.0\n'; // Normal
+        dxf += '2\n' + (isSolid ? 'SOLID' : 'ANSI31') + '\n'; // Pattern name
+        dxf += '70\n' + (isSolid ? 1 : 0) + '\n'; // Solid fill flag
+        dxf += '71\n0\n'; // Non-associative
+        dxf += '91\n' + clipIds.length + '\n'; // Number of boundary paths
+
+        clipIds.forEach(id => {
+            const clipEntity = CAD.getEntity(id);
+            if (!clipEntity) return;
+            dxf += this._hatchBoundaryPath(clipEntity);
+        });
+
+        // Pattern definition for non-solid
+        if (!isSolid) {
+            dxf += '75\n0\n'; // Hatch style: normal
+            dxf += '76\n1\n'; // Pattern type: predefined
+            dxf += '52\n0.0\n'; // Pattern angle
+            dxf += '41\n1.0\n'; // Pattern scale
+            dxf += '78\n1\n'; // Number of pattern lines
+            dxf += '53\n45.0\n'; // Line angle
+            dxf += '43\n0.0\n44\n0.0\n'; // Base point
+            dxf += '45\n-1.0\n46\n1.0\n'; // Offset
+            dxf += '79\n0\n'; // Dash items
+        }
+
+        return dxf;
+    },
+
+    /**
+     * Generate a DXF hatch boundary path for a given entity.
+     */
+    _hatchBoundaryPath(entity) {
+        let dxf = '';
+
+        if (entity.type === 'circle') {
+            dxf += '92\n1\n'; // External boundary
+            dxf += '93\n1\n'; // One edge
+            dxf += '72\n2\n'; // Circular arc edge
+            dxf += '10\n' + entity.center.x + '\n';
+            dxf += '20\n' + (-entity.center.y) + '\n';
+            dxf += '40\n' + entity.r + '\n';
+            dxf += '50\n0.0\n51\n360.0\n73\n1\n';
+            dxf += '97\n0\n'; // Source boundary objects
+        } else if (entity.type === 'rect') {
+            const pts = [
+                { x: entity.p1.x, y: -entity.p1.y },
+                { x: entity.p2.x, y: -entity.p1.y },
+                { x: entity.p2.x, y: -entity.p2.y },
+                { x: entity.p1.x, y: -entity.p2.y }
+            ];
+            dxf += '92\n2\n'; // Polyline boundary
+            dxf += '72\n0\n'; // No bulge
+            dxf += '73\n1\n'; // Closed
+            dxf += '93\n' + pts.length + '\n';
+            pts.forEach(p => {
+                dxf += '10\n' + p.x + '\n20\n' + p.y + '\n';
+            });
+            dxf += '97\n0\n';
+        } else if (entity.type === 'polyline' && entity.points) {
+            const pts = entity.points.map(p => ({ x: p.x, y: -p.y }));
+            dxf += '92\n2\n';
+            dxf += '72\n0\n';
+            dxf += '73\n1\n'; // Closed
+            dxf += '93\n' + pts.length + '\n';
+            pts.forEach(p => {
+                dxf += '10\n' + p.x + '\n20\n' + p.y + '\n';
+            });
+            dxf += '97\n0\n';
+        } else if (entity.type === 'ellipse') {
+            // Approximate ellipse boundary as polyline
+            const numPts = 36;
+            dxf += '92\n2\n';
+            dxf += '72\n0\n';
+            dxf += '73\n1\n';
+            dxf += '93\n' + numPts + '\n';
+            for (let j = 0; j < numPts; j++) {
+                const angle = (j / numPts) * Math.PI * 2;
+                const rot = entity.rotation || 0;
+                const ex = entity.center.x + entity.rx * Math.cos(angle) * Math.cos(rot) - entity.ry * Math.sin(angle) * Math.sin(rot);
+                const ey = entity.center.y + entity.rx * Math.cos(angle) * Math.sin(rot) + entity.ry * Math.sin(angle) * Math.cos(rot);
+                dxf += '10\n' + ex + '\n20\n' + (-ey) + '\n';
+            }
+            dxf += '97\n0\n';
+        } else if (entity.type === 'arc') {
+            dxf += '92\n1\n';
+            dxf += '93\n1\n';
+            dxf += '72\n2\n'; // Circular arc edge
+            dxf += '10\n' + entity.center.x + '\n';
+            dxf += '20\n' + (-entity.center.y) + '\n';
+            dxf += '40\n' + entity.r + '\n';
+            dxf += '50\n' + (-Utils.radToDeg(entity.end)) + '\n';
+            dxf += '51\n' + (-Utils.radToDeg(entity.start)) + '\n';
+            dxf += '73\n1\n';
+            dxf += '97\n0\n';
+        } else {
+            // Fallback: try line segments
+            dxf += '92\n1\n';
+            dxf += '93\n1\n';
+            dxf += '72\n1\n'; // Line edge
+            if (entity.type === 'line') {
+                dxf += '10\n' + entity.p1.x + '\n20\n' + (-entity.p1.y) + '\n';
+                dxf += '11\n' + entity.p2.x + '\n21\n' + (-entity.p2.y) + '\n';
+            }
+            dxf += '97\n0\n';
+        }
+
+        return dxf;
+    },
+
+    /**
+     * Export dimension entity as decomposed DXF entities (lines + text).
+     * Full DXF DIMENSION entities are complex and require block definitions.
+     * Decomposing ensures compatibility with all DXF readers.
+     */
+    dimensionToDXF(entity, colorInt) {
+        let dxf = '';
+        const layer = entity.layer || '0';
+        const textHeight = CAD.dimTextHeight || 2.5;
+        const arrowSize = CAD.dimArrowSize || 2.5;
+
+        if (entity.dimType === 'linear' || entity.dimType === 'aligned') {
+            const p1 = entity.p1;
+            const p2 = entity.p2;
+            const dimPos = entity.dimLinePos;
+            const isHorizontal = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y);
+
+            let dimP1, dimP2;
+            if (entity.dimType === 'aligned') {
+                dimP1 = { ...p1 };
+                dimP2 = { ...p2 };
+            } else if (isHorizontal) {
+                dimP1 = { x: p1.x, y: dimPos.y };
+                dimP2 = { x: p2.x, y: dimPos.y };
+            } else {
+                dimP1 = { x: dimPos.x, y: p1.y };
+                dimP2 = { x: dimPos.x, y: p2.y };
+            }
+
+            // Extension lines
+            dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + p1.x + '\n20\n' + (-p1.y) + '\n30\n0.0\n';
+            dxf += '11\n' + dimP1.x + '\n21\n' + (-dimP1.y) + '\n31\n0.0\n';
+
+            dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + p2.x + '\n20\n' + (-p2.y) + '\n30\n0.0\n';
+            dxf += '11\n' + dimP2.x + '\n21\n' + (-dimP2.y) + '\n31\n0.0\n';
+
+            // Dimension line
+            dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + dimP1.x + '\n20\n' + (-dimP1.y) + '\n30\n0.0\n';
+            dxf += '11\n' + dimP2.x + '\n21\n' + (-dimP2.y) + '\n31\n0.0\n';
+
+            // Dimension text
+            const midX = (dimP1.x + dimP2.x) / 2;
+            const midY = (dimP1.y + dimP2.y) / 2;
+            dxf += '0\nTEXT\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + midX + '\n20\n' + (-(midY - textHeight * 0.5)) + '\n30\n0.0\n';
+            dxf += '40\n' + textHeight + '\n';
+            dxf += '1\n' + (entity.text || '') + '\n';
+            dxf += '72\n1\n'; // Center justified
+
+        } else if (entity.dimType === 'radius' || entity.dimType === 'diameter') {
+            const center = entity.center;
+            const angle = Utils.angle(center, entity.dimLinePos);
+            const edgePoint = {
+                x: center.x + entity.radius * Math.cos(angle),
+                y: center.y + entity.radius * Math.sin(angle)
+            };
+
+            // Radius/diameter line
+            if (entity.dimType === 'diameter') {
+                const oppositeEdge = {
+                    x: center.x - entity.radius * Math.cos(angle),
+                    y: center.y - entity.radius * Math.sin(angle)
+                };
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + oppositeEdge.x + '\n20\n' + (-oppositeEdge.y) + '\n30\n0.0\n';
+                dxf += '11\n' + edgePoint.x + '\n21\n' + (-edgePoint.y) + '\n31\n0.0\n';
+            } else {
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + center.x + '\n20\n' + (-center.y) + '\n30\n0.0\n';
+                dxf += '11\n' + edgePoint.x + '\n21\n' + (-edgePoint.y) + '\n31\n0.0\n';
+            }
+
+            // Dimension text
+            const textX = center.x + (entity.radius * 0.6) * Math.cos(angle);
+            const textY = center.y + (entity.radius * 0.6) * Math.sin(angle);
+            dxf += '0\nTEXT\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + textX + '\n20\n' + (-textY) + '\n30\n0.0\n';
+            dxf += '40\n' + textHeight + '\n';
+            dxf += '1\n' + (entity.text || '') + '\n';
+
+        } else if (entity.dimType === 'ordinate') {
+            const fp = entity.featurePoint;
+            const le = entity.leaderEnd;
+
+            // Leader lines
+            if (entity.isXDatum) {
+                const bend = { x: le.x, y: fp.y };
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + fp.x + '\n20\n' + (-fp.y) + '\n30\n0.0\n';
+                dxf += '11\n' + bend.x + '\n21\n' + (-bend.y) + '\n31\n0.0\n';
+
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + bend.x + '\n20\n' + (-bend.y) + '\n30\n0.0\n';
+                dxf += '11\n' + le.x + '\n21\n' + (-le.y) + '\n31\n0.0\n';
+            } else {
+                const bend = { x: fp.x, y: le.y };
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + fp.x + '\n20\n' + (-fp.y) + '\n30\n0.0\n';
+                dxf += '11\n' + bend.x + '\n21\n' + (-bend.y) + '\n31\n0.0\n';
+
+                dxf += '0\nLINE\n8\n' + layer + '\n420\n' + colorInt + '\n';
+                dxf += '10\n' + bend.x + '\n20\n' + (-bend.y) + '\n30\n0.0\n';
+                dxf += '11\n' + le.x + '\n21\n' + (-le.y) + '\n31\n0.0\n';
+            }
+
+            // Text
+            dxf += '0\nTEXT\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + le.x + '\n20\n' + (-le.y) + '\n30\n0.0\n';
+            dxf += '40\n' + textHeight + '\n';
+            dxf += '1\n' + (entity.text || '') + '\n';
+
+        } else if (entity.dimType === 'arclength') {
+            const center = entity.center;
+            const r = entity.radius;
+            const startA = entity.startAngle;
+            const endA = entity.endAngle;
+
+            // Export arc dimension as an arc + text
+            dxf += '0\nARC\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + center.x + '\n20\n' + (-center.y) + '\n30\n0.0\n';
+            dxf += '40\n' + (r + 15) + '\n'; // Offset radius
+            dxf += '50\n' + (-Utils.radToDeg(endA)) + '\n';
+            dxf += '51\n' + (-Utils.radToDeg(startA)) + '\n';
+
+            // Text at midpoint
+            let sweep = endA - startA;
+            if (sweep < 0) sweep += 2 * Math.PI;
+            const midAngle = startA + sweep / 2;
+            const textR = r + 15 + textHeight;
+            dxf += '0\nTEXT\n8\n' + layer + '\n420\n' + colorInt + '\n';
+            dxf += '10\n' + (center.x + textR * Math.cos(midAngle)) + '\n';
+            dxf += '20\n' + (-(center.y + textR * Math.sin(midAngle))) + '\n30\n0.0\n';
+            dxf += '40\n' + textHeight + '\n';
+            dxf += '1\n' + (entity.text || '') + '\n';
+        }
+
+        return dxf;
+    },
+
+    /**
+     * Export leader entity to DXF as lines + optional text.
+     */
+    leaderToDXF(entity, colorInt) {
+        let dxf = '';
+        const layer = entity.layer || '0';
+
+        // Export leader as LWPOLYLINE
+        if (entity.points && entity.points.length >= 2) {
+            dxf += '0\nLWPOLYLINE\n';
+            dxf += '8\n' + layer + '\n';
+            dxf += '420\n' + colorInt + '\n';
+            dxf += '90\n' + entity.points.length + '\n';
+            dxf += '70\n0\n'; // Open
+            entity.points.forEach(p => {
+                dxf += '10\n' + p.x + '\n20\n' + (-p.y) + '\n';
+            });
+        }
+
+        // Export leader text
+        if (entity.text) {
+            const pos = entity.textPosition || entity.points[entity.points.length - 1];
+            dxf += '0\nTEXT\n';
+            dxf += '8\n' + layer + '\n';
+            dxf += '420\n' + colorInt + '\n';
+            dxf += '10\n' + pos.x + '\n20\n' + (-pos.y) + '\n30\n0.0\n';
+            dxf += '40\n' + (entity.height || 10) + '\n';
+            dxf += '1\n' + entity.text + '\n';
+        }
+
+        return dxf;
+    },
+
+    /**
+     * Export donut as a solid hatch between outer and inner circles.
+     */
+    donutHatchToDXF(entity, colorInt) {
+        let dxf = '';
+
+        dxf += '0\nHATCH\n';
+        dxf += '8\n' + (entity.layer || '0') + '\n';
+        dxf += '420\n' + colorInt + '\n';
+        dxf += '10\n0.0\n20\n0.0\n30\n0.0\n'; // Elevation
+        dxf += '210\n0.0\n220\n0.0\n230\n1.0\n'; // Normal
+        dxf += '2\nSOLID\n';
+        dxf += '70\n1\n'; // Solid fill
+        dxf += '71\n0\n'; // Non-associative
+        dxf += '91\n2\n'; // Two boundary paths (outer + inner)
+
+        // Outer boundary (counterclockwise)
+        dxf += '92\n1\n';
+        dxf += '93\n1\n';
+        dxf += '72\n2\n'; // Circular arc
+        dxf += '10\n' + entity.center.x + '\n';
+        dxf += '20\n' + (-entity.center.y) + '\n';
+        dxf += '40\n' + entity.outerRadius + '\n';
+        dxf += '50\n0.0\n51\n360.0\n73\n1\n';
+        dxf += '97\n0\n';
+
+        // Inner boundary (clockwise - hole)
+        dxf += '92\n17\n'; // 16 (outermost) + 1 (external)
+        dxf += '93\n1\n';
+        dxf += '72\n2\n';
+        dxf += '10\n' + entity.center.x + '\n';
+        dxf += '20\n' + (-entity.center.y) + '\n';
+        dxf += '40\n' + entity.innerRadius + '\n';
+        dxf += '50\n0.0\n51\n360.0\n73\n0\n'; // CCW=0 for inner
+        dxf += '97\n0\n';
 
         return dxf;
     },
@@ -804,8 +1314,29 @@ const Storage = {
                         entities.push(result.entity);
                         i = result.nextIndex;
                     }
+                } else if (entityType === 'HATCH') {
+                    // Skip past HATCH entity data (complex format)
+                    // We don't import hatches as they depend on boundary entities
+                    const { nextIndex } = this.readDXFEntity(lines, i);
+                    i = nextIndex;
+                } else if (entityType === 'INSERT') {
+                    const result = this.parseDXFInsert(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    }
+                } else if (entityType === 'LEADER') {
+                    const result = this.parseDXFLeader(lines, i);
+                    if (result) {
+                        entities.push(result.entity);
+                        i = result.nextIndex;
+                    }
+                } else if (entityType === 'DIMENSION') {
+                    // Skip DIMENSION entities (complex format requiring block defs)
+                    const { nextIndex } = this.readDXFEntity(lines, i);
+                    i = nextIndex;
                 }
-                // Skip unknown entity types - they'll be skipped in next iteration
+                // Skip other unknown entity types - they'll be skipped in next iteration
             } else {
                 i++;
             }
@@ -957,9 +1488,20 @@ const Storage = {
     parseDXFSpline(lines, startIndex) {
         const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
 
-        // Get control points
-        const xCoords = Array.isArray(data[10]) ? data[10] : (data[10] !== undefined ? [data[10]] : []);
-        const yCoords = Array.isArray(data[20]) ? data[20] : (data[20] !== undefined ? [data[20]] : []);
+        // Prefer fit points (11/21) over control points (10/20) for smoother curves
+        let xCoords, yCoords;
+        const fitX = Array.isArray(data[11]) ? data[11] : (data[11] !== undefined ? [data[11]] : []);
+        const fitY = Array.isArray(data[21]) ? data[21] : (data[21] !== undefined ? [data[21]] : []);
+
+        if (fitX.length >= 2) {
+            // Use fit points - these are the actual curve-through points
+            xCoords = fitX;
+            yCoords = fitY;
+        } else {
+            // Fall back to control points
+            xCoords = Array.isArray(data[10]) ? data[10] : (data[10] !== undefined ? [data[10]] : []);
+            yCoords = Array.isArray(data[20]) ? data[20] : (data[20] !== undefined ? [data[20]] : []);
+        }
 
         const points = [];
         for (let j = 0; j < xCoords.length; j++) {
@@ -969,10 +1511,12 @@ const Storage = {
             });
         }
 
+        const flags = parseInt(data[70]) || 0;
         const entity = {
             type: 'polyline',
             points: points,
             isSpline: true,
+            closed: (flags & 1) !== 0,
             layer: data[8] || '0'
         };
 
@@ -1000,6 +1544,53 @@ const Storage = {
             rx: majorRadius,
             ry: minorRadius,
             rotation: rotation,
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
+    },
+
+    parseDXFInsert(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        const entity = {
+            type: 'block',
+            blockName: data[2] || 'UNNAMED',
+            insertPoint: {
+                x: parseFloat(data[10]) || 0,
+                y: -(parseFloat(data[20]) || 0)
+            },
+            scale: {
+                x: parseFloat(data[41]) || 1,
+                y: parseFloat(data[42]) || 1
+            },
+            rotation: -Utils.degToRad(parseFloat(data[50]) || 0),
+            layer: data[8] || '0'
+        };
+
+        return { entity, nextIndex };
+    },
+
+    parseDXFLeader(lines, startIndex) {
+        const { data, nextIndex } = this.readDXFEntity(lines, startIndex);
+
+        const xCoords = Array.isArray(data[10]) ? data[10] : (data[10] !== undefined ? [data[10]] : []);
+        const yCoords = Array.isArray(data[20]) ? data[20] : (data[20] !== undefined ? [data[20]] : []);
+
+        const points = [];
+        for (let j = 0; j < xCoords.length; j++) {
+            points.push({
+                x: parseFloat(xCoords[j]) || 0,
+                y: -(parseFloat(yCoords[j]) || 0)
+            });
+        }
+
+        if (points.length < 2) return null;
+
+        const entity = {
+            type: 'leader',
+            points: points,
+            text: data[3] || '',
             layer: data[8] || '0'
         };
 
