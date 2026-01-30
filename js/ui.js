@@ -645,6 +645,11 @@ AUTOLISP:
             this.elements.coordDisplay.textContent =
                 `${x.toFixed(4)}, ${y.toFixed(4)}, 0.0000`;
         }
+        // Update mobile coordinate overlay
+        const mobileCoords = document.getElementById('mobileCoordsOverlay');
+        if (mobileCoords) {
+            mobileCoords.textContent = `${x.toFixed(2)}, ${y.toFixed(2)}`;
+        }
     },
 
     // ==========================================
