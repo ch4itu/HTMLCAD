@@ -1460,6 +1460,7 @@ const Storage = {
             // alone is sufficient for authenticated Picker access.
             const picker = new google.picker.PickerBuilder()
                 .setOAuthToken(token)
+                .setAppId(window.CAD_CONFIG.appId)
                 .addView(view)
                 .addView(new google.picker.DocsUploadView())
                 .setTitle('Open Drawing from Google Drive (.dxf, .json, .svg)')
