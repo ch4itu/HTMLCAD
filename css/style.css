@@ -86,6 +86,10 @@ body {
     height: 28px;
     padding: 0 8px;
     border-bottom: 1px solid var(--border-dark);
+    position: sticky;
+    top: 0;
+    z-index: 4000;
+    flex-shrink: 0;
 }
 
 .title-bar .logo {
@@ -102,6 +106,8 @@ body {
 .menu-bar {
     display: flex;
     gap: 2px;
+    align-items: center;
+    flex-wrap: nowrap;
 }
 
 .menu-item {
@@ -109,6 +115,10 @@ body {
     cursor: pointer;
     border-radius: 2px;
     font-size: 12px;
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
 }
 
 .menu-item:hover {
@@ -132,6 +142,10 @@ body {
     background: var(--bg-medium);
     border-bottom: 1px solid var(--border-dark);
     transition: all 0.2s ease;
+    position: sticky;
+    top: 28px;
+    z-index: 3500;
+    flex-shrink: 0;
 }
 
 .ribbon.collapsed .ribbon-content {
@@ -380,6 +394,7 @@ body {
     align-items: center;
     gap: 12px;
     border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
 }
 
 .selection-info {
@@ -1385,6 +1400,7 @@ body {
     /* Hide desktop-only elements */
     .title-bar .menu-bar { display: none; }
     .title-bar .file-name { display: none; }
+    .google-signin-btn { display: none; }
     .ribbon { display: none !important; }
     .panel-left { display: none !important; }
     .viewport-tabs { display: none; }
@@ -1397,7 +1413,7 @@ body {
     .title-bar {
         height: 44px;
         padding: 0 10px;
-        justify-content: space-between;
+        justify-content: flex-start;
     }
 
     .title-bar .logo {
@@ -1405,17 +1421,15 @@ body {
         margin-right: 0;
     }
 
-    .google-signin-btn {
-        padding: 4px 10px;
-        font-size: 11px;
-        margin-right: 6px;
-        min-height: 32px;
-        border-radius: 4px;
+    .title-bar .spacer {
+        display: none;
     }
 
-    .google-signin-btn svg {
-        width: 12px;
-        height: 12px;
+    .mobile-menu-btn {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
     }
 
     /* Selection ribbon mobile */
@@ -1879,6 +1893,8 @@ body {
     min-width: 40px;
     align-items: center;
     justify-content: center;
+    position: relative;
+    z-index: 510;
 }
 
 @media (max-width: 768px) {
