@@ -11,6 +11,7 @@ const Renderer = {
     camera: null,
     worldGroup: null,
     viewport: null,
+    webglObjects: new Map(),
 
     // Colors
     colors: {
@@ -177,50 +178,113 @@ const Renderer = {
         this.worldGroup.position.set(CAD.pan.x, CAD.pan.y, 0);
         this.worldGroup.scale.set(CAD.zoom, CAD.zoom, 1);
 
-        this.clearWebGLObjects();
-        this.buildWebGLEntities();
+        this.syncWebGLObjects();
         this.glRenderer.render(this.scene, this.camera);
     },
 
-    clearWebGLObjects() {
-        if (!this.worldGroup) return;
-        while (this.worldGroup.children.length > 0) {
-            const child = this.worldGroup.children.pop();
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-        }
-    },
-
-    buildWebGLEntities() {
+    syncWebGLObjects() {
         const state = CAD;
+        const activeIds = new Set();
 
         state.entities.forEach(entity => {
-            if (entity._hidden) return;
-            const layer = state.getLayer(entity.layer);
-            if (!layer || !layer.visible) return;
-
-            if (!['line', 'circle', 'arc', 'polyline'].includes(entity.type)) {
+            if (!this.shouldRenderInWebGL(entity, state)) {
                 return;
             }
 
-            const isSelected = state.isSelected(entity.id);
-            const isHovered = state.hoveredId === entity.id && !isSelected;
-            let color;
-            if (isSelected) {
-                color = this.colors.selection;
-            } else if (isHovered) {
-                color = this.colors.hover;
-            } else {
-                color = state.getEntityColor(entity);
+            const signature = this.getWebGLSignature(entity);
+            const color = this.getWebGLColor(entity, state);
+            activeIds.add(entity.id);
+
+            const cached = this.webglObjects.get(entity.id);
+            if (!cached || cached.signature !== signature) {
+                if (cached) {
+                    this.removeWebGLObject(entity.id, cached);
+                }
+                const object = this.createWebGLObject(entity, color);
+                if (object) {
+                    this.worldGroup.add(object);
+                    this.webglObjects.set(entity.id, {
+                        object,
+                        signature,
+                        color
+                    });
+                }
+                return;
             }
 
-            const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
-            const geometry = this.buildGeometryForEntity(entity);
-            if (!geometry) return;
-
-            const line = new THREE.Line(geometry, material);
-            this.worldGroup.add(line);
+            if (cached.color !== color) {
+                this.updateWebGLColor(cached.object, color);
+                cached.color = color;
+            }
         });
+
+        for (const [id, cached] of this.webglObjects.entries()) {
+            if (!activeIds.has(id)) {
+                this.removeWebGLObject(id, cached);
+            }
+        }
+    },
+
+    removeWebGLObject(id, cached) {
+        this.worldGroup.remove(cached.object);
+        this.disposeWebGLObject(cached.object);
+        this.webglObjects.delete(id);
+    },
+
+    disposeWebGLObject(object) {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) object.material.dispose();
+    },
+
+    shouldRenderInWebGL(entity, state) {
+        if (entity._hidden) return false;
+        const layer = state.getLayer(entity.layer);
+        if (!layer || !layer.visible) return false;
+        return ['line', 'circle', 'arc', 'polyline'].includes(entity.type);
+    },
+
+    getWebGLSignature(entity) {
+        switch (entity.type) {
+            case 'line':
+                return `line:${entity.p1.x},${entity.p1.y},${entity.p2.x},${entity.p2.y}`;
+            case 'circle':
+                return `circle:${entity.center.x},${entity.center.y},${entity.r}`;
+            case 'arc':
+                return `arc:${entity.center.x},${entity.center.y},${entity.r},${entity.start},${entity.end}`;
+            case 'polyline': {
+                const points = entity.points || [];
+                const coords = points.map(p => `${p.x},${p.y}`).join('|');
+                const closed = entity.closed || Utils.isPolygonClosed(points);
+                return `polyline:${coords}:${closed ? 'closed' : 'open'}`;
+            }
+            default:
+                return `${entity.type}`;
+        }
+    },
+
+    getWebGLColor(entity, state) {
+        const isSelected = state.isSelected(entity.id);
+        const isHovered = state.hoveredId === entity.id && !isSelected;
+        if (isSelected) {
+            return this.colors.selection;
+        }
+        if (isHovered) {
+            return this.colors.hover;
+        }
+        return state.getEntityColor(entity);
+    },
+
+    updateWebGLColor(object, color) {
+        if (object.material && object.material.color) {
+            object.material.color.set(color);
+        }
+    },
+
+    createWebGLObject(entity, color) {
+        const geometry = this.buildGeometryForEntity(entity);
+        if (!geometry) return null;
+        const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
+        return new THREE.Line(geometry, material);
     },
 
     buildGeometryForEntity(entity) {
