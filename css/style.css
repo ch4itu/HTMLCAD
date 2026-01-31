@@ -1400,6 +1400,7 @@ body {
     /* Hide desktop-only elements */
     .title-bar .menu-bar { display: none; }
     .title-bar .file-name { display: none; }
+    .google-signin-btn { display: none; }
     .ribbon { display: none !important; }
     .panel-left { display: none !important; }
     .viewport-tabs { display: none; }
@@ -1420,17 +1421,8 @@ body {
         margin-right: 0;
     }
 
-    .google-signin-btn {
-        padding: 4px 10px;
-        font-size: 11px;
-        margin-right: 6px;
-        min-height: 32px;
-        border-radius: 4px;
-    }
-
-    .google-signin-btn svg {
-        width: 12px;
-        height: 12px;
+    .mobile-menu-btn {
+        margin-left: auto;
     }
 
     /* Selection ribbon mobile */
