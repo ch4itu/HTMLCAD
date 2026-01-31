@@ -2590,6 +2590,7 @@ const Commands = {
             CAD.addEntity({
                 type: 'polyline',
                 points: loop,
+                closed: true,
                 hatch: { pattern: CAD.hatchPattern },
                 noStroke: true
             });

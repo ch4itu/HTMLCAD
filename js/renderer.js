@@ -387,7 +387,7 @@ const Renderer = {
                 color = state.getEntityColor(entity);
             }
 
-            if (useWebGL && ['line', 'circle', 'arc', 'polyline'].includes(entity.type)) {
+            if (useWebGL && ['line', 'circle', 'arc', 'polyline'].includes(entity.type) && !entity.hatch) {
                 return;
             }
 
@@ -428,7 +428,9 @@ const Renderer = {
                 ctx.globalAlpha = hatchStyle.alpha;
                 ctx.fill();
                 ctx.restore();
-                if (!entity.noStroke) {
+                // Skip stroke if WebGL already drew the outline, or if noStroke is set
+                const webglHandlesStroke = useWebGL && ['line', 'circle', 'arc', 'polyline'].includes(entity.type);
+                if (!entity.noStroke && !webglHandlesStroke) {
                     ctx.stroke();
                 }
             } else {
@@ -517,14 +519,21 @@ const Renderer = {
             return this.hatchPatterns.get(key);
         }
 
-        const size = Math.max(4, 8 / CAD.zoom);
+        // Evict oldest entries when cache exceeds limit
+        if (this.hatchPatterns.size > 200) {
+            const keysToDelete = [...this.hatchPatterns.keys()].slice(0, 100);
+            keysToDelete.forEach(k => this.hatchPatterns.delete(k));
+        }
+
+        // Clamp pattern tile size to avoid tiny or huge canvases at extreme zoom
+        const size = Math.max(4, Math.min(64, 8 / CAD.zoom));
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = Math.max(0.5, 1 / CAD.zoom);
+        ctx.lineWidth = Math.max(0.5, Math.min(size / 4, 1 / CAD.zoom));
 
         switch (pattern) {
             case 'diagonal':
