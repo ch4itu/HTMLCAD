@@ -86,8 +86,10 @@ body {
     height: 28px;
     padding: 0 8px;
     border-bottom: 1px solid var(--border-dark);
-    position: relative;
-    z-index: 500;
+    position: sticky;
+    top: 0;
+    z-index: 4000;
+    flex-shrink: 0;
 }
 
 .title-bar .logo {
@@ -105,6 +107,7 @@ body {
     display: flex;
     gap: 2px;
     align-items: center;
+    flex-wrap: nowrap;
 }
 
 .menu-item {
@@ -115,6 +118,7 @@ body {
     color: var(--text-primary);
     display: inline-flex;
     align-items: center;
+    white-space: nowrap;
 }
 
 .menu-item:hover {
@@ -138,6 +142,10 @@ body {
     background: var(--bg-medium);
     border-bottom: 1px solid var(--border-dark);
     transition: all 0.2s ease;
+    position: sticky;
+    top: 28px;
+    z-index: 3500;
+    flex-shrink: 0;
 }
 
 .ribbon.collapsed .ribbon-content {
@@ -386,6 +394,7 @@ body {
     align-items: center;
     gap: 12px;
     border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
 }
 
 .selection-info {
