@@ -86,6 +86,8 @@ body {
     height: 28px;
     padding: 0 8px;
     border-bottom: 1px solid var(--border-dark);
+    position: relative;
+    z-index: 500;
 }
 
 .title-bar .logo {
@@ -102,6 +104,7 @@ body {
 .menu-bar {
     display: flex;
     gap: 2px;
+    align-items: center;
 }
 
 .menu-item {
@@ -109,6 +112,9 @@ body {
     cursor: pointer;
     border-radius: 2px;
     font-size: 12px;
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
 }
 
 .menu-item:hover {
@@ -1879,6 +1885,8 @@ body {
     min-width: 40px;
     align-items: center;
     justify-content: center;
+    position: relative;
+    z-index: 510;
 }
 
 @media (max-width: 768px) {
