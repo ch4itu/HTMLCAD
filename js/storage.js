@@ -6,6 +6,23 @@ const Storage = {
     STORAGE_KEY: 'htmlcad_drawing',
     SETTINGS_KEY: 'htmlcad_settings',
 
+    /**
+     * Format a number for DXF output, avoiding scientific notation.
+     * JavaScript's toString() can produce "1e-7" which DXF readers cannot parse.
+     */
+    _dxfNum(n) {
+        if (n === 0) return '0.0';
+        if (!Number.isFinite(n)) return '0.0';
+        const s = n.toString();
+        // If no scientific notation, return as-is
+        if (!s.includes('e') && !s.includes('E')) {
+            // Ensure at least one decimal for DXF compatibility
+            return s.includes('.') ? s : s + '.0';
+        }
+        // Convert scientific notation to fixed decimal
+        return n.toFixed(10).replace(/\.?0+$/, '') || '0.0';
+    },
+
     // ==========================================
     // LOCAL STORAGE OPERATIONS
     // ==========================================
@@ -129,6 +146,20 @@ const Storage = {
         }
     },
 
+    /**
+     * Post-process DXF string to replace any scientific notation numbers
+     * with fixed decimal notation that DXF readers can parse.
+     */
+    _fixDXFScientificNotation(dxf) {
+        return dxf.replace(/\b(-?\d+\.?\d*)[eE]([+-]?\d+)\b/g, (match, base, exp) => {
+            const num = parseFloat(match);
+            if (!Number.isFinite(num)) return '0.0';
+            // Use enough decimal places to preserve precision
+            const result = num.toFixed(10).replace(/\.?0+$/, '');
+            return result || '0';
+        });
+    },
+
     generateDXF() {
         let dxf = '';
 
@@ -247,7 +278,8 @@ const Storage = {
         dxf += '0\nENDSEC\n';
         dxf += '0\nEOF\n';
 
-        return dxf;
+        // Fix any scientific notation numbers that DXF readers can't parse
+        return this._fixDXFScientificNotation(dxf);
     },
 
     blockToDXF(block) {
@@ -720,6 +752,88 @@ const Storage = {
                 dxf += '49\n3.175\n49\n-2.325\n';
                 dxf += '53\n60.0\n43\n0.0\n44\n0.0\n45\n5.5\n46\n3.175\n79\n2\n';
                 dxf += '49\n3.175\n49\n-2.325\n';
+                break;
+            case 'ansi33': // Diagonal sparse (wider spacing)
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n1\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'ansi34': // Diagonal thick
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                dxf += '53\n45.0\n43\n0.25\n44\n0.25\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'ansi35': // Reverse diagonal
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n1\n';
+                dxf += '53\n135.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                break;
+            case 'ansi36': // Horizontal lines
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n1\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n0\n';
+                break;
+            case 'ansi38': // Diagonal + horizontal
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n0\n';
+                break;
+            case 'earth':
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n3\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n2\n';
+                dxf += '49\n1.5875\n49\n-4.7625\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n2\n';
+                dxf += '49\n1.5875\n49\n-4.7625\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n2\n';
+                dxf += '49\n1.5875\n49\n-4.7625\n';
+                break;
+            case 'grass':
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n1\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n2\n';
+                dxf += '49\n1.5875\n49\n-4.7625\n';
+                break;
+            case 'steel':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n-1.0\n46\n1.0\n79\n0\n';
+                dxf += '53\n135.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n2\n';
+                dxf += '49\n0.5\n49\n-2.675\n';
+                break;
+            case 'insul':
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n1\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n0\n';
+                break;
+            case 'net':
+            case 'net3':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n0\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n0\n';
+                break;
+            case 'dash':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n1\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n3.175\n79\n2\n';
+                dxf += '49\n1.5875\n49\n-1.5875\n';
+                break;
+            case 'square':
+                dxf += '52\n0.0\n41\n6.35\n';
+                dxf += '78\n2\n';
+                dxf += '53\n0.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n0\n';
+                dxf += '53\n90.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n6.35\n79\n0\n';
+                break;
+            case 'zigzag':
+                dxf += '52\n0.0\n41\n3.175\n';
+                dxf += '78\n2\n';
+                dxf += '53\n45.0\n43\n0.0\n44\n0.0\n45\n0.0\n46\n4.49\n79\n2\n';
+                dxf += '49\n2.245\n49\n-2.245\n';
+                dxf += '53\n135.0\n43\n2.245\n44\n0.0\n45\n0.0\n46\n4.49\n79\n2\n';
+                dxf += '49\n2.245\n49\n-2.245\n';
                 break;
             default:
                 // Generic diagonal hatch fallback
