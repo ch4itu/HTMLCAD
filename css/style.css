@@ -1413,7 +1413,7 @@ body {
     .title-bar {
         height: 44px;
         padding: 0 10px;
-        justify-content: space-between;
+        justify-content: flex-start;
     }
 
     .title-bar .logo {
@@ -1421,8 +1421,15 @@ body {
         margin-right: 0;
     }
 
+    .title-bar .spacer {
+        display: none;
+    }
+
     .mobile-menu-btn {
-        margin-left: auto;
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
     }
 
     /* Selection ribbon mobile */
