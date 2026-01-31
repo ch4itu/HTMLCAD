@@ -1412,7 +1412,7 @@ body {
     /* Title bar */
     .title-bar {
         height: 44px;
-        padding: 0 10px;
+        padding: 0 56px 0 10px;
         justify-content: flex-start;
     }
 
@@ -1426,10 +1426,11 @@ body {
     }
 
     .mobile-menu-btn {
-        position: absolute;
+        position: fixed;
         right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
+        top: 10px;
+        transform: none;
+        z-index: 5000;
     }
 
     /* Selection ribbon mobile */
