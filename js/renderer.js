@@ -11,6 +11,7 @@ const Renderer = {
     camera: null,
     worldGroup: null,
     viewport: null,
+    webglObjects: new Map(),
 
     // Colors
     colors: {
@@ -177,50 +178,289 @@ const Renderer = {
         this.worldGroup.position.set(CAD.pan.x, CAD.pan.y, 0);
         this.worldGroup.scale.set(CAD.zoom, CAD.zoom, 1);
 
-        this.clearWebGLObjects();
-        this.buildWebGLEntities();
+        this.syncWebGLObjects();
         this.glRenderer.render(this.scene, this.camera);
     },
 
-    clearWebGLObjects() {
-        if (!this.worldGroup) return;
-        while (this.worldGroup.children.length > 0) {
-            const child = this.worldGroup.children.pop();
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-        }
-    },
-
-    buildWebGLEntities() {
+    syncWebGLObjects() {
         const state = CAD;
+        const activeIds = new Set();
 
         state.entities.forEach(entity => {
-            if (entity._hidden) return;
-            const layer = state.getLayer(entity.layer);
-            if (!layer || !layer.visible) return;
-
-            if (!['line', 'circle', 'arc', 'polyline'].includes(entity.type)) {
+            if (!this.shouldRenderInWebGL(entity, state)) {
                 return;
             }
 
-            const isSelected = state.isSelected(entity.id);
-            const isHovered = state.hoveredId === entity.id && !isSelected;
-            let color;
-            if (isSelected) {
-                color = this.colors.selection;
-            } else if (isHovered) {
-                color = this.colors.hover;
-            } else {
-                color = state.getEntityColor(entity);
+            const color = this.getWebGLColor(entity, state);
+            const signature = this.getWebGLSignature(entity, color);
+            activeIds.add(entity.id);
+
+            const cached = this.webglObjects.get(entity.id);
+            if (!cached || cached.signature !== signature) {
+                if (cached) {
+                    this.removeWebGLObject(entity.id, cached);
+                }
+                const object = this.createWebGLObject(entity, color);
+                if (object) {
+                    this.worldGroup.add(object);
+                    this.webglObjects.set(entity.id, {
+                        object,
+                        signature,
+                        color
+                    });
+                }
+                return;
             }
 
-            const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
-            const geometry = this.buildGeometryForEntity(entity);
-            if (!geometry) return;
-
-            const line = new THREE.Line(geometry, material);
-            this.worldGroup.add(line);
+            if (cached.color !== color) {
+                this.updateWebGLColor(cached.object, color);
+                cached.color = color;
+            }
         });
+
+        for (const [id, cached] of this.webglObjects.entries()) {
+            if (!activeIds.has(id)) {
+                this.removeWebGLObject(id, cached);
+            }
+        }
+    },
+
+    removeWebGLObject(id, cached) {
+        this.worldGroup.remove(cached.object);
+        this.disposeWebGLObject(cached.object);
+        this.webglObjects.delete(id);
+    },
+
+    disposeWebGLObject(object) {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) object.material.dispose();
+        if (object.isGroup) {
+            object.children.forEach(child => this.disposeWebGLObject(child));
+        }
+    },
+
+    shouldRenderInWebGL(entity, state) {
+        if (entity._hidden) return false;
+        const layer = state.getLayer(entity.layer);
+        if (!layer || !layer.visible) return false;
+        return ['line', 'circle', 'arc', 'polyline', 'hatch'].includes(entity.type);
+    },
+
+    getWebGLSignature(entity, color) {
+        switch (entity.type) {
+            case 'line':
+                return `line:${entity.p1.x},${entity.p1.y},${entity.p2.x},${entity.p2.y}`;
+            case 'circle':
+                return `circle:${entity.center.x},${entity.center.y},${entity.r}`;
+            case 'arc':
+                return `arc:${entity.center.x},${entity.center.y},${entity.r},${entity.start},${entity.end}`;
+            case 'polyline': {
+                const points = entity.points || [];
+                const coords = points.map(p => `${p.x},${p.y}`).join('|');
+                const closed = entity.closed || Utils.isPolygonClosed(points);
+                return `polyline:${coords}:${closed ? 'closed' : 'open'}`;
+            }
+            case 'hatch':
+                return this.getHatchSignature(entity, color);
+            default:
+                return `${entity.type}`;
+        }
+    },
+
+    getWebGLColor(entity, state) {
+        const isSelected = state.isSelected(entity.id);
+        const isHovered = state.hoveredId === entity.id && !isSelected;
+        if (isSelected) {
+            return this.colors.selection;
+        }
+        if (isHovered) {
+            return this.colors.hover;
+        }
+        return state.getEntityColor(entity);
+    },
+
+    updateWebGLColor(object, color) {
+        if (object.material && object.material.color) {
+            object.material.color.set(color);
+            return;
+        }
+        if (object.isGroup) {
+            object.children.forEach(child => this.updateWebGLColor(child, color));
+        }
+    },
+
+    createWebGLObject(entity, color) {
+        if (entity.type === 'hatch') {
+            return this.createWebGLHatchObject(entity, color);
+        }
+        const geometry = this.buildGeometryForEntity(entity);
+        if (!geometry) return null;
+        const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
+        return new THREE.Line(geometry, material);
+    },
+
+    getHatchSignature(entity, color) {
+        const hatch = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const pattern = hatch.pattern || 'solid';
+        const zoomKey = Math.round(CAD.zoom * 100);
+        const clipIds = entity.clipIds || [];
+        const clipSignature = clipIds.map(id => {
+            const clipEntity = CAD.getEntity(id);
+            return clipEntity ? this.getHatchPathSignature(clipEntity) : `missing:${id}`;
+        }).join('|');
+        return `hatch:${pattern}:${color}:${zoomKey}:${clipSignature}`;
+    },
+
+    getHatchPathSignature(entity) {
+        switch (entity.type) {
+            case 'line':
+                return `line:${entity.p1.x},${entity.p1.y},${entity.p2.x},${entity.p2.y}`;
+            case 'circle':
+                return `circle:${entity.center.x},${entity.center.y},${entity.r}`;
+            case 'arc':
+                return `arc:${entity.center.x},${entity.center.y},${entity.r},${entity.start},${entity.end}`;
+            case 'rect':
+                return `rect:${entity.p1.x},${entity.p1.y},${entity.p2.x},${entity.p2.y}`;
+            case 'polyline': {
+                const points = entity.points || [];
+                const coords = points.map(p => `${p.x},${p.y}`).join('|');
+                const closed = entity.closed || Utils.isPolygonClosed(points);
+                return `polyline:${coords}:${closed ? 'closed' : 'open'}`;
+            }
+            case 'ellipse':
+                return `ellipse:${entity.center.x},${entity.center.y},${entity.rx},${entity.ry},${entity.rotation || 0}`;
+            default:
+                return `${entity.type}`;
+        }
+    },
+
+    createWebGLHatchObject(entity, color) {
+        const clipIds = entity.clipIds || [];
+        if (clipIds.length === 0) return null;
+
+        const hatchStyle = this.getHatchStyle(entity, color);
+        const material = this.createWebGLHatchMaterial(entity, hatchStyle, color);
+        const group = new THREE.Group();
+
+        clipIds.forEach(id => {
+            const clipEntity = CAD.getEntity(id);
+            if (!clipEntity) return;
+            const shape = this.buildHatchShape(clipEntity);
+            if (!shape) return;
+            const geometry = new THREE.ShapeGeometry(shape);
+            const mesh = new THREE.Mesh(geometry, material.clone());
+            group.add(mesh);
+        });
+
+        return group.children.length ? group : null;
+    },
+
+    createWebGLHatchMaterial(entity, hatchStyle, color) {
+        const hatch = typeof entity.hatch === 'object' ? entity.hatch : { pattern: 'solid' };
+        const pattern = hatch.pattern || 'solid';
+        const base = {
+            transparent: true,
+            opacity: hatchStyle.alpha
+        };
+        if (pattern === 'solid') {
+            return new THREE.MeshBasicMaterial({
+                ...base,
+                color: new THREE.Color(color),
+                side: THREE.DoubleSide
+            });
+        }
+
+        const canvas = this.buildHatchPatternCanvas(pattern, color);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.needsUpdate = true;
+
+        return new THREE.MeshBasicMaterial({
+            ...base,
+            color: new THREE.Color('#ffffff'),
+            map: texture,
+            side: THREE.DoubleSide
+        });
+    },
+
+    buildHatchShape(entity) {
+        const points = this.getHatchShapePoints(entity);
+        if (!points || points.length < 3) return null;
+        const shape = new THREE.Shape();
+        shape.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            shape.lineTo(points[i].x, points[i].y);
+        }
+        shape.closePath();
+        return shape;
+    },
+
+    getHatchShapePoints(entity, segments = 64) {
+        switch (entity.type) {
+            case 'rect': {
+                const minX = Math.min(entity.p1.x, entity.p2.x);
+                const maxX = Math.max(entity.p1.x, entity.p2.x);
+                const minY = Math.min(entity.p1.y, entity.p2.y);
+                const maxY = Math.max(entity.p1.y, entity.p2.y);
+                return [
+                    { x: minX, y: minY },
+                    { x: maxX, y: minY },
+                    { x: maxX, y: maxY },
+                    { x: minX, y: maxY }
+                ];
+            }
+            case 'polyline': {
+                const points = entity.points || [];
+                if (points.length < 3) return null;
+                const finalPoints = [...points];
+                if (entity.closed || Utils.isPolygonClosed(points)) {
+                    finalPoints.push(points[0]);
+                }
+                return finalPoints;
+            }
+            case 'circle': {
+                const points = [];
+                for (let i = 0; i < segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2;
+                    points.push({
+                        x: entity.center.x + Math.cos(angle) * entity.r,
+                        y: entity.center.y + Math.sin(angle) * entity.r
+                    });
+                }
+                return points;
+            }
+            case 'ellipse': {
+                const points = [];
+                const rotation = entity.rotation || 0;
+                for (let i = 0; i < segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2;
+                    const x = Math.cos(angle) * entity.rx;
+                    const y = Math.sin(angle) * entity.ry;
+                    const rx = x * Math.cos(rotation) - y * Math.sin(rotation);
+                    const ry = x * Math.sin(rotation) + y * Math.cos(rotation);
+                    points.push({
+                        x: entity.center.x + rx,
+                        y: entity.center.y + ry
+                    });
+                }
+                return points;
+            }
+            case 'arc': {
+                const points = [];
+                const sweep = entity.end - entity.start;
+                for (let i = 0; i <= segments; i++) {
+                    const angle = entity.start + (sweep * i) / segments;
+                    points.push({
+                        x: entity.center.x + Math.cos(angle) * entity.r,
+                        y: entity.center.y + Math.sin(angle) * entity.r
+                    });
+                }
+                return points;
+            }
+            default:
+                return null;
+        }
     },
 
     buildGeometryForEntity(entity) {
@@ -391,6 +631,10 @@ const Renderer = {
                 return;
             }
 
+            if (useWebGL && entity.type === 'hatch') {
+                return;
+            }
+
             if (entity.type === 'hatch') {
                 this.drawHatchEntity(entity, color);
                 return;
@@ -525,6 +769,13 @@ const Renderer = {
             keysToDelete.forEach(k => this.hatchPatterns.delete(k));
         }
 
+        const canvas = this.buildHatchPatternCanvas(pattern, color);
+        const patternFill = this.ctx.createPattern(canvas, 'repeat');
+        this.hatchPatterns.set(key, patternFill);
+        return patternFill;
+    },
+
+    buildHatchPatternCanvas(pattern, color) {
         // Clamp pattern tile size to avoid tiny or huge canvases at extreme zoom
         const size = Math.max(4, Math.min(64, 8 / CAD.zoom));
         const canvas = document.createElement('canvas');
@@ -723,9 +974,7 @@ const Renderer = {
                 ctx.stroke();
         }
 
-        const patternFill = this.ctx.createPattern(canvas, 'repeat');
-        this.hatchPatterns.set(key, patternFill);
-        return patternFill;
+        return canvas;
     },
 
     drawHatchEntity(entity, color) {
